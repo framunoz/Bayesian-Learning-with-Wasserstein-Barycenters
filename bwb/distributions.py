@@ -65,12 +65,14 @@ class DistributionDraw(Distribution):
             self._matrix = matrix / matrix.sum()
         return self._matrix.copy()
 
-    def rvs(self, size=1, random_state=None) -> np.ndarray:  # TODO: Add Random State!
+    def rvs(self, size=1, random_state=None) -> list[tuple[int, int]]:
+        # Set a random state
         rng = self._rng if random_state is None else np.random.default_rng(random_state)
         n, m = self.matrix.shape
         indices: List[Tuple[int, int], ...] = [(i, j) for i, j in product(range(n), range(m))]
+        # Sample with respect the weight matrix.
         samples = rng.choice(a=len(indices), size=size, p=self.matrix.flatten())
-        return np.array([indices[s] for s in samples])
+        return [indices[s] for s in samples]
 
     def pdf(self, *args, **kwargs):
         return self.matrix[args]
