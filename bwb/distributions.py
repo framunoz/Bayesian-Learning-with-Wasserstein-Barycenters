@@ -7,15 +7,21 @@ import numpy as np
 from PIL.Image import Image
 
 
-class Distribution(abc.ABC):
+class RvsDistribution(abc.ABC):
     """
-    This class provides try to copy the interface of an instance of a distribution class of scipy.
+    This class provides the interface for those distributions that can be sampled from them.
     """
 
     @abc.abstractmethod
     def rvs(self, *args, **kwargs):
         """Random variates."""
         ...
+
+
+class Distribution(RvsDistribution, abc.ABC):
+    """
+    This class provides try to copy the interface of an instance of a distribution class of scipy.
+    """
 
     @abc.abstractmethod
     def pdf(self, *args, **kwargs):
@@ -63,13 +69,13 @@ class DistributionDraw(Distribution):
                 matrix = image_as_array[:, :, 0]
             matrix = 1 - (matrix / 255)
             self._matrix = matrix / matrix.sum()
-        return self._matrix.copy()
+        return self._matrix
 
     def rvs(self, size=1, random_state=None) -> list[tuple[int, int]]:
         # Set a random state
         rng = self._rng if random_state is None else np.random.default_rng(random_state)
         n, m = self.matrix.shape
-        indices: List[Tuple[int, int], ...] = [(i, j) for i, j in product(range(n), range(m))]
+        indices: list[tuple[int, int], ...] = [(i, j) for i, j in product(range(n), range(m))]
         # Sample with respect the weight matrix.
         samples = rng.choice(a=len(indices), size=size, p=self.matrix.flatten())
         return [indices[s] for s in samples]
