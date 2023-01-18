@@ -37,11 +37,19 @@ class DistributionDraw(Distribution):
         """
         Initializer
 
-        :param image: The image to obtain the distribution.
+        Parameters
+        ----------
+        image: Image
+            The image to obtain the distribution.
+        seed: int or generator
+            The seed to create a generator and obtain replicable results.
         """
+        # Generator
+        self._rng: np.random.Generator = np.random.default_rng(seed)
+
+        # Image and pdf
         self._image: Image = image
         self._matrix: np.ndarray = None
-        self._rng: np.random.Generator = np.random.default_rng(seed)
         self._support: list[tuple[int, int], ...] = None
 
         # Indices
@@ -49,14 +57,19 @@ class DistributionDraw(Distribution):
         self._indices_inv: dict[tuple[int, int], int] = None
 
     @classmethod
-    def fromarray(cls, array: np.ndarray, seed=None):
+    def fromarray(cls, array: np.ndarray, seed=None, ceil=0):
         """
         Alternative initializer.
 
-        :param array: An array of integers with minimum value 0 and maximum value 255.
-        :param seed:
-        :return:
+        Parameters
+        ----------
+        array: np.ndarray
+            An array of integers with minimum value 0 and maximum value 255.
+        seed: int or generator
+            The seed to create a generator and obtain replicable results.
         """
+        if ceil != 0:
+            array = np.minimum(array, (255 - ceil) * np.ones_like(array), dtype=array.dtype)
         image = PIL.Image.fromarray(array)
         return cls(image=image, seed=seed)
 
@@ -79,6 +92,11 @@ class DistributionDraw(Distribution):
         return self._matrix
 
     @property
+    def shape(self):
+        """The shape of the matrix"""
+        return self.matrix.shape
+
+    @property
     def indices(self) -> list[tuple[int, int], ...]:
         """A list of coordinates of the domain."""
         if self._indices is None:
@@ -92,11 +110,6 @@ class DistributionDraw(Distribution):
         if self._indices_inv is None:
             self._indices_inv: dict[tuple[int, int], int] = {val: k for k, val in enumerate(self.indices)}
         return self._indices_inv
-
-    @property
-    def shape(self):
-        """The shape of the matrix"""
-        return self.matrix.shape
 
     @property
     def support(self) -> list[tuple[int, int], ...]:
@@ -125,9 +138,12 @@ class DistributionDraw(Distribution):
         return self.matrix.take(indices_from_coord)
 
     def _repr_png_(self):
-        """iPython display hook support
+        """
+        iPython display hook support.
 
-        :returns: png version of the image as bytes
+        Returns
+        -------
+            png version of the image as bytes
         """
         return self.image._repr_png_()
 
@@ -137,14 +153,24 @@ class DistributionDrawBuilder:
     Builder for the class DistributionDraw.
     """
 
-    def __init__(self, seed=None):
+    def __init__(self, seed=None, ceil=0):
         self._rng: np.random.Generator = np.random.default_rng(seed)
+        self._ceil = ceil
+
+        self._dict_kwargs = dict(seed=self._rng, ceil=self._ceil)
 
     def create(self, image: Image) -> DistributionDraw:
-        return DistributionDraw(image=image, seed=self._rng)
+        return DistributionDraw(image=image, **self._dict_kwargs)
 
     def create_fromarray(self, array: np.ndarray) -> DistributionDraw:
-        return DistributionDraw.fromarray(array=array, seed=self._rng)
+        return DistributionDraw.fromarray(array=array, **self._dict_kwargs)
 
     def set_rng(self, rng: np.random.Generator):
         self._rng: np.random.Generator = np.random.default_rng(rng)
+        self._dict_kwargs["seed"] = self._rng
+        return self
+
+    def set_ceil(self, ceil: int):
+        self._ceil = ceil
+        self._dict_kwargs["ceil"] = self._ceil
+        return self
