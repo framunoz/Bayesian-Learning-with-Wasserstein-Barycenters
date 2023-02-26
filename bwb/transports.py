@@ -49,7 +49,7 @@ class FitWithMeasure(abc.ABC):
 
 class FitWithDistribution(FitWithMeasure, abc.ABC):
 
-    # TODO: Cambiar a un método genérico de instancia Distribution (no solo para DistributionDraw)
+    # TODO: Cambiar a un método genérico de instancia DiscreteDistribution (no solo para DistributionDraw)
     def fit_wd(
             self,
             distr_s: DistributionDraw = None,

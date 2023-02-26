@@ -7,7 +7,7 @@ import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
 
-from bwb.distributions import DistributionDraw
+from .distributions import DistributionDraw
 
 
 def plot_histogram_from_points(

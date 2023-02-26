@@ -5,16 +5,18 @@ import logging
 import warnings
 from collections import Counter
 from itertools import product
-from typing import TypeVar, Generic, Union, Any, Optional
+from typing import TypeVar, Generic, Union, Any, Optional, Protocol, Iterable
 
 import PIL.Image
 import numpy as np
 from PIL.Image import Image
+from numpy._typing import ArrayLike
 from numpy.random import Generator
 
 # Get logger
+
 _log = logging.getLogger(__name__)
-_log.setLevel(logging.WARNING)
+_log.setLevel(logging.DEBUG)
 
 # Configure a formatter
 _formatter = logging.Formatter("%(asctime)s: %(levelname)s [%(name)s:%(lineno)s] %(message)s")
@@ -33,45 +35,87 @@ GeneratorLike = Union[None, int, Generator]
 Coord = tuple[int, int]
 
 
-def default_likelihood(data: list[Coord]):
-    ...
-
-
-class RvsDistribution(abc.ABC, Generic[TSample]):
-    """
-    This class provides the interface for those distributions that can be sampled from them.
-    """
+class HasGenerator(abc.ABC):
+    """For classes that has a generator"""
 
     def __init__(self, seed: GeneratorLike):
         # Generator
         self.rng: np.random.Generator = np.random.default_rng(seed)
 
-    @abc.abstractmethod
-    def rvs(self, *args, **kwargs) -> list[TSample]:
-        """Random variates."""
-        ...
-
-    @abc.abstractmethod
-    def draw(self, *args, **kwargs) -> TSample:
-        """To draw a sample from the distribution."""
-        ...
-
-    def obtain_rng(self, random_state: GeneratorLike) -> Generator:
+    def get_rng(self, random_state: GeneratorLike) -> Generator:
         """Obtain a random state. If the random state is `None`, returns the generator of the class"""
         return self.rng if random_state is None else np.random.default_rng(random_state)
 
 
-class Distribution(RvsDistribution, abc.ABC, Generic[TSample]):
-    @abc.abstractmethod
-    def pdf(self, x: TSample | list[TSample], *args, **kwargs) -> float | list[float]:
-        """Probability density function."""
+class RvsDistribution(Generic[TSample], Protocol):
+    """
+    This class provides the interface for those distributions that can be sampled from them.
+    """
+
+    def rvs(self, size: int = 1, random_state: GeneratorLike = None) -> np.ndarray[TSample]:
+        """Random variates."""
+        ...
+
+    def draw(self, random_state: GeneratorLike = None) -> TSample:
+        """To draw a sample from the distribution."""
         ...
 
 
-class DistributionDraw(Distribution[Coord]):
-    Coord = tuple[int, int]
+class DiscreteDistribution(RvsDistribution[TSample], HasGenerator, Generic[TSample]):
+    """
+    Class to represent a finite supported discrete distribution probability.
+    """
 
-    def __init__(self, image: Image, seed: GeneratorLike = None):
+    def __init__(
+            self,
+            weights: ArrayLike[float],
+            support: ArrayLike[TSample],
+            seed: GeneratorLike = None
+    ):
+        super().__init__(seed=seed)
+
+        self.weights: np.ndarray = np.asarray(weights)
+        self.support: np.ndarray = np.asarray(support)
+
+        if self.weights.sum() != 1:
+            raise ValueError("The weights must sum 1.0")
+
+        if len(self.weights) != len(self.support):
+            raise ValueError("The arrays must have the same length.")
+
+        self._support = np.array(list(set(self.support)))
+        self._weights = np.array([
+            np.sum(self.weights[self.support == x]) for x in self._support
+        ])
+
+    def pdf(self, x: TSample | ArrayLike[TSample], *args, **kwargs) -> float | ArrayLike[float]:
+        """Probability density function."""
+
+        if not isinstance(x, Iterable):
+            return self._weights[np.where(self._support == x)]
+        return np.array([self.pdf(x_) for x_ in x])
+        # return np.take(self._weights)
+
+    def rvs(self, size: int = 1, random_state: GeneratorLike = None) -> np.ndarray[TSample]:
+        rng = self.get_rng(random_state)
+        return rng.choice(a=self.support, size=size, p=self.weights)
+
+    def draw(self, random_state: GeneratorLike = None) -> TSample:
+        return self.rvs(size=1, random_state=random_state)[0]
+
+
+# TODO: Cambiar el inicializador para ser construido a partir de arreglos normalizados en vez de imagenes
+# TODO:
+class DistributionDraw(DiscreteDistribution[int]):
+    # Coord = tuple[int, int]
+
+    def __init__(
+            self,
+            weights: ArrayLike[float],
+            support: ArrayLike[int],
+            shape: tuple[int, int],
+            seed: GeneratorLike = None
+    ):
         """
         Initializer
 
@@ -83,19 +127,19 @@ class DistributionDraw(Distribution[Coord]):
             The seed to create a generator and obtain replicable results.
         """
         # Generator
-        super().__init__(seed)
+        super().__init__(weights=weights, support=support, seed=seed)
 
-        # Image and pdf
-        self._image: Image = image
+        # Image and probability matrix
+        self._image: Image = None
         self._matrix: np.ndarray = None
-        self._support: list[Coord, ...] = None
+        self.shape: tuple = shape
 
-        # Indices
-        self._indices: list[Coord, ...] = None
-        self._indices_inv: dict[Coord, int] = None
+        n, m = shape
+        self.ind_to_coord = [(i, j) for i, j in product(range(n), range(m))]
+        self.coord_to_ind = np.arange(n * m).reshape(shape)
 
     @classmethod
-    def fromarray(
+    def from_array(
             cls,
             array: np.ndarray,
             seed: GeneratorLike = None,
@@ -114,7 +158,40 @@ class DistributionDraw(Distribution[Coord]):
         if ceil != 0:
             array = np.minimum(array, (255 - ceil) * np.ones_like(array), dtype=array.dtype)
         image = PIL.Image.fromarray(array)
-        return cls(image=image, seed=seed)
+        # Make the array as a probability distribution
+        array: np.ndarray = 1 - array / 255
+        array /= array.sum()
+        # Obtain the support and the weights
+        N, M = shape = array.shape
+        non_zero_supp = np.array(np.nonzero(array))
+        supp = non_zero_supp[1] + non_zero_supp[0] * M
+        weights = array.take(supp)
+        # Create the insance and set the probability matrix
+        instance = cls(support=supp, weights=weights, shape=shape, seed=seed)
+        instance._matrix = array
+        instance._image = image
+        return instance
+
+    @classmethod
+    def from_image(cls, image: Image, seed: GeneratorLike = None):
+        image_as_array = np.asarray(image)
+        if len(image_as_array.shape) == 2:
+            matrix = image_as_array
+        else:
+            matrix = image_as_array[:, :, 0]
+        instance = cls.from_array(matrix, seed=seed)
+        instance._image = image
+        return instance
+
+    @classmethod
+    def from_weights(
+            cls,
+            weights: ArrayLike[float],
+            support: ArrayLike[int],
+            shape: tuple[int, int],
+            seed: GeneratorLike = None
+    ):
+        return cls(weights, support, shape, seed)
 
     def _repr_png_(self):
         """
@@ -127,71 +204,67 @@ class DistributionDraw(Distribution[Coord]):
         return self.image._repr_png_()
 
     @property
-    def image(self) -> Image:
-        """Original image."""
-        return self._image
-
-    @property
     def matrix(self) -> np.ndarray:
         """Matrix pdf obtained from the image."""
         if self._matrix is None:
-            image_as_array = np.asarray(self.image)
-            if len(image_as_array.shape) == 2:
-                matrix = image_as_array
-            else:
-                matrix = image_as_array[:, :, 0]
-            matrix = 1 - (matrix / 255)
-            self._matrix = matrix / matrix.sum()
+            to_return = np.zeros(self.shape)
+            for row, weight in zip(self.support.astype(int), self.weights):
+                coord = self.ind_to_coord[row]
+                to_return[coord] += weight
+            self._matrix = to_return
         return self._matrix
 
     @property
-    def shape(self) -> tuple:
-        """The shape of the matrix"""
-        return self.matrix.shape
+    def image(self) -> Image:
+        """Original image."""
+        if self._image is None:
+            matrix: np.ndarray = np.ceil(255 - 255 * self.matrix / self.matrix.max()).astype("uint8")
+            self._image = PIL.Image.fromarray(matrix)
+        return self._image
 
-    @property
-    def indices(self) -> list[Coord, ...]:
-        """A list of coordinates of the domain."""
-        if self._indices is None:
-            n, m = self.shape
-            self._indices = [(i, j) for i, j in product(range(n), range(m))]
-        return self._indices
+    # @property
+    # def indices(self) -> list[Coord]:
+    #     """A list of coordinates of the domain."""
+    #     if self._indices is None:
+    #         n, m = self.shape
+    #         self._indices = [(i, j) for i, j in product(range(n), range(m))]
+    #     return self._indices
+    #
+    # @property
+    # def indices_inv(self) -> dict[Coord, int]:
+    #     """The inverse function that return the index if the component."""
+    #     if self._indices_inv is None:
+    #         self._indices_inv: dict[Coord, int] = {val: k for k, val in enumerate(self.indices)}
+    #     return self._indices_inv
 
-    @property
-    def indices_inv(self) -> dict[Coord, int]:
-        """The inverse function that return the index if the component."""
-        if self._indices_inv is None:
-            self._indices_inv: dict[Coord, int] = {val: k for k, val in enumerate(self.indices)}
-        return self._indices_inv
+    # @property
+    # def support(self) -> list[Coord, ...]:
+    #     """Support of the distribution."""
+    #     if self._support is None:
+    #         non_zero_coord: np.ndarray = np.array(np.nonzero(self.matrix)).T
+    #         self._support: list[Coord, ...] = [tuple(row) for row in non_zero_coord]
+    #     return self._support
 
-    @property
-    def support(self) -> list[Coord, ...]:
-        """Support of the distribution."""
-        if self._support is None:
-            non_zero_coord: np.ndarray = np.array(np.nonzero(self.matrix)).T
-            self._support: list[Coord, ...] = [tuple(row) for row in non_zero_coord]
-        return self._support
+    # @property
+    # def weights(self):
+    #     """Return its correspondient weights in the same order of it support."""
+    #     return self.pdf(self.support)
 
-    @property
-    def weights(self):
-        """Return its correspondient weights in the same order of it support."""
-        return self.pdf(self.support)
+    # def rvs(self, size: int = 1, random_state: GeneratorLike = None) -> list[Coord]:
+    #     # Set a random state
+    #     rng = self.get_rng(random_state)
+    #     # Sample with respect the weight matrix.
+    #     samples = rng.choice(a=len(self.indices), size=size, p=self.matrix.flatten())
+    #     return [self.indices[s] for s in samples]
+    #
+    # def draw(self, random_state: GeneratorLike = None) -> Coord:
+    #     return self.rvs(size=1, random_state=random_state)[0]
 
-    def rvs(self, size: int = 1, random_state: GeneratorLike = None) -> list[Coord]:
-        # Set a random state
-        rng = self.obtain_rng(random_state)
-        # Sample with respect the weight matrix.
-        samples = rng.choice(a=len(self.indices), size=size, p=self.matrix.flatten())
-        return [self.indices[s] for s in samples]
-
-    def draw(self, random_state: GeneratorLike = None) -> Coord:
-        return self.rvs(size=1, random_state=random_state)[0]
-
-    def pdf(self, x: Coord | list[Coord], **kwargs) -> float | list[float]:
-        if isinstance(x, tuple):
-            return self.matrix[x]
-        indices_from_coord = [self.indices_inv[tup] for tup in x]
-        return self.matrix.take(indices_from_coord)
+    def pdf(self, x: int | list[int], **kwargs) -> float | list[float]:
+        # if isinstance(x, tuple):
+        #     return self.matrix[x]
+        # indices_from_coord = [self.indices_inv[tup] for tup in x]
+        return self.matrix.take(x)
 
 
 class DistributionDrawBuilder:
@@ -209,7 +282,7 @@ class DistributionDrawBuilder:
         return DistributionDraw(image=image, **self._dict_kwargs)
 
     def create_fromarray(self, array: np.ndarray) -> DistributionDraw:
-        return DistributionDraw.fromarray(array=array, **self._dict_kwargs)
+        return DistributionDraw.from_array(array=array, **self._dict_kwargs)
 
     def set_rng(self, rng: GeneratorLike):
         self._rng = np.random.default_rng(rng)
@@ -222,13 +295,15 @@ class DistributionDrawBuilder:
         return self
 
 
-class PosteriorPiN(RvsDistribution[TSample], abc.ABC):
+# TODO: Hacerle un método fit en donde se ajusten los modelos y los datos, pero en el init se ajuste el generador y
+#  la verosimilitud
+class PosteriorPiN(HasGenerator, RvsDistribution[TSample], abc.ABC):
     """Abstract class used as protocol for the distributions used as Posterior."""
 
     def __init__(
             self,
             data: list[TSample, ...],
-            models: list[Distribution],
+            models: list[DiscreteDistribution],
             seed: GeneratorLike,
     ):
         super().__init__(seed)
@@ -239,7 +314,7 @@ class PosteriorPiN(RvsDistribution[TSample], abc.ABC):
         # Data = {x_i}_{i=1}^n
         self.data: list[TSample] = data
         # Models space M = {m_i}_{i=1}^M
-        self.models: list[Distribution] = models
+        self.models: list[DiscreteDistribution] = models
         # Likelihood cache
         self._likelihood_cache: np.ndarray = None
         self.counter: Counter = Counter()
@@ -270,7 +345,7 @@ class PosteriorPiN(RvsDistribution[TSample], abc.ABC):
     def __repr__(self):
         return self.__class__.__name__ + f"(n_data={self.n_data}, n_models={self.n_models})"
 
-    def likelihood(self, m: Distribution) -> float:
+    def likelihood(self, m: DiscreteDistribution) -> float:
         """
         Likelihood of the function:
 
@@ -278,7 +353,7 @@ class PosteriorPiN(RvsDistribution[TSample], abc.ABC):
 
         Parameters
         ----------
-        m: Distribution
+        m: DiscreteDistribution
             The distribution to calculate the likelihood.
 
         Returns
@@ -297,12 +372,12 @@ class PosteriorPiN(RvsDistribution[TSample], abc.ABC):
         # Return the product of evaluations
         return evaluations_prod
 
-    def rvs(self, size: int = 1, random_state: GeneratorLike = None) -> list[Distribution]:
+    def rvs(self, size: int = 1, random_state: GeneratorLike = None) -> list[DiscreteDistribution]:
         # Set a random state
-        rng = self.obtain_rng(random_state)
+        rng = self.get_rng(random_state)
         return [self.draw(random_state=rng) for _ in range(size)]
 
-    def draw(self, random_state: GeneratorLike = None) -> Distribution:
+    def draw(self, random_state: GeneratorLike = None) -> DiscreteDistribution:
         _log.debug("=" * 10 + f" i = {self._i} " + "=" * 10)
         self._i += 1
         draw, i = self._draw(random_state=random_state)
@@ -310,11 +385,11 @@ class PosteriorPiN(RvsDistribution[TSample], abc.ABC):
         return draw
 
     @abc.abstractmethod
-    def _draw(self, random_state: GeneratorLike) -> tuple[Distribution, int]:
+    def _draw(self, random_state: GeneratorLike) -> tuple[DiscreteDistribution, int]:
         """To use template pattern. Returns a distribution and its index."""
         ...
 
-    def most_common(self, n: Optional[int] = None) -> list[Distribution]:
+    def most_common(self, n: Optional[int] = None) -> list[DiscreteDistribution]:
         return [self.models[k] for k, _ in self.counter.most_common(n)]
 
 
@@ -324,13 +399,13 @@ class MCMCPosteriorPiN(PosteriorPiN[TSample], abc.ABC):
     def __init__(
             self,
             data: list[TSample, ...],
-            models: list[Distribution],
+            models: list[DiscreteDistribution],
             seed: GeneratorLike,
             lazy_init: bool,
     ):
         super().__init__(data, models, seed)
         # History {mu^(i)}_{i=1}^N
-        self.history: list[Distribution] = []
+        self.history: list[DiscreteDistribution] = []
         self.last_i: int = None
         if not lazy_init:
             self._first_step(self.rng)
@@ -350,7 +425,7 @@ class MetropolisPosteriorPiN(MCMCPosteriorPiN[TSample]):
     def __init__(
             self,
             data: list[TSample, ...],
-            models: list[Distribution],
+            models: list[DiscreteDistribution],
             seed: GeneratorLike = None,
             lazy_init: bool = False,
     ):
@@ -369,9 +444,9 @@ class MetropolisPosteriorPiN(MCMCPosteriorPiN[TSample]):
         # Update the counter
         self.counter[self.last_i] += 1
 
-    def _draw(self, random_state: GeneratorLike = None) -> tuple[Distribution, int]:
+    def _draw(self, random_state: GeneratorLike = None) -> tuple[DiscreteDistribution, int]:
         # Set generator
-        rng = self.obtain_rng(random_state)
+        rng = self.get_rng(random_state)
 
         # If this is the first time that executes this instruction
         if len(self.history) == 0:
@@ -425,7 +500,7 @@ class AlternativeMetropolisPosteriorPiN(MetropolisPosteriorPiN[TSample]):
     def __init__(
             self,
             data: list[TSample],
-            models: list[Distribution],
+            models: list[DiscreteDistribution],
             seed: GeneratorLike = None,
             lazy_init: bool = False,
     ):
@@ -442,7 +517,7 @@ class GibbsPosteriorPiN(MCMCPosteriorPiN[TSample]):
     def __init__(
             self,
             data: list[TSample],
-            models: list[Distribution],
+            models: list[DiscreteDistribution],
             seed: GeneratorLike = None,
             lazy_init: bool = False,
     ):
@@ -472,9 +547,9 @@ class GibbsPosteriorPiN(MCMCPosteriorPiN[TSample]):
         # Update the counter
         self.counter[self.last_i] += 1
 
-    def _draw(self, random_state=None) -> tuple[Distribution, int]:
+    def _draw(self, random_state=None) -> tuple[DiscreteDistribution, int]:
         # Set generator
-        rng = self.obtain_rng(random_state)
+        rng = self.get_rng(random_state)
 
         # If this is the first time that executes this instruction
         if len(self.history) == 0:
@@ -528,7 +603,7 @@ class AlternativeGibbsPosteriorPiN(GibbsPosteriorPiN[TSample]):
     def __init__(
             self,
             data: list[TSample],
-            models: list[Distribution],
+            models: list[DiscreteDistribution],
             seed=None,
             lazy_init=False,
     ):
