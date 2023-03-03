@@ -51,7 +51,7 @@ def plot_list_of_draws(list_of_draws: list[DistributionDraw], **kwargs):
     list_of_images: list[PIL.Image.Image] = [draw.image for draw in list_of_draws]
 
     # Set values by default
-    kwargs.setdefault("max_images", 55)
+    kwargs.setdefault("max_images", 33)
     kwargs.setdefault("img_width", 75)
 
     with warnings.catch_warnings():
