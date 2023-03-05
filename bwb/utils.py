@@ -1,5 +1,5 @@
 import warnings
-from typing import Optional
+from typing import Optional, Sequence
 
 import PIL.Image
 import ipyplot
@@ -7,7 +7,7 @@ import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
 
-from bwb.distributions import DistributionDraw
+from bwb.distributions import DistributionDraw, PosteriorPiN
 
 
 def plot_histogram_from_points(
@@ -51,9 +51,13 @@ def plot_list_of_draws(list_of_draws: list[DistributionDraw], **kwargs):
     list_of_images: list[PIL.Image.Image] = [draw.image for draw in list_of_draws]
 
     # Set values by default
-    kwargs.setdefault("max_images", 33)
+    kwargs.setdefault("max_images", 36)
     kwargs.setdefault("img_width", 75)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         ipyplot.plot_images(list_of_images, **kwargs)
+
+
+def freq_labels_posterior(posterior: PosteriorPiN) -> Sequence[str]:
+    return [f"id: {id_},\nfreq: {freq}" for id_, freq in posterior.counter.most_common()]
