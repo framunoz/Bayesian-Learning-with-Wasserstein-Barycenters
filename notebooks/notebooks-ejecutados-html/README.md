@@ -1,0 +1,12 @@
+# Links para visualizar los notebooks
+
+1. [https://htmlpreview.github.io/?https://github.com/framunoz/Bayesian-Learning-with-Wasserstein-Barycenters/blob/practica/entregable/notebooks/notebooks-ejecutados-html/01-fmg-explorar-datos-quick-draw.html](01-fmg-explorar-datos-quick-draw)
+2. [https://htmlpreview.github.io/?https://github.com/framunoz/Bayesian-Learning-with-Wasserstein-Barycenters/blob/practica/entregable/notebooks/notebooks-ejecutados-html/02-fmg-jugando-con-pot.html](02-fmg-jugando-con-pot)
+3. [https://htmlpreview.github.io/?https://github.com/framunoz/Bayesian-Learning-with-Wasserstein-Barycenters/blob/practica/entregable/notebooks/notebooks-ejecutados-html/03-fmg-obteniendo-ot-entre-caras.html](03-fmg-obteniendo-ot-entre-caras)
+4. [https://htmlpreview.github.io/?https://github.com/framunoz/Bayesian-Learning-with-Wasserstein-Barycenters/blob/practica/entregable/notebooks/notebooks-ejecutados-html/04-fmg-probando-clase-DistributionDraw.html](04-fmg-probando-clase-DistributionDraw)
+5. [https://htmlpreview.github.io/?https://github.com/framunoz/Bayesian-Learning-with-Wasserstein-Barycenters/blob/practica/entregable/notebooks/notebooks-ejecutados-html/05-fmg-programando-mcmc.html](05-fmg-programando-mcmc)
+6. [https://htmlpreview.github.io/?https://github.com/framunoz/Bayesian-Learning-with-Wasserstein-Barycenters/blob/practica/entregable/notebooks/notebooks-ejecutados-html/06-fmg-soporte-no-nulo-mcmc.html](06-fmg-soporte-no-nulo-mcmc)
+7. [https://htmlpreview.github.io/?https://github.com/framunoz/Bayesian-Learning-with-Wasserstein-Barycenters/blob/practica/entregable/notebooks/notebooks-ejecutados-html/07-fmg-probando-clases-PosteriorPiN.html](07-fmg-probando-clases-PosteriorPiN)
+8. [https://htmlpreview.github.io/?https://github.com/framunoz/Bayesian-Learning-with-Wasserstein-Barycenters/blob/practica/entregable/notebooks/notebooks-ejecutados-html/08-fmg-estadisticas-mcmc.html](08-fmg-estadisticas-mcmc)
+9. [https://htmlpreview.github.io/?https://github.com/framunoz/Bayesian-Learning-with-Wasserstein-Barycenters/blob/practica/entregable/notebooks/notebooks-ejecutados-html/09-fmg-probando-clases-transform.html](09-fmg-probando-clases-transform)
+10. [https://htmlpreview.github.io/?https://github.com/framunoz/Bayesian-Learning-with-Wasserstein-Barycenters/blob/practica/entregable/notebooks/notebooks-ejecutados-html/10-fmg-programando-baricentros.html](10-fmg-programando-baricentros)
