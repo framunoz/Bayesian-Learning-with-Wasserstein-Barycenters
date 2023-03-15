@@ -491,13 +491,17 @@ class GibbsPosteriorPiN(MCMCPosteriorPiN[TSample]):
         _log.debug(f"{u = }")
 
         # Draw a candidate
-        if last_i not in self.probs_cache:
-            _log.debug(f"Computing the cache probabilities for the draw {last_i}.")
-            self.probs_cache[last_i] = self.likelihood_cache.copy()
-            self.probs_cache[last_i][last_i] = 0.
-            self.probs_cache[last_i] /= self.probs_cache[last_i].sum()
+        probs = self.likelihood_cache.copy()
+        probs[last_i] = 0.
+        probs /= probs.sum()
 
-        next_i = int(rng.choice(self.possible_models, p=self.probs_cache[last_i]))
+        # if last_i not in self.probs_cache:
+        #     _log.debug(f"Computing the cache probabilities for the draw {last_i}.")
+        #     self.probs_cache[last_i] = self.likelihood_cache.copy()
+        #     self.probs_cache[last_i][last_i] = 0.
+        #     self.probs_cache[last_i] /= self.probs_cache[last_i].sum()
+
+        next_i = int(rng.choice(self.possible_models, p=probs))
 
         # Compute the acceptance probability
         A_mu_i_mu_star = min(
