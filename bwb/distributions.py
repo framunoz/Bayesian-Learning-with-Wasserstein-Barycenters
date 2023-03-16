@@ -40,11 +40,11 @@ class HasGenerator(abc.ABC):
 
     def __init__(self, seed: GeneratorLike):
         # Generator
-        self.rng: np.random.Generator = np.random.default_rng(seed)
+        self.random_state: np.random.Generator = np.random.default_rng(seed)
 
     def get_rng(self, random_state: GeneratorLike) -> Generator:
         """Obtain a random state. If the random state is `None`, returns the generator of the class"""
-        return self.rng if random_state is None else np.random.default_rng(random_state)
+        return self.random_state if random_state is None else np.random.default_rng(random_state)
 
 
 class RvsDistribution(Generic[TSample], Protocol):
@@ -77,12 +77,13 @@ class DiscreteDistribution(RvsDistribution[TSample], HasGenerator, Generic[TSamp
         self.weights: np.ndarray = np.asarray(weights)
         self.support: np.ndarray = np.asarray(support)
 
-        if self.weights.sum() != 1:
-            raise ValueError("The weights must sum 1.0")
-
         if len(self.weights) != len(self.support):
             raise ValueError("The arrays must have the same length.")
 
+        if self.weights.sum() != 1:
+            raise ValueError("The weights must sum 1.0")
+
+        # Simplified hidden support and hidden weights
         self._support = np.array(list(set(self.support)))
         self._weights = np.array([
             np.sum(self.weights[self.support == x]) for x in self._support
@@ -95,6 +96,8 @@ class DiscreteDistribution(RvsDistribution[TSample], HasGenerator, Generic[TSamp
             return self._weights[np.where(self._support == x)]
         return np.array([self.pdf(x_) for x_ in x])
         # return np.take(self._weights)
+
+    # def log_pdf(self: x: TSample | ArrayLike[TSample], *args, **kwargs) -> :
 
     def rvs(self, size: int = 1, random_state: GeneratorLike = None) -> np.ndarray[TSample]:
         rng = self.get_rng(random_state)
@@ -252,9 +255,9 @@ class DistributionDraw(DiscreteDistribution[int]):
 
     # def rvs(self, size: int = 1, random_state: GeneratorLike = None) -> list[Coord]:
     #     # Set a random state
-    #     rng = self.get_rng(random_state)
+    #     random_state = self.get_rng(random_state)
     #     # Sample with respect the weight matrix.
-    #     samples = rng.choice(a=len(self.indices), size=size, p=self.matrix.flatten())
+    #     samples = random_state.choice(a=len(self.indices), size=size, p=self.matrix.flatten())
     #     return [self.indices[s] for s in samples]
     #
     # def draw(self, random_state: GeneratorLike = None) -> Coord:
@@ -408,7 +411,7 @@ class MCMCPosteriorPiN(PosteriorPiN[TSample], abc.ABC):
         self.history: list[DiscreteDistribution] = []
         self.last_i: int = None
         if not lazy_init:
-            self._first_step(self.rng)
+            self._first_step(self.random_state)
 
     def __repr__(self):
         return (self.__class__.__name__
@@ -509,7 +512,7 @@ class AlternativeMetropolisPosteriorPiN(MetropolisPosteriorPiN[TSample]):
         self.possible_models = np.arange(self.n_models)
 
         if not lazy_init:
-            self._first_step(self.rng)
+            self._first_step(self.random_state)
 
 
 class GibbsPosteriorPiN(MCMCPosteriorPiN[TSample]):
@@ -527,7 +530,7 @@ class GibbsPosteriorPiN(MCMCPosteriorPiN[TSample]):
         self.likelihood_sum: float = 0.
 
         if not lazy_init:
-            self._first_step(self.rng)
+            self._first_step(self.random_state)
 
     def __repr__(self):
         return (self.__class__.__name__
@@ -613,4 +616,4 @@ class AlternativeGibbsPosteriorPiN(GibbsPosteriorPiN[TSample]):
         self.possible_models = np.arange(self.n_models)
 
         if not lazy_init:
-            self._first_step(self.rng)
+            self._first_step(self.random_state)
