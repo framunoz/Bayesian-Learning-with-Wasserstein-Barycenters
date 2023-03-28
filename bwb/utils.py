@@ -1,13 +1,15 @@
 import warnings
+from collections import OrderedDict
 from typing import Optional, Sequence
 
 import PIL.Image
 import ipyplot
+import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
 
-from bwb.distributions import DistributionDraw, PosteriorPiN
+from bwb.distributions import DistributionDraw, PosteriorPiN, MCMCPosteriorPiN
 
 
 def plot_histogram_from_points(
@@ -60,4 +62,25 @@ def plot_list_of_draws(list_of_draws: list[DistributionDraw], **kwargs):
 
 
 def freq_labels_posterior(posterior: PosteriorPiN) -> Sequence[str]:
-    return [f"id: {id_},\nfreq: {freq}" for id_, freq in posterior.counter.most_common()]
+    return [f"id: {id_},\nfreq: {freq}" for id_, freq in posterior.samples_counter.most_common()]
+
+
+def likelihood_ordered_dict(mcmc: PosteriorPiN):
+    like_cache = mcmc.likelihood_cache
+    posterior_probs = like_cache / np.sum(like_cache)
+    likelihood_dct = OrderedDict({i: prob for i, prob in enumerate(posterior_probs)})
+
+    for key, _ in sorted(likelihood_dct.items(), key=lambda item: -item[1]):
+        likelihood_dct.move_to_end(key)
+
+    return likelihood_dct
+
+
+def normalised_steps_ordered_dict(mcmc: MCMCPosteriorPiN):
+    counter = mcmc.steps_counter
+    return OrderedDict([(k, v / counter.total()) for k, v in counter.most_common()])
+
+
+def normalised_samples_ordered_dict(mcmc: PosteriorPiN):
+    counter = mcmc.samples_counter
+    return OrderedDict([(k, v / counter.total()) for k, v in counter.most_common()])
