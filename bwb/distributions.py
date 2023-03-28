@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import abc
 import logging
+import math
+import time
 import warnings
 from collections import Counter
 from itertools import product
@@ -11,6 +13,7 @@ import PIL.Image
 import numpy as np
 from PIL.Image import Image
 from numpy._typing import ArrayLike
+from numpy import ma
 from numpy.random import Generator
 
 # Get logger
@@ -19,7 +22,7 @@ _log = logging.getLogger(__name__)
 _log.setLevel(logging.DEBUG)
 
 # Configure a formatter
-_formatter = logging.Formatter("%(asctime)s: %(levelname)s [%(name)s:%(lineno)s] %(message)s")
+_formatter = logging.Formatter("%(asctime)s: %(levelname)s [%(name)s:%(lineno)s]\n> %(message)s")
 
 # Configure a file handler
 _file_handler = logging.FileHandler(f"logging.log")
@@ -136,6 +139,8 @@ class DistributionDraw(DiscreteDistribution[int]):
         self._image: Image = None
         self._matrix: np.ndarray = None
         self.shape: tuple = shape
+        self._log_matrix: np.ndarray = None
+        self._support: list[Coord, ...] = None
 
         n, m = shape
         self.ind_to_coord = [(i, j) for i, j in product(range(n), range(m))]
@@ -216,6 +221,14 @@ class DistributionDraw(DiscreteDistribution[int]):
                 to_return[coord] += weight
             self._matrix = to_return
         return self._matrix
+
+    @property
+    def log_matrix(self) -> np.ndarray:
+        if self._log_matrix is None:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                self._log_matrix = np.log(self.matrix)
+        return self._log_matrix
 
     @property
     def image(self) -> Image:
@@ -300,29 +313,43 @@ class DistributionDrawBuilder:
 
 # TODO: Hacerle un método fit en donde se ajusten los modelos y los datos, pero en el init se ajuste el generador y
 #  la verosimilitud
+# noinspection PyUnboundLocalVariable
 class PosteriorPiN(HasGenerator, RvsDistribution[TSample], abc.ABC):
     """Abstract class used as protocol for the distributions used as Posterior."""
 
     def __init__(
             self,
             data: list[TSample, ...],
-            models: list[DiscreteDistribution],
+            models: list[DistributionDraw],
             seed: GeneratorLike,
     ):
         super().__init__(seed)
 
-        # Number of the iteration
-        self._i = 0
-
         # Data = {x_i}_{i=1}^n
         self.data: list[TSample] = data
+
+        self.shape = models[0].shape
+        matrix_data = np.zeros(self.shape).astype(int)
+        for coord in self.data:
+            matrix_data[tuple(coord)] += 1
+        matrix_data = ma.masked_less(matrix_data, 1)
+        self._mask = ~matrix_data.mask
+        self._counter_data = matrix_data[self._mask]
+
         # Models space M = {m_i}_{i=1}^M
         self.models: list[DiscreteDistribution] = models
+        self.models_index: np.ndarray[int] = np.arange(self.n_models)
         # Likelihood cache
+        self._log_likelihood_cache: np.ndarray = None
         self._likelihood_cache: np.ndarray = None
-        self.counter: Counter = Counter()
+        self.samples_counter: Counter = Counter()
+
+        self.total_time = 0.
 
         _log.info(f"init PosteriorPiN: n_data={self.n_data}, n_models={self.n_models}")
+
+    def __repr__(self):
+        return self.__class__.__name__ + f"(n_data={self.n_data}, n_models={self.n_models})"
 
     @property
     def n_data(self) -> int:
@@ -333,20 +360,26 @@ class PosteriorPiN(HasGenerator, RvsDistribution[TSample], abc.ABC):
         return len(self.models)
 
     @property
-    def likelihood_cache(self) -> np.ndarray[float]:
+    def log_likelihood_cache(self) -> np.ndarray[float]:
         """Likelihood cache to avoid to compute every time a same distribution, in order to be the same order of
         the list `models`."""
-        if self._likelihood_cache is None or len(self._likelihood_cache) != self.n_models:
+        if self._log_likelihood_cache is None or len(self._log_likelihood_cache) != self.n_models:
             _log.debug(f"Calculating the likelihood cache...")
-            self._likelihood_cache = np.array([self.likelihood(m) for m in self.models])
+            self._log_likelihood_cache = np.array([self.log_likelihood(m) for m in self.models])
             _log.debug(f"Likelihood cache calculated.")
 
-            if sum(self._likelihood_cache > 0) == 1:
+            if sum(self._log_likelihood_cache > 0) == 1:
                 warnings.warn("The likelihood support has only one element.")
+        return self._log_likelihood_cache
+
+    @property
+    def likelihood_cache(self):
+        if self._likelihood_cache is None:
+            self._likelihood_cache = np.exp(self.log_likelihood_cache)
         return self._likelihood_cache
 
-    def __repr__(self):
-        return self.__class__.__name__ + f"(n_data={self.n_data}, n_models={self.n_models})"
+    def log_likelihood(self, m: DistributionDraw) -> float:
+        return np.sum(self._counter_data * m.log_matrix[self._mask])
 
     def likelihood(self, m: DiscreteDistribution) -> float:
         """
@@ -364,16 +397,26 @@ class PosteriorPiN(HasGenerator, RvsDistribution[TSample], abc.ABC):
         float
             The likelihood computed.
         """
-        evaluations_prod = 1.
-        # Iterate over every value of the data
-        for i in range(self.n_data):
-            evaluations_prod *= m.pdf(self.data[i])
-            # If the evaluation is zero, return 0 directly
-            if evaluations_prod == 0:
-                return 0.
+        return np.exp(self.log_likelihood(m))
 
-        # Return the product of evaluations
-        return evaluations_prod
+    def draw(self, *args, **kwargs) -> TSample:
+        tic = time.time()
+
+        to_return, i = self._draw(*args, **kwargs)
+
+        self.samples_counter[i] += 1
+
+        toc = time.time()
+        _log.info(
+            "=" * 10 + f" n samples: {self.samples_counter.total()}, total time: {toc - tic:.4f} [seg] " + "=" * 10)
+
+        self.total_time += toc - tic
+        return to_return
+
+    @abc.abstractmethod
+    def _draw(self, *args, **kwargs) -> tuple[TSample, int]:
+        """To use template pattern"""
+        ...
 
     def rvs(self, size: int = 1, random_state: GeneratorLike = None) -> list[DiscreteDistribution]:
         # Set a random state
@@ -394,6 +437,54 @@ class PosteriorPiN(HasGenerator, RvsDistribution[TSample], abc.ABC):
 
     def most_common(self, n: Optional[int] = None) -> list[DiscreteDistribution]:
         return [self.models[k] for k, _ in self.counter.most_common(n)]
+    def most_common(self, n: Optional[int] = None) -> list[Distribution]:
+        return [self.models[k] for k, _ in self.samples_counter.most_common(n)]
+
+
+class ExplicitPosteriorPiN(PosteriorPiN):
+    """
+    The explicit posterior probability, without using MCMC.
+    """
+
+    def __init__(
+            self,
+            data: list[TSample, ...],
+            models: list[DistributionDraw],
+            seed: GeneratorLike = None,
+            lazy_init: bool = True,
+    ):
+        super().__init__(data, models, seed)
+        self._probabilities_arr = None
+
+        if not lazy_init:
+            # Calcular las verosimilitudes caché
+            _ = self.likelihood_cache
+
+    @property
+    def probabilities_arr(self):
+        if self._probabilities_arr is None:
+            self._probabilities_arr = self.likelihood_cache / np.sum(self.likelihood_cache)
+        return self._probabilities_arr
+
+    def _draw(self, *args, random_state=None, **kwargs) -> tuple[TSample, int]:
+        rng = self.obtain_rng(random_state)
+        i = rng.choice(a=self.models_index, p=self.probabilities_arr)
+        return self.models[i], i
+
+    def rvs(self, size: int = 1, random_state: GeneratorLike = None) -> list[Distribution]:
+        tic = time.time()
+
+        # Set a random state
+        rng = self.obtain_rng(random_state)
+        index_list = rng.choice(a=self.models_index, size=size, p=self.probabilities_arr)
+
+        self.samples_counter.update(index_list)
+
+        toc = time.time()
+        _log.info(
+            "=" * 10 + f" n samples: {self.samples_counter.total()}, total time: {toc - tic:.4f} [seg] " + "=" * 10)
+        self.total_time += toc - tic
+        return [self.models[i] for i in index_list]
 
 
 class MCMCPosteriorPiN(PosteriorPiN[TSample], abc.ABC):
@@ -405,22 +496,62 @@ class MCMCPosteriorPiN(PosteriorPiN[TSample], abc.ABC):
             models: list[DiscreteDistribution],
             seed: GeneratorLike,
             lazy_init: bool,
+            mixing_time,
+            precision,
     ):
         super().__init__(data, models, seed)
         # History {mu^(i)}_{i=1}^N
         self.history: list[DiscreteDistribution] = []
+
+        # Number of the iteration
+        self._i = 0
+        self.mixing_time = mixing_time
+        self.precision = precision
+
+        self.last_measure = None
         self.last_i: int = None
         if not lazy_init:
             self._first_step(self.random_state)
+        self._lazy_init = lazy_init
+
+        self.steps_counter: Counter = Counter()
 
     def __repr__(self):
         return (self.__class__.__name__
                 + f"(n_data={self.n_data}, n_models={self.n_models}, "
-                  f"n_samples={len(self.history) - 1}, last_i={self.last_i})")
+                  f"n_samples={self.samples_counter.total()}, last_i={self.last_i})")
 
     @abc.abstractmethod
     def _first_step(self, rng: GeneratorLike):
         ...
+
+    def _post_init_(self):
+        if not self._lazy_init:
+            self._first_step(self._first_step(self.rng))
+
+    def _draw(self, *args, random_state=None, **kwargs) -> tuple[TSample, int]:
+
+        # Calcular el t_mix(eps)
+        t_mix_eps = int(math.log2(1 / self.precision) * self.mixing_time + 1)
+        _log.debug(f"t_mix(eps) = {t_mix_eps} steps")
+
+        # Dejar pasar algunas iteraciones para obtener resultados indep
+        for _ in range(t_mix_eps - 1):
+            self.step(random_state)
+
+        return self.step(random_state)
+
+    @abc.abstractmethod
+    def _step(self, random_state: GeneratorLike) -> tuple[Distribution, int]:
+        """To use template pattern. Returns a distribution and its index."""
+        ...
+
+    def step(self, random_state: GeneratorLike = None) -> tuple[DistributionDraw, int]:
+        _log.debug("=" * 10 + f" mcmc iter = {self._i} " + "=" * 10)
+        self._i += 1
+        step, i = self._step(random_state=random_state)
+        self.steps_counter[i] += 1
+        return step, i
 
 
 class MetropolisPosteriorPiN(MCMCPosteriorPiN[TSample]):
@@ -431,72 +562,57 @@ class MetropolisPosteriorPiN(MCMCPosteriorPiN[TSample]):
             models: list[DiscreteDistribution],
             seed: GeneratorLike = None,
             lazy_init: bool = False,
+            mixing_time: int = 150,
+            precision: float = 1e-2,
     ):
-        super().__init__(data, models, seed, lazy_init)
-        self.possible_models: np.ndarray[int] = np.arange(self.n_models)
-
-    def _first_step(self, rng):
-        _log.info("Executing _first_step")
-        # To avoid a measure with zero likelihood
-        probabilities = (self.likelihood_cache > 0).astype(float)
+        super().__init__(data, models, seed, lazy_init, mixing_time, precision)
+        probabilities: np.ndarray[float] = np.isfinite(self.log_likelihood_cache).astype(float)
         probabilities /= probabilities.sum()
-        # Choose a model
-        self.last_i = int(rng.choice(self.n_models, p=probabilities))
-        _log.info(f"First model selected: {self.last_i}.")
-        self.history.append(self.models[self.last_i])
-        # Update the counter
-        self.counter[self.last_i] += 1
+        self.probabilities = probabilities
+        self._post_init_()
 
-    def _draw(self, random_state: GeneratorLike = None) -> tuple[DiscreteDistribution, int]:
+    def _first_step(self, rng: GeneratorLike):
+        if self.last_measure is None:
+            _log.info("Executing _first_step")
+            # Choose a model
+            self.last_i = int(rng.choice(self.n_models, p=self.probabilities.copy()))
+            _log.info(f"First model selected: {self.last_i}.")
+            self.last_measure = self.models[self.last_i]
+
+    def _step(self, random_state: GeneratorLike = None) -> tuple[DiscreteDistribution, int]:
         # Set generator
         rng = self.get_rng(random_state)
 
         # If this is the first time that executes this instruction
-        if len(self.history) == 0:
-            self._first_step(rng)
+        self._first_step(rng)
         last_i = self.last_i
 
-        if sum(self.likelihood_cache > 0) == 1:
-            mu_i = self.history[-1]
-            self.history.append(mu_i)
-            return self.history[-1], self.last_i
-
-        # Draw a uniform
-        u = rng.uniform(low=0, high=1)
-        _log.debug(f"{u = }")
+        if sum(np.isfinite(self.log_likelihood_cache)) == 1:
+            return self.last_measure, self.last_i
 
         # Draw a candidate
-        probabilities = np.ones(self.n_models)
+        probabilities = self.probabilities.copy()
         probabilities[last_i] = 0.  # Remove the last distribution
         probabilities /= probabilities.sum()
 
-        next_i = int(rng.choice(self.possible_models, p=probabilities))
+        next_i = int(rng.choice(self.models_index, p=probabilities))
 
         # Compute the acceptance probability
-        A_mu_i_mu_star = min(
-            1.,
-            (self.likelihood_cache[next_i])
-            / (self.likelihood_cache[last_i])
-        )
-        _log.debug(f"{A_mu_i_mu_star = }")
-        _log.debug(f"{self.likelihood_cache[next_i] = }")
+        log_likelihood_diff = self.log_likelihood_cache[next_i] - self.log_likelihood_cache[last_i]
+        _log.debug(f"{log_likelihood_diff = }")
 
         # Acceptance / Rejection
-        if u < A_mu_i_mu_star:
+        if (log_likelihood_diff >= 1
+                or rng.uniform(low=0, high=1) < np.exp(log_likelihood_diff)):
             _log.info(f"i = {self._i}: {last_i = } -> {next_i = }.")
             # Add to the history
             mu_star = self.models[next_i]
-            self.history.append(mu_star)
+            self.last_measure = mu_star
 
             # Update the last_i
             self.last_i = next_i
 
-        else:
-            # Repeat the last sample
-            mu_i = self.history[-1]
-            self.history.append(mu_i)
-
-        return self.history[-1], last_i
+        return self.last_measure, last_i
 
 
 class AlternativeMetropolisPosteriorPiN(MetropolisPosteriorPiN[TSample]):
@@ -506,8 +622,10 @@ class AlternativeMetropolisPosteriorPiN(MetropolisPosteriorPiN[TSample]):
             models: list[DiscreteDistribution],
             seed: GeneratorLike = None,
             lazy_init: bool = False,
+            mixing_time: int = 150,
+            precision: float = 1e-2,
     ):
-        super().__init__(data, models, seed, True)
+        super().__init__(data, models, seed, lazy_init, mixing_time, precision)
         self.models = [m for m in self.models if self.likelihood(m) > 0]
         self.possible_models = np.arange(self.n_models)
 
@@ -523,8 +641,10 @@ class GibbsPosteriorPiN(MCMCPosteriorPiN[TSample]):
             models: list[DiscreteDistribution],
             seed: GeneratorLike = None,
             lazy_init: bool = False,
+            mixing_time: int = 150,
+            precision: float = 1e-2,
     ):
-        super().__init__(data, models, seed, True)
+        super().__init__(data, models, seed, lazy_init, mixing_time, precision)
         self.possible_models = np.arange(self.n_models)
         self.probs_cache: dict[int, np.ndarray] = dict()
         self.likelihood_sum: float = 0.
@@ -535,71 +655,58 @@ class GibbsPosteriorPiN(MCMCPosteriorPiN[TSample]):
     def __repr__(self):
         return (self.__class__.__name__
                 + f"(n_data={self.n_data}, n_models={self.n_models}, "
-                  f"n_samples={len(self.history) - 1}, last_i={self.last_i},"
+                  f"n_samples={self.samples_counter.total()}, last_i={self.last_i},"
                   f" likelihood_sum={self.likelihood_sum:.4e})")
 
     def _first_step(self, rng):
-        _log.info("Executing _first_step")
-        self.likelihood_sum = np.sum(self.likelihood_cache)
-        _log.debug(f"likelihood_sum = {self.likelihood_sum}")
-        # Choose a model
-        possible_distributions = np.arange(self.n_models)[self.likelihood_cache > 0]
-        self.last_i = int(rng.choice(possible_distributions))
-        self.history.append(self.models[self.last_i])
-        _log.info(f"First model selected: {self.last_i}.")
-        # Update the counter
-        self.counter[self.last_i] += 1
+        if self.last_measure is None:
+            _log.info("Executing _first_step")
+            self.likelihood_sum = np.sum(self.likelihood_cache)
+            _log.debug(f"likelihood_sum = {self.likelihood_sum}")
+            # Choose a model
+            possible_distributions = np.arange(self.n_models)[np.isfinite(self.log_likelihood_cache)]
+            self.last_i = int(rng.choice(possible_distributions))
+            self.last_measure = self.models[self.last_i]
+            _log.info(f"First model selected: {self.last_i}.")
 
-    def _draw(self, random_state=None) -> tuple[DiscreteDistribution, int]:
+    def _step(self, random_state=None) -> tuple[DiscreteDistribution, int]:
         # Set generator
         rng = self.get_rng(random_state)
 
         # If this is the first time that executes this instruction
-        if len(self.history) == 0:
+        if self.last_measure is None:
             self._first_step(rng)
+
         last_i = self.last_i
 
-        if sum(self.likelihood_cache > 0) == 1:
-            mu_i = self.history[-1]
-            self.history.append(mu_i)
-            return self.history[-1], self.last_i
-
-        # Draw a uniform
-        u = rng.uniform(low=0, high=1)
-        _log.debug(f"{u = }")
+        if sum(np.isfinite(self.log_likelihood_cache)) == 1:
+            return self.last_measure, self.last_i
 
         # Draw a candidate
-        if last_i not in self.probs_cache:
-            _log.debug(f"Computing the cache probabilities for the draw {last_i}.")
-            self.probs_cache[last_i] = self.likelihood_cache.copy()
-            self.probs_cache[last_i][last_i] = 0.
-            self.probs_cache[last_i] /= self.probs_cache[last_i].sum()
+        probs = self.likelihood_cache.copy()
+        probs[last_i] = 0.
+        probs /= probs.sum()
 
-        next_i = int(rng.choice(self.possible_models, p=self.probs_cache[last_i]))
+        next_i = int(rng.choice(self.possible_models, p=probs))
 
         # Compute the acceptance probability
-        A_mu_i_mu_star = min(
-            1.,
-            (self.likelihood_sum - self.likelihood_cache[last_i])
-            / (self.likelihood_sum - self.likelihood_cache[next_i])
-        )
-        _log.debug(f"{A_mu_i_mu_star = }")
+        acceptance_prob = ((self.likelihood_sum - self.likelihood_cache[next_i])
+                           / (self.likelihood_sum - self.likelihood_cache[last_i]))
+        _log.debug(f"{acceptance_prob = }")
 
         # Acceptance / Rejection
-        if u < A_mu_i_mu_star:
+        if (acceptance_prob >= 1
+                or rng.uniform(low=0, high=1) < acceptance_prob):
             _log.info(f"i = {self._i}: {last_i = } -> {next_i = }.")
+
             # Add to the history
             mu_star = self.models[next_i]
-            self.history.append(mu_star)
+            self.last_measure = mu_star
 
             # Update the last_i
             self.last_i = next_i
 
-        else:
-            mu_i = self.history[-1]
-            self.history.append(mu_i)
-
-        return self.history[-1], last_i
+        return self.last_measure, last_i
 
 
 class AlternativeGibbsPosteriorPiN(GibbsPosteriorPiN[TSample]):
@@ -609,10 +716,12 @@ class AlternativeGibbsPosteriorPiN(GibbsPosteriorPiN[TSample]):
             models: list[DiscreteDistribution],
             seed=None,
             lazy_init=False,
+            mixing_time: int = 150,
+            precision: float = 1e-2,
     ):
-        super().__init__(data, models, seed, True)
+        super().__init__(data, models, seed, lazy_init, mixing_time, precision)
 
-        self.models = [m for m in self.models if self.likelihood(m) > 0]
+        self.models = [m for m in self.models if self.log_likelihood(m) > 0]
         self.possible_models = np.arange(self.n_models)
 
         if not lazy_init:
