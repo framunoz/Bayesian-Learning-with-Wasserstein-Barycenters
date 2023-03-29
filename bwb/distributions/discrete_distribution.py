@@ -3,6 +3,10 @@ from pyro.distributions import Categorical
 
 from bwb.config import Config
 
+__all__ = [
+    "DiscreteDistribution",
+]
+
 config = Config()
 
 
