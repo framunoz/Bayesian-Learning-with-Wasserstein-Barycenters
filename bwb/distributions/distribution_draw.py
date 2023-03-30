@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from PIL import Image
 
@@ -6,6 +7,7 @@ from bwb.distributions.discrete_distribution import DiscreteDistribution
 
 __all__ = [
     "DistributionDraw",
+    "DistributionDrawBuilder",
 ]
 
 config = Config()
@@ -16,33 +18,27 @@ class DistributionDraw(DiscreteDistribution):
 
     def __init__(
             self,
-            grayscale,
+            weights,
+            shape,
             device=None,
     ):
-        # If device is None, uso the device of the grayscale tensor
-        if isinstance(grayscale, torch.Tensor):
-            device = device or grayscale.device
-        # Else, use the device by default
+        """
+        Initialiser.
+
+        :param weights: The weights of the distribution.
+        :param shape: The shape of the image that represents the distribution.
+        :param device: The device to work.
+        """
+        # If device is None, use the device by default
         device: torch.device = torch.device(device or config.device)
 
-        # Save the grayscales for create images
-        self.grayscale: torch.Tensor = torch.as_tensor(
-            grayscale,
-            dtype=torch.uint8,  # Use uint8 for images
-            device=device
-        )
-
         # Get the shape information
-        self.shape: torch.Size = self.grayscale.shape
+        self.shape = shape
         if len(self.shape) != 2:
-            raise ValueError("The shape of the 'grayscale' tensor"
-                             " must be a (n, m) shape tensor.")
+            raise ValueError("The shape must have dimension 2.")
         n, m = self.shape
-
-        # Get the weights from the grayscale
-        weights: torch.Tensor = self.grayscale / 255
-        weights /= torch.sum(weights)
-        weights = weights.reshape((-1,))
+        if n * m != len(weights):
+            raise ValueError("The weights must be equals to n * m, where shape=(n, m).")
 
         # Get the support as coordinates
         indx = torch.arange(n * m, device=device).reshape(-1, 1)
@@ -50,13 +46,54 @@ class DistributionDraw(DiscreteDistribution):
 
         super(DistributionDraw, self).__init__(pk=weights, xk=support, device=device)
 
+    @classmethod
+    def from_array(
+            cls,
+            grayscale,
+            device=None,
+    ):
+        # If device is None, use the device of the grayscale tensor
+        if isinstance(grayscale, torch.Tensor):
+            device = device or grayscale.device
+        # Else, use the device by default
+        device: torch.device = torch.device(device or config.device)
+
+        # Save the grayscales for create images
+        grayscale: torch.Tensor = torch.as_tensor(
+            grayscale,
+            dtype=torch.uint8,  # Use uint8 for images
+            device=device
+        )
+
+        # Get the shape information
+        shape = tuple(grayscale.shape)
+        if len(shape) != 2:
+            raise ValueError("The 'grayscale' tensor must have dimension 2.")
+
+        # Get the weights from the grayscale
+        weights: torch.Tensor = grayscale / 255
+        weights /= torch.sum(weights)
+        weights = weights.reshape((-1,))
+
+        return cls(weights=weights, shape=shape, device=device)
+
+    @property
+    def grayscale(self) -> np.ndarray:
+        """The matrix representating the gray scale of the image"""
+        grayscale_ = self.pk / torch.max(self.pk) * 255
+        grayscale_ = grayscale_.reshape(self.shape).clone().detach()
+        return grayscale_.to(torch.uint8).cpu().numpy()
+
     @property
     def image(self) -> Image.Image:
         """Representation of the Image.
 
         :return: An PIL.Image.Image instance.
         """
-        return Image.fromarray(255 - self.grayscale.cpu().numpy())
+        return Image.fromarray(255 - self.grayscale)
+
+    def __repr__(self):
+        return type(self).__name__ + f"(shape: {self.shape})"
 
     def _repr_png_(self):
         """iPython display hook support
@@ -64,3 +101,35 @@ class DistributionDraw(DiscreteDistribution):
         :returns: png version of the image as bytes
         """
         return self.image._repr_png_()
+
+
+class DistributionDrawBuilder:
+    def __init__(
+            self,
+            floor=0,
+            device=None
+    ):
+        """
+        Initialiser.
+
+        :param floor: The floor of the images
+        :param device: The device of the tensor
+        """
+        self.floor = floor
+        self.device = device or config.device
+
+    def create_from_array(self, models_array: np.ndarray, shape):
+        """
+        Creates an iterable of DistributionDraws from an array.
+
+        :param models_array: Array with shape (n_models, n_pixels)
+        :param shape: The shape of the images (n, m). It must be satisfied that n * m = n_pixels.
+        :return: An array of DistributionDraws.
+        """
+        models_array = torch.tensor(models_array, device=self.device)
+        if self.floor != 0:
+            models_array = torch.min(self.floor, models_array)
+        models_array = models_array / 255
+        models_array = models_array / torch.sum(models_array, 1).reshape(-1, 1)
+
+        return np.array([DistributionDraw(arr, shape, self.device) for arr in models_array])

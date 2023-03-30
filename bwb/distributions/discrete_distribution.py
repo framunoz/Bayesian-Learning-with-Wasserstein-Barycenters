@@ -40,10 +40,10 @@ class DiscreteDistribution(Categorical):
         self.device: torch.device = device or config.device
 
         # Save pk and xk as tensor
-        self.pk = torch.as_tensor(pk, dtype=config.dtype, device=self.device)
+        self.pk: torch.Tensor = torch.as_tensor(pk, dtype=config.dtype, device=self.device)
 
         xk = xk if xk is not None else range(len(self.pk))
-        self.xk = torch.as_tensor(xk, device=self.device)
+        self.xk: torch.Tensor = torch.as_tensor(xk, device=self.device)
 
         if len(self.pk) != len(self.xk):
             raise ValueError(
