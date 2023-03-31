@@ -9,7 +9,8 @@ import torch
 from numpy.random import Generator
 
 from bwb.config import Config
-from bwb.distributions.discrete_distribution import DiscreteDistribution, BaseDistributionDataLoader
+from bwb.distributions.data_loaders import BaseDistributionDataLoader
+from bwb.distributions.discrete_distribution import DiscreteDistribution
 from bwb.validation import check_is_fitted
 
 __all__ = [
