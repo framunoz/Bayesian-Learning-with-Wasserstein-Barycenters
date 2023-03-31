@@ -16,7 +16,7 @@ _stream_handler.setFormatter(_formatter)
 _log.addHandler(_stream_handler)
 
 
-class SingletonMeta(type):
+class _SingletonMeta(type):
     """Metaclass to implements Singleton Pattern. Obtained from
     https://refactoring.guru/design-patterns/singleton/python/example#example-1 """
     _instances = {}
@@ -30,7 +30,7 @@ class SingletonMeta(type):
         return cls._instances[cls]
 
 
-class Config(metaclass=SingletonMeta):
+class Config(metaclass=_SingletonMeta):
     # The dtype selected by default: A double
     dtype = torch.float64
 

@@ -6,12 +6,16 @@ from typing import Sequence
 
 import numpy as np
 import torch
+from numpy.random import Generator
 
 from bwb.config import Config
-from bwb.distributions.discrete_distribution import DiscreteDistribution
+from bwb.distributions.discrete_distribution import DiscreteDistribution, BaseDistributionDataLoader
 from bwb.validation import check_is_fitted
 
-config = Config()
+__all__ = [
+    "PosteriorPiN",
+    "ExplicitPosteriorPiN",
+]
 
 
 def _log_likelihood_default(model: DiscreteDistribution, data: torch.Tensor):
@@ -25,7 +29,8 @@ def _log_likelihood_default(model: DiscreteDistribution, data: torch.Tensor):
 
 
 def timeit_to_total_time(method):
-    """Function that records the total time of a method and stores it in the class instance."""
+    """Function that records the total time it takes to execute a method, and stores it in the ``total_time``
+    attribute of the class instance."""
 
     @functools.wraps(method)
     def timeit_wrapper(*args, **kwargs):
@@ -40,26 +45,23 @@ def timeit_to_total_time(method):
 
 # noinspection PyAttributeOutsideInit
 class PosteriorPiN(abc.ABC):
-    r"""
-    Clase base para las clases que representen la distribución posterior:
-     .. math::
+    r"""Base class for classes representing the posterior distribution:
+
+    .. math::
         \Pi_n(dm) = \Pi(dm) \frac{\mathcal{L}_n(m)}{\int_{\mathcal{M}} \mathcal{L}_n(d\bar m) \Pi(d\bar m)}
+
     """
 
     def __init__(
             self,
             log_likelihood_fn,
-            device,
     ):
         """
         Initiliser.
 
-        :param log_likelihood_fn: The log-likelihood function. Is a function that recieves a model and data, and
+        :param log_likelihood_fn: The log-likelihood function. Is a function that receives a model and data, and
         returns the log-likelihood.
-        :param device: The device of the tensors.
         """
-        # Set the device of the instance
-        self.device: torch.device = torch.device(device or config.device)
         self.log_likelihood_fn = log_likelihood_fn or _log_likelihood_default
 
         # The history of the index samples
@@ -72,7 +74,7 @@ class PosteriorPiN(abc.ABC):
     def fit(
             self,
             data: Sequence[int],
-            models: Sequence[DiscreteDistribution],
+            models: BaseDistributionDataLoader,
     ):
         """
         Fit the data of the distribution
@@ -81,13 +83,13 @@ class PosteriorPiN(abc.ABC):
         :param models: A sequence of models.
         :return: itself.
         """
-        self.data_ = torch.as_tensor(data, device=self.device)
-        self.models_ = np.asarray(models)
+        self.data_ = torch.as_tensor(data, device=Config.device)
+        self.models_: BaseDistributionDataLoader = models
         self.models_index_ = np.arange(len(self.models_))
         return self
 
     def log_likelihood(self, model: DiscreteDistribution):
-        """The log-likelehood of the model."""
+        """The log-likelihood of the model."""
         check_is_fitted(self)
         return self.log_likelihood_fn(model, data=self.data_)
 
@@ -122,3 +124,67 @@ class PosteriorPiN(abc.ABC):
         self.samples_history += list_i
         self.samples_counter.update(list_i)
         return to_return
+
+
+# noinspection PyAttributeOutsideInit
+class ExplicitPosteriorPiN(PosteriorPiN):
+    r"""Distribution that uses the strategy of calculating all likelihoods by brute force. This class implements
+    likelihoods of the form
+
+    .. math::
+        \mathcal{L}_n(m) = \prod_{i=1}^{n} \rho_{m}(x_i)
+
+    using the log-likelihood for stability. Finally, to compute the sampling probabilities, for a discrete
+    set :math:`\mathcal{M}` of models, using a uniform prior, we have the posterior explicit by
+
+    .. math::
+        \Pi_n(m) = \frac{\mathcal{L}_n(m)}{\sum_{\bar m \in \mathcal{M}} \mathcal{L}_n(\bar m)}
+
+     """
+
+    def __init__(
+            self,
+            log_likelihood_fn=None,
+    ):
+        super().__init__(log_likelihood_fn)
+
+    def fit(
+            self,
+            data: Sequence[int],
+            models: BaseDistributionDataLoader,
+    ):
+        super(ExplicitPosteriorPiN, self).fit(data, models)
+
+        # Compute the log-likelihood of the models as cache
+        # Data with shape (1, n_data)
+        data = self.data_.reshape(1, -1)
+
+        # logits array with shape (n_models, n_support)
+        logits_models = models.logits_tensor
+
+        # Take the evaluations of the logits, resulting in a tensor of shape (n_models, n_data)
+        evaluations = torch.take_along_dim(logits_models, data, 1)
+
+        # Get the likelihood as cache. The shape is (n_models,)
+        likelihood_cache = torch.exp(torch.sum(evaluations, 1))
+
+        # Get the posterior probabilities.
+        self.probabilities_: np.ndarray = (likelihood_cache / likelihood_cache.sum()).cpu().numpy()
+
+        return self
+
+    def _draw(self, seed=None):
+        rng: Generator = np.random.default_rng(seed)
+        i = rng.choice(a=self.models_index_, p=self.probabilities_)
+        return self.models_[i], i
+
+    def _rvs(self, size=1, seed=None, **kwargs):
+        rng: Generator = np.random.default_rng(seed)
+        list_i = list(rng.choice(a=self.models_index_, size=size, p=self.probabilities_))
+        return [self.models_[i] for i in list_i], list_i
+
+    def draw(self, seed=None, **kwargs):
+        super().draw(seed=seed)
+
+    def rvs(self, size=1, seed=None, **kwargs):
+        super().rvs(size=size, seed=seed)
