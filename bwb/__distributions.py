@@ -12,8 +12,8 @@ from typing import TypeVar, Generic, Union, Any, Optional, Protocol, Iterable
 import PIL.Image
 import numpy as np
 from PIL.Image import Image
-from numpy._typing import ArrayLike
 from numpy import ma
+from numpy._typing import ArrayLike
 from numpy.random import Generator
 
 # Get logger
@@ -475,7 +475,7 @@ class ExplicitPosteriorPiN(PosteriorPiN):
         tic = time.time()
 
         # Set a random state
-        rng = self.obtain_rng(random_state)
+        rng: Generator = self.obtain_rng(random_state)
         index_list = rng.choice(a=self.models_index, size=size, p=self.probabilities_arr)
 
         self.samples_counter.update(index_list)
