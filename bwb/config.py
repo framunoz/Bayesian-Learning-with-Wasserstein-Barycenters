@@ -1,33 +1,8 @@
-import logging
-from threading import Lock
-
 import torch
 
-# Get logger
+from .logging import _SingletonMeta
 
-_log = logging.getLogger(__name__)
-_log.setLevel(logging.DEBUG)
-
-# Configure a formatter
-_formatter = logging.Formatter("%(asctime)s: %(levelname)s [%(name)s:%(lineno)s]\n> %(message)s")
-
-_stream_handler = logging.StreamHandler()
-_stream_handler.setFormatter(_formatter)
-_log.addHandler(_stream_handler)
-
-
-class _SingletonMeta(type):
-    """Metaclass to implements Singleton Pattern. Obtained from
-    https://refactoring.guru/design-patterns/singleton/python/example#example-1 """
-    _instances = {}
-    _lock: Lock = Lock()
-
-    def __call__(cls, *args, **kwargs):
-        with cls._lock:
-            if cls not in cls._instances:
-                instance = super().__call__(*args, **kwargs)
-                cls._instances[cls] = instance
-        return cls._instances[cls]
+_log = _logging.get_logger(__name__)
 
 
 class Config(metaclass=_SingletonMeta):

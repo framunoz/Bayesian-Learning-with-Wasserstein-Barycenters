@@ -3,7 +3,6 @@ from typing import Protocol
 
 import torch
 
-from . import _logging
 from ._protocols import BaseTransport, FitWithDistribution
 from .distributions import DiscreteDistribution
 from .validation import check_is_fitted

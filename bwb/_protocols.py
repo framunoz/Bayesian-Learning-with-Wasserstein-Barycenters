@@ -4,7 +4,6 @@ from typing import Protocol
 
 from ot import da as da
 
-from . import _logging
 from .distributions import DiscreteDistribution
 
 _log = _logging.get_logger(__name__)
