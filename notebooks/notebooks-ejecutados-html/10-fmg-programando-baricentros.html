@@ -18976,9 +18976,11 @@ all of MD as it is not optimized for dense, information rich UIs.
             <div class="jp-InputPrompt jp-InputArea-prompt">In&nbsp;[1]:</div>
             <div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
                 <div class="CodeMirror cm-s-jupyter">
-                    <div class=" highlight hl-ipython3"><pre><span></span><span class="kn">from</span> <span class="nn">bwb.transports</span> <span
-                            class="kn">import</span> <span class="n">MySinkhornTransport</span><span class="p">,</span> <span
-                            class="n">MyEMDTransport</span>
+                    <div class=" highlight hl-ipython3"><pre><span></span><span
+                            class="kn">from</span> <span class="nn">bwb.transports</span> <span
+                            class="kn">import</span> <span class="n">SinkhornTransport</span><span
+                            class="p">,</span> <span
+                            class="n">EMDTransport</span>
 </pre>
                     </div>
 
@@ -21944,12 +21946,14 @@ freq: 6</h4>
                 <div class="CodeMirror cm-s-jupyter">
                     <div class=" highlight hl-ipython3"><pre><span></span><span class="n">eps</span> <span
                             class="o">=</span> <span class="mf">1e-3</span>
-<span class="n">alpha</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">/</span> <span
+<span class="n">alpha</span> <span class="o">=</span> <span class="mf">1.</span> <span
+                                class="o">/</span> <span
                                 class="mi">10</span>
-<span class="n">emd_transp</span> <span class="o">=</span> <span class="n">MyEMDTransport</span><span
+<span class="n">emd_transp</span> <span class="o">=</span> <span class="n">EMDTransport</span><span
                                 class="p">()</span>
 <span class="n">gamma</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">k_</span><span
-                                class="p">:</span> <span class="mi">1</span> <span class="o">/</span> <span
+                                class="p">:</span> <span class="mi">1</span> <span
+                                class="o">/</span> <span
                                 class="p">(</span><span class="n">k_</span> <span class="o">+</span> <span
                                 class="mi">2</span><span class="p">)</span>
 
@@ -24264,15 +24268,18 @@ W_mu_kp1_mu_k = 0.0009716072436321852
                 <div class="CodeMirror cm-s-jupyter">
                     <div class=" highlight hl-ipython3"><pre><span></span><span class="n">eps</span> <span
                             class="o">=</span> <span class="mf">1e-3</span>
-<span class="n">alpha</span> <span class="o">=</span> <span class="mf">1.</span> <span class="o">/</span> <span
+<span class="n">alpha</span> <span class="o">=</span> <span class="mf">1.</span> <span
+                                class="o">/</span> <span
                                 class="mi">10</span>
-<span class="n">emd_transp</span> <span class="o">=</span> <span class="n">MyEMDTransport</span><span
+<span class="n">emd_transp</span> <span class="o">=</span> <span class="n">EMDTransport</span><span
                                 class="p">()</span>
 <span class="n">gamma</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">k_</span><span
-                                class="p">:</span> <span class="mi">1</span> <span class="o">/</span> <span
+                                class="p">:</span> <span class="mi">1</span> <span
+                                class="o">/</span> <span
                                 class="p">(</span><span class="n">k_</span> <span class="o">+</span> <span
                                 class="mi">2</span><span class="p">)</span>
-<span class="n">S</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">k_</span><span
+<span class="n">S</span> <span class="o">=</span> <span class="k">lambda</span> <span
+                                class="n">k_</span><span
                                 class="p">:</span> <span class="mi">5</span>
 
 <span class="c1"># Camino de baricentros</span>
