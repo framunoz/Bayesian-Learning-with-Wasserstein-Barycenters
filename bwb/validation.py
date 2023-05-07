@@ -1,3 +1,4 @@
+import math
 from inspect import isclass
 
 from bwb.exceptions import NotFittedError
@@ -41,3 +42,17 @@ def check_is_fitted(estimator, attributes=None, *, msg=None, all_or_any=all):
 
     if not fitted:
         raise NotFittedError(msg % {"name": type(estimator).__name__})
+
+
+def _shape_validation(shape, n_dim=2, msg="The shape must have dimension {n_dim}."):
+    if len(shape) != n_dim:
+        raise ValueError(msg.format(n_dim=n_dim))
+    return tuple(shape)
+
+
+def _shape_weights_validation(shape, weights, n_dim=2):
+    shape = _shape_validation(shape, n_dim)
+    if math.prod(shape) != len(weights):
+        raise ValueError("The weights must be equals to the product of the shape, "
+                         f"where prod(shape)={math.prod(shape)}.")
+    return shape
