@@ -1,10 +1,11 @@
 import abc
-from typing import TypeVar, MutableMapping, Generic
+import typing
 
 import torch
 
+import bwb.distributions as distrib
 from bwb.config import config
-from bwb.distributions import DiscreteDistribution, DistributionDraw
+from bwb.utils import _ArrayLike, _DistributionT
 
 __all__ = [
     "BaseDistributionDataLoader",
@@ -12,13 +13,16 @@ __all__ = [
     "DistributionDrawDataLoader",
 ]
 
-TDistribution = TypeVar("TDistribution")
 
-
-class BaseDistributionDataLoader(MutableMapping, Generic[TDistribution], abc.ABC):
+class BaseDistributionDataLoader(
+    typing.MutableMapping[int, _DistributionT],
+    typing.Generic[_DistributionT],
+    abc.ABC
+):
     """
-    Base class for DataLoaders. It is a ``MutableMapping`` that creates instances of distributions in a 'lazy' way,
-    saving computation time. It ends up representing several distributions from a tensor with the corresponding weights.
+    Base class for DataLoaders. It is a :py:class:`MutableMapping` that creates instances of
+    distributions in a 'lazy' way, saving computation time. It ends up representing several
+    distributions from a tensor with the corresponding weights.
     """
 
     def __init__(
@@ -36,19 +40,19 @@ class BaseDistributionDataLoader(MutableMapping, Generic[TDistribution], abc.ABC
         self.logits_tensor = torch.logit(self.probs_tensor, config.eps)
 
         # And define the dictionary to wrap
-        self._models: dict[int, TDistribution] = {i: None for i in range(_n_probs)}
+        self._models: dict[int, _DistributionT] = {i: None for i in range(_n_probs)}
 
     @abc.abstractmethod
-    def _create_distribution_instance(self, index) -> TDistribution:
+    def _create_distribution_instance(self, index) -> _DistributionT:
         """To use template pattern on __get_item__"""
         raise NotImplementedError("Must implement method '_create_distribution_instance'.")
 
-    def __getitem__(self, item: int) -> TDistribution:
+    def __getitem__(self, item: int) -> _DistributionT:
         if self._models[item] is None:
             self._models[item] = self._create_distribution_instance(item)
         return self._models[item]
 
-    def __setitem__(self, key: int, value: TDistribution):
+    def __setitem__(self, key: int, value: _DistributionT):
         self._models[key] = value
 
     def __delitem__(self, key: int):
@@ -63,35 +67,40 @@ class BaseDistributionDataLoader(MutableMapping, Generic[TDistribution], abc.ABC
     def __len__(self) -> int:
         return len(self._models)
 
+    def __repr__(self):
+        return (self.__class__.__name__
+                + "("
+                + f"(n_models, n_supp)={tuple(self.probs_tensor.shape)}"
+                + ")")
 
-class DiscreteDistributionDataLoader(BaseDistributionDataLoader[DiscreteDistribution]):
+
+class DiscreteDistributionDataLoader(
+    BaseDistributionDataLoader[distrib.DiscreteDistribution]
+):
     """
-    DataLoader for the ``DiscreteDistributions``.
+    DataLoader for the :py:class:`bwb.distributions.discrete_distributions.DiscreteDistributions`.
     """
 
-    def _create_distribution_instance(self, index: int) -> DiscreteDistribution:
-        return DiscreteDistribution(self.probs_tensor[index])
+    def _create_distribution_instance(self, index: int) -> distrib.DiscreteDistribution:
+        return distrib.DiscreteDistribution(self.probs_tensor[index])
 
 
-class DistributionDrawDataLoader(BaseDistributionDataLoader[DistributionDraw]):
-    """A class of type ``MutableMapping`` that wraps a dictionary. It stores information from probability arrays and
-     logits. This class can be thought of as using the flyweight pattern, so as not to take up too much instantiation
-     time, or if an instance already exists, to reuse it."""
+class DistributionDrawDataLoader(BaseDistributionDataLoader[distrib.DistributionDraw]):
+    """A class of type :py:class:`MutableMapping` that wraps a dictionary. It stores information
+    from probability arrays and logits. This class can be thought of as using the flyweight
+    pattern, so as not to take up too much instantiation time, or if an instance already exists,
+    to reuse it. """
 
     def __init__(
             self,
-            models_array,
+            models_array: _ArrayLike,
             shape,
             floor=0,
     ):
         """
-        :type models_array: scalar or sequence or arraylike
-
         :param models_array: Arreglo de modelos.
-        :type shape: tuple[int, int]
-        :param shape: Dimensiones de las imágenes originales.
-        :type floor: int
-        :param floor: Número que funciona como valor mínimo de las imágenes.
+        :param tuple[int, int] shape: Dimensiones de las imágenes originales.
+        :param int floor: Número que funciona como valor mínimo de las imágenes.
         """
         self.floor: int = int(floor)
 
@@ -107,5 +116,5 @@ class DistributionDrawDataLoader(BaseDistributionDataLoader[DistributionDraw]):
 
         super(DistributionDrawDataLoader, self).__init__(probs_tensor=probs_tensor)
 
-    def _create_distribution_instance(self, index) -> DistributionDraw:
-        return DistributionDraw(self.probs_tensor[index], self.shape)
+    def _create_distribution_instance(self, index) -> distrib.DistributionDraw:
+        return distrib.DistributionDraw.from_weights(self.probs_tensor[index], self.shape)
