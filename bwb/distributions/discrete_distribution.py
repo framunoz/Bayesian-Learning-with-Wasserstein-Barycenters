@@ -175,8 +175,9 @@ class DistributionDraw(DiscreteDistribution):
 
     @property
     def image(self) -> Image.Image:
-        """Representation of the Image.
-.
+        """
+        Representation of the Image.
+
         :return: A PIL.Image.Image instance.
         """
         return Image.fromarray(255 - self.grayscale)

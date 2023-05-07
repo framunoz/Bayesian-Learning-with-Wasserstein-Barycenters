@@ -4,9 +4,10 @@ from typing import Protocol
 
 from ot import da as da
 
-from .distributions import DiscreteDistribution
+from bwb import logging
+from bwb.distributions import DiscreteDistribution
 
-_log = _logging.get_logger(__name__)
+_log = logging.get_logger(__name__)
 
 
 class FitWithMeasure(Protocol):

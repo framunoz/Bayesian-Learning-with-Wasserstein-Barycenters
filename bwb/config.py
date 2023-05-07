@@ -1,8 +1,9 @@
 import torch
 
-from .logging import _SingletonMeta
+from bwb import logging
+from bwb.logging import _SingletonMeta
 
-_log = _logging.get_logger(__name__)
+_log = logging.get_logger(__name__)
 
 
 class Config(metaclass=_SingletonMeta):

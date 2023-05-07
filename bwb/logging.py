@@ -1,21 +1,20 @@
 """
 Script with all the necessary information for the library loggers.
-You can use this script by importing it as follows::
+You can use this module by importing it as follows::
 
-    from library_name import _logging
-    logger = _logging.get_logger(name)
+    from library_name import logging
+    logger = logging.get_logger(__name__)  # The name of the logger is the same of the module
 
-And change the level of any logger with
+And change the level of any logger with::
 
-    from library_name import _logging
-    _logging.set_level(_logging.DEBUG, name="name of the logger")
+    logging.set_level(logging.DEBUG, name=name_of_the_logger)
 
-If you want to change the level of every logger, omit the name.
+If you want to change the level of all loggers, omit the name.
 """
 import functools
 import logging
+import threading
 import time
-from threading import Lock
 
 # The levels of the severity as in the package 'logging'
 CRITICAL = logging.CRITICAL
@@ -41,7 +40,7 @@ class _SingletonMeta(type):
     """Metaclass to implements Singleton Pattern. Obtained from
     https://refactoring.guru/design-patterns/singleton/python/example#example-1 """
     _instances = {}
-    _lock: Lock = Lock()
+    _lock: threading.Lock = threading.Lock()
 
     def __call__(cls, *args, **kwargs):
         with cls._lock:
