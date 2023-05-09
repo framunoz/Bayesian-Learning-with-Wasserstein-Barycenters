@@ -1,9 +1,11 @@
 import abc
+import time
 import typing
 
 import torch
 
 import bwb.distributions as distrib
+from bwb import logging
 from bwb.config import config
 from bwb.utils import _ArrayLike, _DistributionT
 
@@ -12,6 +14,8 @@ __all__ = [
     "DiscreteDistributionDataLoader",
     "DistributionDrawDataLoader",
 ]
+
+_log = logging.get_logger(__name__)
 
 
 class BaseDistributionDataLoader(
@@ -29,6 +33,8 @@ class BaseDistributionDataLoader(
             self,
             probs_tensor,
     ):
+        _log.debug("Creating a BaseDistributionDataLoader instance.")
+        tic = time.time()
         # Set the probs_tensor
         self.probs_tensor: torch.Tensor = torch.as_tensor(probs_tensor, device=config.device)
         _n_probs = len(self.probs_tensor)
@@ -41,6 +47,9 @@ class BaseDistributionDataLoader(
 
         # And define the dictionary to wrap
         self._models: dict[int, _DistributionT] = {i: None for i in range(_n_probs)}
+
+        toc = time.time()
+        _log.debug(f"Δt={toc - tic:.2f} [seg]")
 
     @abc.abstractmethod
     def _create_distribution_instance(self, index) -> _DistributionT:
@@ -102,6 +111,8 @@ class DistributionDrawDataLoader(BaseDistributionDataLoader[distrib.Distribution
         :param tuple[int, int] shape: Dimensiones de las imágenes originales.
         :param int floor: Número que funciona como valor mínimo de las imágenes.
         """
+        _log.debug("Creating a DistributionDrawDataLoader instance.")
+        tic = time.time()
         self.floor: int = int(floor)
 
         # Setting the shape
@@ -113,6 +124,9 @@ class DistributionDrawDataLoader(BaseDistributionDataLoader[distrib.Distribution
             probs_tensor = torch.min(probs_tensor, self.floor)
         probs_tensor = probs_tensor / 255
         probs_tensor = probs_tensor / torch.sum(probs_tensor, 1).reshape(-1, 1)
+
+        toc = time.time()
+        _log.debug(f"Δt={toc - tic:.2f} [seg]")
 
         super(DistributionDrawDataLoader, self).__init__(probs_tensor=probs_tensor)
 
