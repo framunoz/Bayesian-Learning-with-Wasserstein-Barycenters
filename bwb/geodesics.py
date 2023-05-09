@@ -3,11 +3,11 @@ from typing import Protocol
 
 import torch
 
-from ._protocols import BaseTransport, FitWithDistribution
-from .distributions import DiscreteDistribution
-from .validation import check_is_fitted
+import bwb.transports as tpt
+from bwb import logging
+from bwb.validation import check_is_fitted
 
-_log = _logging.get_logger(__name__)
+_log = logging.get_logger(__name__)
 
 
 class Geodesic(Protocol):
@@ -18,34 +18,26 @@ class Geodesic(Protocol):
         ...
 
 
-class BaseGeodesic(FitWithDistribution, metaclass=abc.ABCMeta):
-    transport: BaseTransport
+class BaseGeodesic(tpt.FitWithDistribution, metaclass=abc.ABCMeta):
+    transport: tpt.BaseTransport
 
-    def __init__(self, transport: BaseTransport):
+    def __init__(self, transport: tpt.BaseTransport):
         self.transport = transport
 
     @abc.abstractmethod
     def _fit(self, Xs=None, mu_s=None, Xt=None, mu_t=None):
         pass
 
-    @_logging.register_total_time(_log)
-    def fit_wm(
-            self,
-            Xs=None, ys=None, mu_s=None,
-            Xt=None, yt=None, mu_t=None,
-    ):
-        _log.debug(f"Fitting with measure from the BaseGeodesic class.")
-        self.transport.fit_wm(Xs=Xs, ys=ys, mu_s=mu_s, Xt=Xt, yt=yt, mu_t=mu_t)
-        self._fit(Xs, mu_s, Xt, mu_t)
-        return self
-
-    @_logging.register_total_time(_log)
+    @logging.register_total_time(_log)
     def fit(
             self,
-            dd_s: DiscreteDistribution = None,
-            dd_t: DiscreteDistribution = None,
+            Xs=None, mu_s=None,
+            Xt=None, mu_t=None,
     ):
-        return self.fit_wd(dd_s=dd_s, dd_t=dd_t)
+        _log.debug(f"Fitting from the BaseGeodesic class.")
+        self.transport.fit(Xs=Xs, mu_s=mu_s, Xt=Xt, mu_t=mu_t)
+        self._fit(Xs, mu_s, Xt, mu_t)
+        return self
 
     @abc.abstractmethod
     def interpolate(self, t: float):
@@ -71,24 +63,18 @@ class McCannGeodesic(BaseGeodesic):
 
         return self
 
-    @_logging.register_total_time(_log)
+    @logging.register_total_time(_log)
     def interpolate(self, t: float, rtol=1e-4, atol=1e-6):
         _log.debug(f"Interpolating with {t=:.2f}")
         check_is_fitted(self)
         X = (1 - t) * self.X0_ + t * self.X1_
-        _log.debug(f"{X.shape = }")
         coupling = self.coupling_
-        _log.debug(f"{coupling.shape = }")
         nz_coord = torch.nonzero(
             ~torch.isclose(torch.zeros_like(coupling), coupling, rtol=rtol, atol=atol),
             as_tuple=True
         )
-        _log.debug(f"{nz_coord[0].shape = }")
         X_to_return = X[nz_coord]
-        _log.debug(f"{X_to_return.shape = }")
         weights = coupling[nz_coord]
-        _log.debug(f"{weights.shape = }")
-        _log.debug(f"{weights.sum() = :.4f}")
         weights_to_return = weights / weights.sum()
         return X_to_return, weights_to_return
 
@@ -100,12 +86,10 @@ class BarycentricProjGeodesic(BaseGeodesic):
 
         return self
 
-    @_logging.register_total_time(_log)
+    @logging.register_total_time(_log)
     def interpolate(self, t: float):
         _log.debug(f"Interpolating with {t=:.2f}")
         check_is_fitted(self)
         X_ = (1 - t) * self.X0_ + t * self.transport.transform(self.X0_)
 
         return X_, self.mu_0_
-
-    ...
