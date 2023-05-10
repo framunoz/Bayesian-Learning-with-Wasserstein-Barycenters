@@ -40,8 +40,15 @@ class BaseGeodesic(tpt.FitWithDistribution, metaclass=abc.ABCMeta):
         return self
 
     @abc.abstractmethod
-    def interpolate(self, t: float):
+    def _interpolate(self, t: float, *args, **kwargs):
         pass
+
+    @logging.register_total_time(_log)
+    @logging.register_init_method(_log)
+    def interpolate(self, t: float, *args, **kwargs):
+        check_is_fitted(self)
+        _log.debug(f"Interpolating with {t=:.2f}")
+        return self._interpolate(t, *args, **kwargs)
 
 
 class McCannGeodesic(BaseGeodesic):
@@ -60,10 +67,7 @@ class McCannGeodesic(BaseGeodesic):
 
         return self
 
-    @logging.register_total_time(_log)
-    def interpolate(self, t: float, rtol=1e-4, atol=1e-6):
-        _log.debug(f"Interpolating with {t=:.2f}")
-        check_is_fitted(self)
+    def _interpolate(self, t: float, rtol=1e-4, atol=1e-6):
         X = (1 - t) * self.X0_ + t * self.X1_
         coupling = self.coupling_
         nz_coord = torch.nonzero(
@@ -83,10 +87,6 @@ class BarycentricProjGeodesic(BaseGeodesic):
 
         return self
 
-    @logging.register_total_time(_log)
-    def interpolate(self, t: float):
-        _log.debug(f"Interpolating with {t=:.2f}")
-        check_is_fitted(self)
+    def _interpolate(self, t: float, **kwargs):
         X_ = (1 - t) * self.X0_ + t * self.transport.transform(self.X0_)
-
         return X_, self.mu_0_
