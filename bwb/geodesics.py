@@ -29,12 +29,12 @@ class BaseGeodesic(tpt.FitWithDistribution, metaclass=abc.ABCMeta):
         pass
 
     @logging.register_total_time(_log)
+    @logging.register_init_method(_log)
     def fit(
             self,
             Xs=None, mu_s=None,
             Xt=None, mu_t=None,
     ):
-        _log.debug(f"Fitting from the BaseGeodesic class.")
         self.transport.fit(Xs=Xs, mu_s=mu_s, Xt=Xt, mu_t=mu_t)
         self._fit(Xs, mu_s, Xt, mu_t)
         return self
@@ -47,11 +47,8 @@ class BaseGeodesic(tpt.FitWithDistribution, metaclass=abc.ABCMeta):
 class McCannGeodesic(BaseGeodesic):
     # noinspection PyUnresolvedReferences
     def _fit(self, Xs=None, mu_s=None, Xt=None, mu_t=None):
-        _log.debug(f"Using the method _fit.")
         n, dim_0 = Xs.shape
-        _log.debug(f"{n=}, {dim_0=}")
         m, dim_1 = Xt.shape
-        _log.debug(f"{m=}, {dim_1=}")
 
         if dim_0 != dim_1:
             raise ValueError(

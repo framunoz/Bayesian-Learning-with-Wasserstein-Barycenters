@@ -143,18 +143,47 @@ set_level.__doc__ = LoggerConfiguration.set_level.__doc__
 
 
 def register_total_time(logger: logging.Logger):
-    """Wrapper that records the total time it takes to execute a function, and shows it with the
-    logger."""
+    """
+    Wrapper that records the total time it takes to execute a function, and shows it with the
+    logger.
 
-    def decorator_register_total_time(func):
+    :param logger: A `Logger` instance
+    :return: The decorator
+    """
+
+    def decorator(func):
         @functools.wraps(func)
-        def timeit_wrapper(*args, **kwargs):
+        def wrapper(*args, **kwargs):
             tic = time.perf_counter()
             result = func(*args, **kwargs)
             toc = time.perf_counter()
             logger.debug(f"The function '{func.__name__}' takes {toc - tic:.4f} [seg]")
             return result
 
-        return timeit_wrapper
+        return wrapper
 
-    return decorator_register_total_time
+    return decorator
+
+
+def register_init_method(logger: logging.Logger):
+    """
+    Logs the use of a method, indicating the name of the method and the name of the class.
+
+    :param logger: A `Logger` instance
+    :return: The decorator
+    """
+
+    def decorator(method):
+        @functools.wraps(method)
+        def wrapper(*args, **kwargs):
+            self: object = args[0]  # We are in a method of a class
+            class_name = self.__class__.__name__
+            method_name = method.__name__
+            logger.debug(f"Using the method '{method_name}' in the class '{class_name}'.")
+            # Compute the result
+            result = method(*args, **kwargs)
+            return result
+
+        return wrapper
+
+    return decorator
