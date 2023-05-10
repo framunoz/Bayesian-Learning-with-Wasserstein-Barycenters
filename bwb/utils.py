@@ -90,3 +90,24 @@ def _grayscale(shape: tuple, weights: np.ndarray, support: np.ndarray) -> np.nda
         to_return[pos1, pos2] += w
     to_return: np.ndarray = (to_return / np.max(to_return) * 255).astype("uint8")
     return to_return
+
+
+@numba.njit
+def _partition(X: np.ndarray, mu: np.ndarray, alpha: float):
+    _, m = X.shape
+    min_w = np.min(mu)
+
+    n_times = np.ceil(alpha * mu / min_w).astype("int32")
+    n_rows = int(np.sum(n_times))
+
+    X_, mu_ = np.zeros((n_rows, m)), np.zeros(n_rows)
+    i = 0
+    for x, w, n in zip(X, mu, n_times):
+        x, w = x[None, :], w / n
+        for _ in range(n):
+            X_[i], mu_[i] = x, w
+            i += 1
+
+    mu_ = mu_ / np.sum(mu_)  # Ensures that is a probability
+
+    return X_, mu_

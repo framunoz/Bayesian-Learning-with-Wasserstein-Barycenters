@@ -1,10 +1,12 @@
 import abc
 from typing import Protocol
 
+import ot.backend
 import torch
 
 import bwb.transports as tpt
 from bwb import logging
+from bwb.utils import _partition
 from bwb.validation import check_is_fitted
 
 _log = logging.get_logger(__name__)
@@ -35,8 +37,8 @@ class BaseGeodesic(tpt.FitWithDistribution, metaclass=abc.ABCMeta):
             Xs=None, mu_s=None,
             Xt=None, mu_t=None,
     ):
+        Xs, mu_s, Xt, mu_t = self._fit(Xs, mu_s, Xt, mu_t)
         self.transport.fit(Xs=Xs, mu_s=mu_s, Xt=Xt, mu_t=mu_t)
-        self._fit(Xs, mu_s, Xt, mu_t)
         return self
 
     @abc.abstractmethod
@@ -53,6 +55,7 @@ class BaseGeodesic(tpt.FitWithDistribution, metaclass=abc.ABCMeta):
 
 class McCannGeodesic(BaseGeodesic):
     # noinspection PyUnresolvedReferences
+    @logging.register_init_method(_log)
     def _fit(self, Xs=None, mu_s=None, Xt=None, mu_t=None):
         n, dim_0 = Xs.shape
         m, dim_1 = Xt.shape
@@ -63,13 +66,13 @@ class McCannGeodesic(BaseGeodesic):
 
         self.X0_: torch.Tensor = torch.unsqueeze(Xs, dim=1)
         self.X1_: torch.Tensor = torch.unsqueeze(Xt, dim=0)
-        self.coupling_: torch.Tensor = self.transport.coupling_
 
-        return self
+        return Xs, mu_s, Xt, mu_t
 
+    @logging.register_init_method(_log)
     def _interpolate(self, t: float, rtol=1e-4, atol=1e-6):
         X = (1 - t) * self.X0_ + t * self.X1_
-        coupling = self.coupling_
+        coupling = self.transport.coupling_
         nz_coord = torch.nonzero(
             ~torch.isclose(torch.zeros_like(coupling), coupling, rtol=rtol, atol=atol),
             as_tuple=True
@@ -81,12 +84,28 @@ class McCannGeodesic(BaseGeodesic):
 
 
 class BarycentricProjGeodesic(BaseGeodesic):
+    @logging.register_init_method(_log)
     def _fit(self, Xs=None, mu_s=None, Xt=None, mu_t=None):
         self.X0_ = Xs
         self.mu_0_ = mu_s
 
-        return self
+        return Xs, mu_s, Xt, mu_t
 
+    @logging.register_init_method(_log)
     def _interpolate(self, t: float, **kwargs):
         X_ = (1 - t) * self.X0_ + t * self.transport.transform(self.X0_)
         return X_, self.mu_0_
+
+
+class PartitionedBarycentricProjGeodesic(BarycentricProjGeodesic):
+    def __init__(self, transport: tpt.BaseTransport, alpha: float = 1):
+        super().__init__(transport)
+        self.alpha = alpha
+
+    @logging.register_init_method(_log)
+    def _fit(self, Xs=None, mu_s=None, Xt=None, mu_t=None):
+        nx = ot.backend.get_backend(Xs, mu_s, Xt, mu_t)
+        X_, mu_ = _partition(X=nx.to_numpy(Xs), mu=nx.to_numpy(mu_s), alpha=self.alpha)
+        Xs, mu_s = nx.from_numpy(X_, type_as=Xs), nx.from_numpy(mu_, type_as=mu_s)
+
+        return super(PartitionedBarycentricProjGeodesic, self)._fit(Xs, mu_s, Xt, mu_t)

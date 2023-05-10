@@ -21,12 +21,12 @@ class FitWithDistribution(typing.Protocol):
     def fit(self, Xs=None, mu_s=None, ys=None, Xt=None, mu_t=None, yt=None) -> object:
         ...
 
+    @logging.register_init_method(_log)
     def fit_wd(
             self,
             dd_s: distrib.DiscreteDistribution,
             dd_t: distrib.DiscreteDistribution,
     ):
-        _log.debug(f"Fitting with distribution from the FitWithDistribution Protocol.")
         # noinspection PyPep8Naming
         Xs, Xt = dd_s.enumerate_nz_support_(), dd_t.enumerate_nz_support_()
         mu_s, mu_t = dd_s.nz_probs, dd_t.nz_probs
