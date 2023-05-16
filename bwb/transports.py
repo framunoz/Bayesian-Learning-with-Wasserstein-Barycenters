@@ -65,8 +65,7 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
     limit_max: int
     distribution_estimation: typing.Callable
 
-    @logging.register_total_time(_log)
-    @logging.register_init_method(_log)
+    @logging.register_total_time_method(_log)
     def fit(self, Xs=None, mu_s=None, ys=None, Xt=None, mu_t=None, yt=None) -> object:
         r"""Build a coupling matrix from source and target sets of samples
         :math:`(\mathbf{X_s}, \mathbf{y_s})` and :math:`(\mathbf{X_t}, \mathbf{y_t})`
@@ -459,7 +458,7 @@ class SinkhornTransport(BaseTransport):
         self.distribution_estimation = distribution_estimation
         self.out_of_sample_map = out_of_sample_map
 
-    @logging.register_total_time(_log)
+    @logging.register_total_time_method(_log)
     def fit(self, Xs=None, mu_s=None, ys=None, Xt=None, mu_t=None, yt=None):
         r"""Build a coupling matrix from source and target sets of samples
         :math:`(\mathbf{X_s}, \mathbf{y_s})` and :math:`(\mathbf{X_t}, \mathbf{y_t})`
@@ -562,7 +561,7 @@ class EMDTransport(BaseTransport):
         self.out_of_sample_map = out_of_sample_map
         self.max_iter = max_iter
 
-    @logging.register_total_time(_log)
+    @logging.register_total_time_method(_log)
     def fit(self, Xs=None, mu_s=None, ys=None, Xt=None, mu_t=None, yt=None):
         r"""Build a coupling matrix from source and target sets of samples
         :math:`(\mathbf{X_s}, \mathbf{y_s})` and :math:`(\mathbf{X_t}, \mathbf{y_t})`

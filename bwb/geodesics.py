@@ -30,8 +30,7 @@ class BaseGeodesic(tpt.FitWithDistribution, metaclass=abc.ABCMeta):
     def _fit(self, Xs=None, mu_s=None, Xt=None, mu_t=None):
         pass
 
-    @logging.register_total_time(_log)
-    @logging.register_init_method(_log)
+    @logging.register_total_time_method(_log)
     def fit(
             self,
             Xs=None, mu_s=None,
@@ -45,8 +44,7 @@ class BaseGeodesic(tpt.FitWithDistribution, metaclass=abc.ABCMeta):
     def _interpolate(self, t: float, *args, **kwargs):
         pass
 
-    @logging.register_total_time(_log)
-    @logging.register_init_method(_log)
+    @logging.register_total_time_method(_log)
     def interpolate(self, t: float, *args, **kwargs):
         check_is_fitted(self)
         _log.debug(f"Interpolating with {t=:.2f}")

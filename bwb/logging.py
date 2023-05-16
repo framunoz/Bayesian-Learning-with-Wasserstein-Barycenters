@@ -3,7 +3,7 @@ Script with all the necessary information for the library loggers.
 You can use this module by importing it as follows::
 
     from library_name import logging
-    logger = logging.get_logger(__name__)  # The name of the logger is the same of the module
+    logger = logging.get_logger(__name__)  # The name of the logger should be the same of the module
 
 And change the level of any logger with::
 
@@ -142,7 +142,7 @@ get_logger.__doc__ = LoggerConfiguration.get_logger.__doc__
 set_level.__doc__ = LoggerConfiguration.set_level.__doc__
 
 
-def register_total_time(logger: logging.Logger):
+def register_total_time_function(logger: logging.Logger):
     """
     Wrapper that records the total time it takes to execute a function, and shows it with the
     logger.
@@ -158,6 +158,31 @@ def register_total_time(logger: logging.Logger):
             result = func(*args, **kwargs)
             toc = time.perf_counter()
             logger.debug(f"The function '{func.__name__}' takes {toc - tic:.4f} [seg]")
+            return result
+
+        return wrapper
+
+    return decorator
+
+
+def register_total_time_method(logger: logging.Logger):
+    """
+    Wrapper that records the total time it takes to execute a method, and shows it with the
+    logger.
+
+    :param logger: A `Logger` instance
+    :return: The decorator
+    """
+
+    def decorator(method):
+        @functools.wraps(method)
+        def wrapper(*args, **kwargs):
+            self: object = args[0]
+            tic = time.perf_counter()
+            result = method(*args, **kwargs)
+            toc = time.perf_counter()
+            logger.debug(f"The method '{self.__class__.__name__}.{method.__name__}' takes"
+                         f" {toc - tic:.4f} [seg]")
             return result
 
         return wrapper

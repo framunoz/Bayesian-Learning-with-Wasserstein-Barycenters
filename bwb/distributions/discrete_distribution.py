@@ -160,7 +160,7 @@ class DistributionDraw(DiscreteDistribution):
         return to_return
 
     @property
-    @logging.register_total_time(_log)
+    @logging.register_total_time_method(_log)
     def grayscale(self) -> np.ndarray:
         """A matrix representing the gray scale of the image."""
         if self._grayscale is None:
