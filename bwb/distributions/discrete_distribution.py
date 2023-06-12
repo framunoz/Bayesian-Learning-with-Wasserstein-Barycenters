@@ -133,6 +133,14 @@ class DistributionDraw(DiscreteDistribution):
         return cls(support, weights, shape)
 
     @classmethod
+    def from_discrete_distribution(
+            cls,
+            dd: DiscreteDistribution,
+            shape
+    ):
+        return cls(support=dd.support, weights=dd.weights, shape=shape)
+
+    @classmethod
     def from_array(
             cls,
             grayscale,
