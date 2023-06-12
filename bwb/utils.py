@@ -6,6 +6,7 @@ import PIL.Image
 import ipyplot
 import numba
 import numpy as np
+import ot.backend
 import pandas as pd
 import seaborn as sns
 import torch
@@ -36,6 +37,23 @@ def plot_histogram_from_points(
     return histplot_return
 
 
+def plot_list_of_images(list_of_images: list[PIL.Image.Image], **kwargs):
+    """
+    Function that plots a list of images.
+
+    :param list_of_images: The list of images to draw.
+    :param kwargs: Optional arguments to pass to the ipyplot.plot_images function. For further
+        information, please see the documentation of that function.
+    """
+    # Set values by default
+    kwargs.setdefault("max_images", 36)
+    kwargs.setdefault("img_width", 75)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        ipyplot.plot_images(list_of_images, **kwargs)
+
+
 def plot_list_of_draws(list_of_draws, **kwargs):
     """
     Function that plots a list of DistributionDraws instances.
@@ -44,16 +62,7 @@ def plot_list_of_draws(list_of_draws, **kwargs):
     :param kwargs: Optional arguments to pass to the ipyplot.plot_images function. For further
         information, please see the documentation of that function.
     """
-    # Map the list of draws to obtain a list of images
-    list_of_images: list[PIL.Image.Image] = [draw.image for draw in list_of_draws]
-
-    # Set values by default
-    kwargs.setdefault("max_images", 36)
-    kwargs.setdefault("img_width", 75)
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        ipyplot.plot_images(list_of_images, **kwargs)
+    return plot_list_of_images([draw.image for draw in list_of_draws], **kwargs)
 
 
 def freq_labels_posterior(posterior) -> typing.Sequence[str]:
@@ -82,13 +91,17 @@ def normalised_samples_ordered_dict(mcmc):
 
 
 @numba.jit(nopython=True)
-def _grayscale(shape: tuple, weights: np.ndarray, support: np.ndarray) -> np.ndarray:
-    to_return: np.ndarray = np.zeros(shape)
+def _grayscale(
+        shape: tuple,
+        weights: np.ndarray,
+        support: np.ndarray
+) -> np.ndarray:
+    to_return = np.zeros(shape)
     support = np.round(support).astype("int32")
     support1, support2 = support[:, 0], support[:, 1]
     for w, pos1, pos2 in zip(weights, support1, support2):
         to_return[pos1, pos2] += w
-    to_return: np.ndarray = (to_return / np.max(to_return) * 255).astype("uint8")
+    to_return = (to_return / np.max(to_return) * 255).astype("uint8")
     return to_return
 
 
@@ -111,3 +124,11 @@ def _partition(X: np.ndarray, mu: np.ndarray, alpha: float):
     mu_ = mu_ / np.sum(mu_)  # Ensures that is a probability
 
     return X_, mu_
+
+
+def partition(X, mu, alpha: float):
+    nx = ot.backend.get_backend(X, mu)
+    X_, mu_ = _partition(X=nx.to_numpy(X), mu=nx.to_numpy(mu), alpha=alpha)
+    X, mu = nx.from_numpy(X_, type_as=X), nx.from_numpy(mu_, type_as=mu)
+
+    return X, mu
