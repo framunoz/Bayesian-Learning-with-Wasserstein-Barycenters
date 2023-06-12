@@ -122,6 +122,7 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         # Otherwise, iterate over every logger
         for logger in self.loggers.values():
             logger.setLevel(level)
+        self.LEVEL = level
 
 
 # Create the (single) instance of LoggerConfiguration
@@ -178,6 +179,7 @@ def register_total_time_method(logger: logging.Logger):
         @functools.wraps(method)
         def wrapper(*args, **kwargs):
             self: object = args[0]
+            logger.debug(f"Using the method '{self.__class__.__name__}.{method.__name__}'...")
             tic = time.perf_counter()
             result = method(*args, **kwargs)
             toc = time.perf_counter()

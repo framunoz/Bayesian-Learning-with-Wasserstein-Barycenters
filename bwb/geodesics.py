@@ -13,6 +13,8 @@ _log = logging.get_logger(__name__)
 
 
 class Geodesic(Protocol):
+    transport: tpt.BaseTransport
+
     def fit(self, Xs=None, mu_s=None, Xt=None, mu_t=None):
         ...
 
