@@ -73,7 +73,7 @@ class PosteriorPiN(abc.ABC, typing.Generic[_DistributionT]):
         # To register the total time of the samples
         self.total_time = 0.
 
-        self.__fitted = False
+        self._fitted = False
 
     def fit(
             self,
@@ -90,7 +90,7 @@ class PosteriorPiN(abc.ABC, typing.Generic[_DistributionT]):
         self.data_ = torch.as_tensor(data, device=config.device)
         self.models_: data_loaders.BaseDistributionDataLoader[_DistributionT] = models
         self.models_index_ = np.arange(len(self.models_))
-        self.__fitted = True
+        self._fitted = True
         return self
 
     def log_likelihood(self, model: _DistributionT):
@@ -131,7 +131,7 @@ class PosteriorPiN(abc.ABC, typing.Generic[_DistributionT]):
         return to_return
 
     def __repr__(self):
-        if self.__fitted:
+        if self._fitted:
             return (self.__class__.__name__
                     + "("
                     + f"n_data={len(self.data_)}, "
@@ -183,6 +183,9 @@ class ExplicitPosteriorPiN(PosteriorPiN[_DistributionT]):
         # Get the likelihood as cache. The shape is (n_models,)
         likelihood_cache = torch.exp(torch.sum(evaluations, 1))
 
+        # Define the support
+        self.support_ = self.models_index_[likelihood_cache > 0]
+
         # Get the posterior probabilities.
         self.probabilities_: np.ndarray = (likelihood_cache / likelihood_cache.sum()).cpu().numpy()
 
@@ -197,3 +200,13 @@ class ExplicitPosteriorPiN(PosteriorPiN[_DistributionT]):
         rng: np.random.Generator = np.random.default_rng(seed)
         list_i = list(rng.choice(a=self.models_index_, size=size, p=self.probabilities_))
         return [self.models_[i] for i in list_i], list_i
+
+    def __repr__(self):
+        if self._fitted:
+            return (self.__class__.__name__
+                    + "("
+                    + f"n_data={len(self.data_)}, "
+                    + f"n_models={len(self.models_)}, "
+                    + f"n_support={len(self.support_)}"
+                    + ")")
+        return self.__class__.__name__ + "()"
