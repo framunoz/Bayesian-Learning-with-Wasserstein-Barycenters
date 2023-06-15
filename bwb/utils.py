@@ -4,9 +4,7 @@ import warnings
 
 import PIL.Image
 import ipyplot
-import numba
 import numpy as np
-import ot.backend
 import pandas as pd
 import seaborn as sns
 import torch
@@ -90,45 +88,46 @@ def normalised_samples_ordered_dict(mcmc):
     return collections.OrderedDict([(k, v / counter.total()) for k, v in counter.most_common()])
 
 
-@numba.jit(nopython=True)
+@torch.jit.script
 def _grayscale(
-        shape: tuple,
-        weights: np.ndarray,
-        support: np.ndarray
-) -> np.ndarray:
-    to_return = np.zeros(shape)
-    support = np.round(support).astype("int32")
+        to_return: torch.Tensor,
+        weights: torch.Tensor,
+        support: torch.Tensor,
+) -> torch.Tensor:
+    support = torch.round(support).type(torch.int32)
     support1, support2 = support[:, 0], support[:, 1]
     for w, pos1, pos2 in zip(weights, support1, support2):
         to_return[pos1, pos2] += w
-    to_return = (to_return / np.max(to_return) * 255).astype("uint8")
+    to_return = (to_return / torch.max(to_return) * 255).type(torch.uint8)
     return to_return
 
 
-@numba.njit
-def _partition(X: np.ndarray, mu: np.ndarray, alpha: float):
-    _, m = X.shape
-    min_w = np.min(mu)
+@torch.jit.script
+def _partition(
+        X: torch.Tensor,
+        mu: torch.Tensor,
+        alpha,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    _, n_dim = X.shape
+    min_w = torch.min(mu)
 
-    n_times = np.ceil(alpha * mu / min_w).astype("int32")
-    n_rows = int(np.sum(n_times))
+    n_times = torch.ceil(alpha * mu / min_w).type(torch.int)
+    n_rows = int(torch.sum(n_times))
 
-    X_, mu_ = np.zeros((n_rows, m)), np.zeros(n_rows)
+    X_, mu_ = torch.zeros((n_rows, n_dim)), torch.zeros((n_rows,))
     i = 0
     for x, w, n in zip(X, mu, n_times):
-        x, w = x[None, :], w / n
-        for _ in range(n):
-            X_[i], mu_[i] = x, w
+        x, w = x, w / n
+        for _ in range(int(n)):
+            X_[i] = x
+            mu_[i] = w
             i += 1
-
-    mu_ = mu_ / np.sum(mu_)  # Ensures that is a probability
 
     return X_, mu_
 
 
 def partition(X, mu, alpha: float):
-    nx = ot.backend.get_backend(X, mu)
-    X_, mu_ = _partition(X=nx.to_numpy(X), mu=nx.to_numpy(mu), alpha=alpha)
-    X, mu = nx.from_numpy(X_, type_as=X), nx.from_numpy(mu_, type_as=mu)
+    X, mu = _partition(X, mu, torch.tensor(alpha))
+    mu = mu / torch.sum(mu)
 
     return X, mu

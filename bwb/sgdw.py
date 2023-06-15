@@ -81,6 +81,7 @@ def compute_bwb_distribution_draw(
             if samples_posterior_history:
                 samples_posterior_history[-1].append(t_mu_i_k)
             t_X_i_k, t_m_i_k = t_mu_i_k.enumerate_nz_support_(), t_mu_i_k.nz_probs
+            t_m_i_k /= torch.sum(t_m_i_k)
 
             # Calcular transporte óptimo
             transport.fit(

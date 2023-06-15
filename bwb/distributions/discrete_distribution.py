@@ -1,7 +1,7 @@
-import numpy as np
 import torch
 # noinspection PyPackageRequirements
 import torch.distributions
+import torchvision.transforms.functional as F
 from PIL import Image
 
 from bwb import logging
@@ -163,21 +163,20 @@ class DistributionDraw(DiscreteDistribution):
 
         to_return = cls.from_weights(weights=weights, shape=shape)
 
-        to_return._grayscale = grayscale.cpu().numpy()
+        to_return._grayscale = grayscale
 
         return to_return
 
     @property
     @logging.register_total_time_method(_log)
-    def grayscale(self) -> np.ndarray:
+    def grayscale(self) -> torch.Tensor:
         """A matrix representing the gray scale of the image."""
         if self._grayscale is None:
-            # Get the arrays as numpy
-            shape = tuple(self.shape)
-            weights = self.weights.cpu().numpy()
-            support = self.original_support.cpu().numpy()
-            # Compute the grayscale using Numba
-            self._grayscale = _grayscale(shape, weights, support)
+            to_return = torch.zeros(self.shape)
+            weights = self.weights
+            support = self.original_support
+            # Compute the grayscale
+            self._grayscale = _grayscale(to_return, weights, support)
 
         return self._grayscale
 
@@ -188,7 +187,7 @@ class DistributionDraw(DiscreteDistribution):
 
         :return: A PIL.Image.Image instance.
         """
-        return Image.fromarray(255 - self.grayscale)
+        return F.to_pil_image(255 - self.grayscale)
 
     def __repr__(self):
         return type(self).__name__ + f"(shape: {self.shape})"

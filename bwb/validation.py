@@ -1,6 +1,8 @@
 import math
 from inspect import isclass
 
+import torch
+
 from bwb.exceptions import NotFittedError
 
 
@@ -44,10 +46,14 @@ def check_is_fitted(estimator, attributes=None, *, msg=None, all_or_any=all):
         raise NotFittedError(msg % {"name": type(estimator).__name__})
 
 
-def _shape_validation(shape, n_dim=2, msg="The shape must have dimension {n_dim}."):
+def _shape_validation(
+        shape,
+        n_dim=2,
+        msg="The shape must have dimension {n_dim}."
+) -> torch.Size:
     if len(shape) != n_dim:
         raise ValueError(msg.format(n_dim=n_dim))
-    return tuple(shape)
+    return torch.Size(shape)
 
 
 def _shape_weights_validation(shape, weights, n_dim=2):
