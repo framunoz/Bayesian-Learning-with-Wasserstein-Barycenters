@@ -7,7 +7,7 @@ _log = logging.get_logger(__name__)
 
 
 class Config(metaclass=_SingletonMeta):
-    # The dtype selected by default: A double
+    # The dtype selected by default
     dtype = torch.float64
 
     # Use cuda if is possible

@@ -144,8 +144,8 @@ def _convolutional_barycenter2d(A, reg, weights=None, entrop_sharp=False, H0=Non
     bar = nx.ones(A.shape[1:], type_as=A)
     bar /= nx.sum(bar)
     old_bar = bar
-    U = nx.ones(A.shape, type_as=A)
     V = nx.ones(A.shape, type_as=A)
+    W = nx.ones(A.shape, type_as=A)
 
     # build the convolution operator
     # this is equivalent to blurring on horizontal then vertical directions
@@ -162,18 +162,21 @@ def _convolutional_barycenter2d(A, reg, weights=None, entrop_sharp=False, H0=Non
         kxy = nx.einsum("...ij,klj->kli", K2, kx)
         return kxy
 
+    ii = 0
     for ii in range(numItermax):
         # Project onto C_1
-        V = A / convol_imgs(U)
-        D = U * convol_imgs(V)
+        W = A / convol_imgs(V)
+        D = V * convol_imgs(W)
         bar = nx.exp(
             nx.sum(weights_ * nx.log(D + stabThr), axis=0)
         )
+
         # The optional entropic regularization
         if entrop_sharp:
             bar = _entropic_sharpening(bar, H0, stabThr=stabThr)
+
         # Project onto C_2
-        U = U * bar[None] / D
+        V = V * bar[None] / D
 
         if ii % checkSteps == 0:
             err = nx.mean(nx.abs(old_bar - bar))
@@ -185,8 +188,10 @@ def _convolutional_barycenter2d(A, reg, weights=None, entrop_sharp=False, H0=Non
                 if ii % 200 == 0:
                     print('{:5s}|{:12s}'.format('It.', 'Err') + '\n' + '-' * 19)
                 print('{:5d}|{:8e}|'.format(ii, err))
+
             if err < stopThr:
                 break
+
         old_bar = bar
 
     else:
@@ -196,8 +201,8 @@ def _convolutional_barycenter2d(A, reg, weights=None, entrop_sharp=False, H0=Non
                           "or a larger entropy `reg`.")
     if log:
         log['niter'] = ii
-        log['U'] = U
         log['V'] = V
+        log['W'] = W
         return bar, log
     else:
         return bar
