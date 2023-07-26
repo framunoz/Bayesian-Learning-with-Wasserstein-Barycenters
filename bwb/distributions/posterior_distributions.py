@@ -44,6 +44,15 @@ def _timeit_to_total_time(method):
     return timeit_wrapper
 
 
+def _set_generator(seed=None, device='cpu') -> torch.Generator:
+    gen = torch.Generator(device=device)
+    if seed is None:
+        gen.seed()
+        return gen
+    gen.manual_seed(seed)
+    return seed
+
+
 # noinspection PyAttributeOutsideInit
 class PosteriorPiN(abc.ABC, typing.Generic[_DistributionT]):
     r"""Base class for classes representing the posterior distribution:
@@ -87,9 +96,9 @@ class PosteriorPiN(abc.ABC, typing.Generic[_DistributionT]):
         :param models: A sequence of models.
         :return: itself.
         """
-        self.data_ = torch.as_tensor(data, device=config.device)
+        self.data_: torch.Tensor = torch.as_tensor(data, device=config.device)  # The original dtype must be maintained
         self.models_: data_loaders.BaseDistributionDataLoader[_DistributionT] = models
-        self.models_index_ = np.arange(len(self.models_))
+        self.models_index_: torch.Tensor = torch.arange(len(self.models_), device=config.device)
         self._fitted = True
         return self
 
@@ -155,7 +164,7 @@ class ExplicitPosteriorPiN(PosteriorPiN[_DistributionT]):
     .. math::
         \Pi_n(m) = \frac{\mathcal{L}_n(m)}{\sum_{\bar m \in \mathcal{M}} \mathcal{L}_n(\bar m)}
 
-     """
+    """
 
     def __init__(
             self,
@@ -187,18 +196,20 @@ class ExplicitPosteriorPiN(PosteriorPiN[_DistributionT]):
         self.support_ = self.models_index_[likelihood_cache > 0]
 
         # Get the posterior probabilities.
-        self.probabilities_: np.ndarray = (likelihood_cache / likelihood_cache.sum()).cpu().numpy()
+        self.probabilities_: torch.Tensor = (likelihood_cache / likelihood_cache.sum())
 
         return self
 
     def _draw(self, seed=None) -> _DistributionT:
-        rng: np.random.Generator = np.random.default_rng(seed)
-        i = rng.choice(a=self.models_index_, p=self.probabilities_)
+        rng: torch.Generator = _set_generator(seed, device=config.device)
+
+        i = int(torch.multinomial(input=self.probabilities_, num_samples=1, generator=rng))
         return self.models_[i], i
 
     def _rvs(self, size=1, seed=None, **kwargs) -> typing.Sequence[_DistributionT]:
-        rng: np.random.Generator = np.random.default_rng(seed)
-        list_i = list(rng.choice(a=self.models_index_, size=size, p=self.probabilities_))
+        rng: torch.Generator = _set_generator(seed, device=config.device)
+
+        list_i = [int(i) for i in torch.multinomial(input=self.probabilities_, num_samples=size, generator=rng)]
         return [self.models_[i] for i in list_i], list_i
 
     def __repr__(self):
