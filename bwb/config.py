@@ -22,15 +22,16 @@ class Config(metaclass=_SingletonMeta):
     @property
     def eps(self):
         if self._eps is None:
-            return torch.finfo(self.dtype).eps
+            self._eps = torch.finfo(self.dtype).eps
         return self._eps
 
     @eps.setter
     def eps(self, value):
-        self._eps = value
+        self._eps = torch.tensor(value)
 
 
 config = Config()
+conf = config  # Alias for config
 
 
 def use_half_precision():
