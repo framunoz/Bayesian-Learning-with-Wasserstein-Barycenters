@@ -111,10 +111,11 @@ def _partition(
     _, n_dim = X.shape
     min_w = torch.min(mu)
 
-    n_times = torch.ceil(alpha * mu / min_w).type(torch.int)
+    n_times = torch.ceil(alpha * mu / min_w).type(torch.int).to(mu.device)
     n_rows = int(torch.sum(n_times))
 
-    X_, mu_ = torch.zeros((n_rows, n_dim)), torch.zeros((n_rows,))
+    X_ = torch.zeros((n_rows, n_dim), dtype=X.dtype, device=X.device)
+    mu_ = torch.zeros((n_rows,), dtype=mu.dtype, device=mu.device)
     i = 0
     for x, w, n in zip(X, mu, n_times):
         x, w = x, w / n
@@ -126,7 +127,7 @@ def _partition(
     return X_, mu_
 
 
-def partition(X, mu, alpha: float):
+def partition(X: torch.Tensor, mu: torch.Tensor, alpha: float):
     X, mu = _partition(X, mu, torch.tensor(alpha))
     mu = mu / torch.sum(mu)
 
