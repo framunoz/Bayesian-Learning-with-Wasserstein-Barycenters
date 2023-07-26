@@ -107,7 +107,8 @@ class DistributionDraw(DiscreteDistribution):
 
         # Get the shape information
         self.shape = _shape_validation(shape, n_dim=2)
-        self._grayscale = None  # For the caché of the grayscale
+        self._grayscale = None  # For the cache of the grayscale
+        self._grayscale_weights = None
 
         super(DistributionDraw, self).__init__(weights=weights, support=support)
 
@@ -139,6 +140,32 @@ class DistributionDraw(DiscreteDistribution):
             shape
     ):
         return cls(support=dd.support, weights=dd.weights, shape=shape)
+    
+    @classmethod
+    def from_grayscale_weights(
+        cls,
+        grayscale_weights,
+    ):
+        grayscale_weights: torch.Tensor = torch.as_tensor(
+            grayscale_weights,
+            dtype=config.dtype,
+            device=config.device,
+        )
+
+        # Get the shape information
+        shape = _shape_validation(
+            grayscale_weights.shape, n_dim=2,
+            msg="The 'grayscale_weights' tensor must have dimension {n_dim}."
+        )
+
+        grayscale_weights /= torch.sum(grayscale_weights)
+        weights = grayscale_weights.reshape((-1,))
+
+        to_return = cls.from_weights(weights=weights, shape=shape)
+
+        to_return._grayscale_weights = grayscale_weights
+
+        return to_return
 
     @classmethod
     def from_array(
@@ -153,17 +180,20 @@ class DistributionDraw(DiscreteDistribution):
         )
 
         # Get the shape information
-        shape = _shape_validation(grayscale.shape, n_dim=2,
-                                  msg="The 'grayscale' tensor must have dimension {n_dim}.")
+        shape = _shape_validation(
+            grayscale.shape, n_dim=2,
+            msg="The 'grayscale' tensor must have dimension {n_dim}."
+            )
 
         # Get the weights from the grayscale
-        weights: torch.Tensor = grayscale / 255
-        weights /= torch.sum(weights)
-        weights = weights.reshape((-1,))
+        grayscale_weights: torch.Tensor = grayscale / 255
+        grayscale_weights /= torch.sum(grayscale_weights)
+        weights = grayscale_weights.reshape((-1,))
 
         to_return = cls.from_weights(weights=weights, shape=shape)
 
         to_return._grayscale = grayscale
+        to_return._grayscale_weights = grayscale_weights
 
         return to_return
 
@@ -171,14 +201,38 @@ class DistributionDraw(DiscreteDistribution):
     @logging.register_total_time_method(_log)
     def grayscale(self) -> torch.Tensor:
         """A matrix representing the gray scale of the image."""
-        if self._grayscale is None:
-            to_return = torch.zeros(self.shape)
+        if self._grayscale is not None:
+            return self._grayscale
+        
+        if self._grayscale_weights is not None:
+            grayscale = torch.clone(self._grayscale_weights)
+            grayscale /= grayscale.max()
+            grayscale *= torch.tensor(255, dtype=config.dtype, device=config.device)
+            self._grayscale = torch.as_tensor(
+                grayscale,
+                dtype=torch.uint8,
+                device=config.device
+            )
+        
+        else:
+            to_return = torch.zeros(self.shape, dtype=config.dtype, device=config.device)
             weights = self.weights
             support = self.original_support
             # Compute the grayscale
             self._grayscale = _grayscale(to_return, weights, support)
 
         return self._grayscale
+    
+    @property
+    @logging.register_total_time_method(_log)
+    def grayscale_weights(self) -> torch.Tensor:
+        """A matrix representing the gray scale of the image as a probability weight."""
+        if self._grayscale_weights is None:
+            gs_weights = self.grayscale / 255
+            gs_weights /= torch.sum(gs_weights)
+            self._grayscale_weights = gs_weights
+        
+        return self._grayscale_weights
 
     @property
     def image(self) -> Image.Image:
