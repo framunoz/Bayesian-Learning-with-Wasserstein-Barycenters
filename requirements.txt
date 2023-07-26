@@ -6,6 +6,6 @@ pandas~=1.5.2
 seaborn~=0.12.2
 matplotlib~=3.6.2
 ipyplot~=1.1.1
-torch~=2.0.0
+# torch~=2.0.0
 pyro-ppl
 numba~=0.57.0
