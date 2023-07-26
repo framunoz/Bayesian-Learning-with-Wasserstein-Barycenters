@@ -112,6 +112,7 @@ pip-selfcheck.json
 .idea/dictionaries
 .idea/vcs.xml
 .idea/jsLibraryMappings.xml
+.vscode/settings.json
 
 # Sensitive or high-churn files:
 .idea/dataSources.ids
