@@ -22,7 +22,7 @@ class Config(metaclass=_SingletonMeta):
     @property
     def eps(self):
         if self._eps is None:
-            self._eps = torch.finfo(self.dtype).eps
+            self._eps = torch.tensor(torch.finfo(self.dtype).eps)
         return self._eps
 
     @eps.setter
