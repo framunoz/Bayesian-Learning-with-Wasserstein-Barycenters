@@ -3,6 +3,7 @@ from typing import Callable, Union
 
 import torch
 from torch import linalg as LA
+from bwb import bregman
 
 import bwb.distributions as distrib
 import bwb.transports as tpt
@@ -26,8 +27,8 @@ def compute_bwb_discrete_distribution(
         tol: float = 1e-8,  # Tolerance to converge
         max_iter: int = 100_000,
         max_time: float = float("inf"),  # In seconds
-        position_historial=False,  # Return the historial as a position
-        distribution_historial=False,  # Return the distributions along the iterations
+        position_history=False,  
+        distribution_history=False, 
         samples_posterior_history=False,
 ):
     if isinstance(batch_size, int):
@@ -37,20 +38,24 @@ def compute_bwb_discrete_distribution(
             return aux
     batch_size: Callable[[int], int]
 
-    # Paso 1: Muestrear un mu_0
+    # Paso 1: Sampling a mu_0
     mu_0: distrib.DiscreteDistribution = posterior.draw()
+    dtype, device = mu_0.dtype, mu_0.device
+    _log.info(f"{dtype = }, {device = }")
 
-    # Calcular las ubicaciones a través de la partición
-    X_k, m = utils.partition(X=mu_0.enumerate_nz_support_(),
-                             mu=mu_0.nz_probs,
-                             alpha=alpha)
+    # Calculate locations through the partition
+    X_k, m = utils.partition(
+        X=mu_0.enumerate_nz_support_(), 
+        mu=mu_0.nz_probs,
+        alpha=alpha
+        )
     _log.info(f"total init weights: {len(m)}")
 
-    # Crear historiales
-    if position_historial:
-        position_historial = [X_k]
-    if distribution_historial:
-        distribution_historial = [distrib.DiscreteDistribution(support=X_k, weights=m)]
+    # Create histories
+    if position_history:
+        position_history = [X_k]
+    if distribution_history:
+        distribution_history = [distrib.DiscreteDistribution(support=X_k, weights=m)]
     if samples_posterior_history:
         samples_posterior_history = [[mu_0]]
 
@@ -59,31 +64,33 @@ def compute_bwb_discrete_distribution(
     w_dist = float("inf")
     k = 0
     while (
-            k < max_iter  # Alcanza iteración máxima
-            and toc - tic < max_time  # Alcanza tiempo máximo
-            and w_dist >= tol  # Alcanza convergencia en distancia
+            k < max_iter  # Reaches maximum iteration
+            and toc - tic < max_time  # Reaches maximum time
+            and w_dist >= tol  # Achieves convergence in distance
     ):
         tic_ = time.time()
-        _log.info(_bar
-                  + f" {k = }, "
-                    f"t = {toc - tic:.4f} [seg], "
-                    f"Δt = {diff_t * 1000:.4f} [ms], "
-                    f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.4f} [ms/iter] " + _bar)
+        _log.info(
+            _bar 
+            + f" {k = }, "
+            f"t = {toc - tic:.4f} [seg], "
+            f"Δt = {diff_t * 1000:.4f} [ms], "
+            f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.4f} [ms/iter] " + _bar
+            )
 
         if samples_posterior_history:
             samples_posterior_history.append([])
 
-        T_X_k = torch.zeros_like(X_k)
+        T_X_k = torch.zeros_like(X_k, dtype=dtype, device=device)
         S_k = batch_size(k)
-        for j in range(S_k):
-            # Paso 2: Muestrear \tilde\mu^i_k
+        for _ in range(S_k):
+            # Paso 2: Draw \tilde\mu^i_k
             t_mu_i_k: distrib.DiscreteDistribution = posterior.draw()
             if samples_posterior_history:
                 samples_posterior_history[-1].append(t_mu_i_k)
             t_X_i_k, t_m_i_k = t_mu_i_k.enumerate_nz_support_(), t_mu_i_k.nz_probs
             t_m_i_k /= torch.sum(t_m_i_k)
 
-            # Calcular transporte óptimo
+            # Calculate optimal transport
             transport.fit(
                 Xs=X_k, mu_s=m,
                 Xt=t_X_i_k, mu_t=t_m_i_k,
@@ -91,145 +98,119 @@ def compute_bwb_discrete_distribution(
             T_X_k += transport.transform(X_k)
         T_X_k /= S_k
 
-        # Calcular la distribución de mu_{k+1}
+        # Calculate the distribution of mu_{k+1}
         gamma_k = learning_rate(k)
         _log.debug(f"{gamma_k = :.6f}")
         X_kp1 = (1 - gamma_k) * X_k + gamma_k * T_X_k
 
-        # Calcular la distancia de Wasserstein
+        # Calculate Wasserstein distance
         diff = X_k - T_X_k
         w_dist = float((gamma_k ** 2) * torch.sum(m * LA.norm(diff, dim=1) ** 2))
         _log.debug(f"{w_dist = :.8f}")
 
-        # Agregar a los historiales
-        if position_historial:
-            position_historial.append(X_kp1)
-        if distribution_historial:
-            distribution_historial.append(
+        # Add to history
+        if position_history:
+            position_history.append(X_kp1)
+        if distribution_history:
+            distribution_history.append(
                 distrib.DiscreteDistribution(support=X_kp1, weights=m)
             )
 
-        # Actualizar
+        # Update
         k += 1
         X_k = X_kp1
         toc = time.time()
         diff_t = toc - tic_
 
     to_return = [X_k, m]
-    if position_historial:
-        to_return.append(position_historial)
-    if distribution_historial:
-        to_return.append(distribution_historial)
+    if position_history:
+        to_return.append(position_history)
+    if distribution_history:
+        to_return.append(distribution_history)
     if samples_posterior_history:
         to_return.append(samples_posterior_history)
 
     return tuple(to_return)
 
 
-def compute_bwb_distribution_draw_convolutional(
-        transport: tpt.BaseTransport,
-        posterior: distrib.PosteriorPiN[distrib.DiscreteDistribution],
+def compute_bwb_distribution_draw(
+        posterior: distrib.PosteriorPiN[distrib.DistributionDraw],
         learning_rate: Callable[[int], float],  # The \gamma_k schedule
-        batch_size: Union[Callable[[int], int], int],  # The S_k schedule
-        alpha: float = 1.,
-        tol: float = 1e-8,  # Tolerance to converge
+        reg: float = 3e-3,  # Regularization of the convolutional method
         max_iter: int = 100_000,
         max_time: float = float("inf"),  # In seconds
-        position_historial=False,  # Return the historial as a position
-        distribution_historial=False,  # Return the distributions along the iterations
+        weights_history=False,  
+        distribution_history=False, 
         samples_posterior_history=False,
 ):
-    if isinstance(batch_size, int):
-        aux = batch_size
 
-        def batch_size(n):
-            return aux
-    batch_size: Callable[[int], int]
+    # Paso 1: Sampling a mu_0
+    mu_k: distrib.DistributionDraw = posterior.draw()
+    dtype, device = mu_k.dtype, mu_k.device
+    _log.info(f"{dtype = }, {device = }")
 
-    # Paso 1: Muestrear un mu_0
-    mu_0: distrib.DiscreteDistribution = posterior.draw()
+    gs_weights_k = mu_k.grayscale_weights
 
-    # Calcular las ubicaciones a través de la partición
-    X_k, m = utils.partition(X=mu_0.enumerate_nz_support_(),
-                             mu=mu_0.nz_probs,
-                             alpha=alpha)
-    _log.info(f"total init weights: {len(m)}")
-
-    # Crear historiales
-    if position_historial:
-        position_historial = [X_k]
-    if distribution_historial:
-        distribution_historial = [distrib.DiscreteDistribution(support=X_k, weights=m)]
+    # Create histories
+    if weights_history:
+        weights_history = [gs_weights_k]
+    if distribution_history:
+        distribution_history = [mu_k]
     if samples_posterior_history:
-        samples_posterior_history = [[mu_0]]
+        samples_posterior_history = [[mu_k]]
 
     tic, toc = time.time(), time.time()
     diff_t = 0
-    w_dist = float("inf")
     k = 0
     while (
-            k < max_iter  # Alcanza iteración máxima
-            and toc - tic < max_time  # Alcanza tiempo máximo
-            and w_dist >= tol  # Alcanza convergencia en distancia
+            k < max_iter  # Reaches maximum iteration
+            and toc - tic < max_time  # Reaches maximum time
     ):
         tic_ = time.time()
-        _log.info(_bar
-                  + f" {k = }, "
-                    f"t = {toc - tic:.4f} [seg], "
-                    f"Δt = {diff_t * 1000:.4f} [ms], "
-                    f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.4f} [ms/iter] " + _bar)
-
-        if samples_posterior_history:
-            samples_posterior_history.append([])
-
-        T_X_k = torch.zeros_like(X_k)
-        S_k = batch_size(k)
-        for j in range(S_k):
-            # Paso 2: Muestrear \tilde\mu^i_k
-            t_mu_i_k: distrib.DiscreteDistribution = posterior.draw()
-            if samples_posterior_history:
-                samples_posterior_history[-1].append(t_mu_i_k)
-            t_X_i_k, t_m_i_k = t_mu_i_k.enumerate_nz_support_(), t_mu_i_k.nz_probs
-            t_m_i_k /= torch.sum(t_m_i_k)
-
-            # Calcular transporte óptimo
-            transport.fit(
-                Xs=X_k, mu_s=m,
-                Xt=t_X_i_k, mu_t=t_m_i_k,
+        _log.info(
+            _bar 
+            + f" {k = }, "
+            f"t = {toc - tic:.4f} [seg], "
+            f"Δt = {diff_t * 1000:.4f} [ms], "
+            f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.4f} [ms/iter] " + _bar
             )
-            T_X_k += transport.transform(X_k)
-        T_X_k /= S_k
 
-        # Calcular la distribución de mu_{k+1}
+        m_k: distrib.DistributionDraw = posterior.draw()
+        if samples_posterior_history:
+            samples_posterior_history.append([m_k])
+
+        # Calculate the distribution of mu_{k+1}
         gamma_k = learning_rate(k)
         _log.debug(f"{gamma_k = :.6f}")
-        X_kp1 = (1 - gamma_k) * X_k + gamma_k * T_X_k
 
-        # Calcular la distancia de Wasserstein
-        diff = X_k - T_X_k
-        w_dist = float((gamma_k ** 2) * torch.sum(m * LA.norm(diff, dim=1) ** 2))
-        _log.debug(f"{w_dist = :.8f}")
+        gs_weights_kp1, _ = bregman.convolutional_barycenter2d(
+            A=[gs_weights_k, m_k.grayscale_weights],
+            reg=reg, weights=[1-gamma_k, gamma_k],
+            numItermax=1_000, stopThr=1e-8,
+            warn=False, log=True,
+        )
 
-        # Agregar a los historiales
-        if position_historial:
-            position_historial.append(X_kp1)
-        if distribution_historial:
-            distribution_historial.append(
-                distrib.DiscreteDistribution(support=X_kp1, weights=m)
-            )
+        # Add to history
+        if weights_history:
+            weights_history.append(gs_weights_k)
+        if distribution_history:
+            mu_kp1 = distrib.DistributionDraw.from_grayscale_weights(gs_weights_kp1)
+            distribution_history.append(mu_kp1)
 
-        # Actualizar
+        # Update
         k += 1
-        X_k = X_kp1
+        gs_weights_k = gs_weights_kp1
         toc = time.time()
         diff_t = toc - tic_
 
-    to_return = [X_k, m]
-    if position_historial:
-        to_return.append(position_historial)
-    if distribution_historial:
-        to_return.append(distribution_historial)
+    mu = distrib.DistributionDraw.from_grayscale_weights(gs_weights_kp1)
+    to_return = [mu]
+    if weights_history:
+        to_return.append(weights_history)
+    if distribution_history:
+        to_return.append(distribution_history)
     if samples_posterior_history:
         to_return.append(samples_posterior_history)
 
     return tuple(to_return)
+
