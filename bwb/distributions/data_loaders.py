@@ -36,7 +36,7 @@ class BaseDistributionDataLoader(
         _log.debug("Creating a BaseDistributionDataLoader instance.")
         tic = time.time()
         # Set the probs_tensor
-        self.probs_tensor: torch.Tensor = torch.as_tensor(probs_tensor, device=config.device)
+        self.probs_tensor: torch.Tensor = torch.as_tensor(probs_tensor, device=config.device, dtype=config.dtype)
         _n_probs = len(self.probs_tensor)
         probs_tensor_sum = self.probs_tensor.sum(dim=1)
         if not (torch.isclose(probs_tensor_sum, torch.ones_like(probs_tensor_sum))).all():
@@ -119,7 +119,7 @@ class DistributionDrawDataLoader(BaseDistributionDataLoader[distrib.Distribution
         self.shape = shape
 
         # Setting the tensor of probabilities
-        probs_tensor = torch.tensor(models_array, device=config.device)
+        probs_tensor = torch.tensor(models_array, device=config.device, dtype=config.dtype)
         if self.floor != 0:
             probs_tensor = torch.min(probs_tensor, self.floor)
         probs_tensor = probs_tensor / 255
