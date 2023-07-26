@@ -4,10 +4,8 @@ Module that implements the missing functionalities of convolutional wasserstein 
 import warnings
 
 import torch
-import xitorch
 from ot.backend import get_backend
-from ot.utils import list_to_array
-from xitorch.optimize import rootfinder
+from bwb.config import config
 
 
 def _entropy(mu, stabThr=1e-30):
@@ -20,6 +18,7 @@ def _entropic_sharpening(mu, H0, stabThr=1e-30):
 
     beta = 1.0
     if _entropy(mu, stabThr) > H0 + stabThr:
+        from xitorch.optimize import rootfinder
         beta = xitorch.optimize.rootfinder(
             fcn=lambda beta_: _entropy(nx.power(mu, beta_), stabThr) - H0,
             y0=torch.tensor(1.),
@@ -32,9 +31,10 @@ def _entropic_sharpening(mu, H0, stabThr=1e-30):
     return mu / nx.sum(mu)
 
 
-def convolutional_barycenter2d(A, reg, weights=None, method="sinkhorn", numItermax=10000,
-                               stopThr=1e-8, verbose=False, log=False,
-                               warn=True, entrop_sharp=False, H0=None, **kwargs):
+def convolutional_barycenter2d(
+        A, reg, weights=None, method="sinkhorn", numItermax=10000,
+        stopThr=1e-8, verbose=False, log=False,
+        warn=True, entrop_sharp=False, H0=None, **kwargs):
     r"""Compute the entropic regularized wasserstein barycenter of distributions :math:`\mathbf{A}`
     where :math:`\mathbf{A}` is a collection of 2D images. This function use the API used in POT.
 
@@ -104,13 +104,14 @@ def convolutional_barycenter2d(A, reg, weights=None, method="sinkhorn", numIterm
     """
 
     if method.lower() == 'sinkhorn':
-        return _convolutional_barycenter2d(A, reg, weights=weights,
-                                           numItermax=numItermax,
-                                           stopThr=stopThr, verbose=verbose,
-                                           log=log, warn=warn,
-                                           entrop_sharp=entrop_sharp,
-                                           H0=H0,
-                                           **kwargs)
+        return _convolutional_barycenter2d(
+            A, reg, weights=weights,
+            numItermax=numItermax,
+            stopThr=stopThr, verbose=verbose,
+            log=log, warn=warn,
+            entrop_sharp=entrop_sharp,
+            H0=H0,
+            **kwargs)
     # We will not use the function that uses the logarithm
     else:
         raise ValueError("Unknown method '%s'." % method)
@@ -123,14 +124,19 @@ def _convolutional_barycenter2d(A, reg, weights=None, entrop_sharp=False, H0=Non
     where A is a collection of 2D images.
     """
 
-    A = list_to_array(A)
+    A = torch.stack(A)
 
     nx = get_backend(A)
 
+    dtype, device = nx.dtype_device(A)
+
+    n_hists, width, height = A.shape
+
     if weights is None:
-        weights = nx.ones((A.shape[0],), type_as=A)
+        weights = nx.ones((n_hists,), type_as=A)
     else:
-        assert (len(weights) == A.shape[0])
+        assert (len(weights) == n_hists)
+        weights = torch.as_tensor(weights, dtype=dtype, device=device)
 
     weights = weights / nx.sum(weights)
     weights_ = weights[:, None, None]
@@ -149,11 +155,11 @@ def _convolutional_barycenter2d(A, reg, weights=None, entrop_sharp=False, H0=Non
 
     # build the convolution operator
     # this is equivalent to blurring on horizontal then vertical directions
-    t = nx.linspace(0, 1, A.shape[1])
+    t = nx.linspace(0, 1, A.shape[1]).to(dtype=dtype, device=device)
     [Y, X] = nx.meshgrid(t, t)
     K1 = nx.exp(-(X - Y) ** 2 / reg)
 
-    t = nx.linspace(0, 1, A.shape[2])
+    t = nx.linspace(0, 1, A.shape[2]).to(dtype=dtype, device=device)
     [Y, X] = nx.meshgrid(t, t)
     K2 = nx.exp(-(X - Y) ** 2 / reg)
 
@@ -165,7 +171,7 @@ def _convolutional_barycenter2d(A, reg, weights=None, entrop_sharp=False, H0=Non
     ii = 0
     for ii in range(numItermax):
         # Project onto C_1
-        W = A / convol_imgs(V)
+        W = A / torch.maximum(convol_imgs(V), config.eps)
         D = V * convol_imgs(W)
         bar = nx.exp(
             nx.sum(weights_ * nx.log(D + stabThr), axis=0)
@@ -176,7 +182,7 @@ def _convolutional_barycenter2d(A, reg, weights=None, entrop_sharp=False, H0=Non
             bar = _entropic_sharpening(bar, H0, stabThr=stabThr)
 
         # Project onto C_2
-        V = V * bar[None] / D
+        V = V * bar[None] / torch.maximum(D, config.eps)
 
         if ii % checkSteps == 0:
             err = nx.mean(nx.abs(old_bar - bar))
@@ -196,9 +202,10 @@ def _convolutional_barycenter2d(A, reg, weights=None, entrop_sharp=False, H0=Non
 
     else:
         if warn:
-            warnings.warn("Convolutional Sinkhorn did not converge. "
-                          "Try a larger number of iterations `numItermax` "
-                          "or a larger entropy `reg`.")
+            warnings.warn(
+                "Convolutional Sinkhorn did not converge. "
+                "Try a larger number of iterations `numItermax` "
+                "or a larger entropy `reg`.")
     if log:
         log['niter'] = ii
         log['V'] = V
