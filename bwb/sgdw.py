@@ -19,23 +19,24 @@ _bar = "=" * 12
 
 
 def compute_bwb_discrete_distribution(
-        transport: tpt.BaseTransport,
-        posterior: distrib.PosteriorPiN[distrib.DiscreteDistribution],
-        learning_rate: Callable[[int], float],  # The \gamma_k schedule
-        batch_size: Union[Callable[[int], int], int],  # The S_k schedule
-        alpha: float = 1.,
-        tol: float = 1e-8,  # Tolerance to converge
-        max_iter: int = 100_000,
-        max_time: float = float("inf"),  # In seconds
-        position_history=False,  
-        distribution_history=False, 
-        samples_posterior_history=False,
+    transport: tpt.BaseTransport,
+    posterior: distrib.PosteriorPiN[distrib.DiscreteDistribution],
+    learning_rate: Callable[[int], float],  # The \gamma_k schedule
+    batch_size: Union[Callable[[int], int], int],  # The S_k schedule
+    alpha: float = 1.0,
+    tol: float = 1e-8,  # Tolerance to converge
+    max_iter: int = 100_000,
+    max_time: float = float("inf"),  # In seconds
+    position_history=False,
+    distribution_history=False,
+    samples_posterior_history=False,
 ):
     if isinstance(batch_size, int):
         aux = batch_size
 
         def batch_size(n):
             return aux
+
     batch_size: Callable[[int], int]
 
     # Paso 1: Sampling a mu_0
@@ -45,10 +46,8 @@ def compute_bwb_discrete_distribution(
 
     # Calculate locations through the partition
     X_k, m = utils.partition(
-        X=mu_0.enumerate_nz_support_(), 
-        mu=mu_0.nz_probs,
-        alpha=alpha
-        )
+        X=mu_0.enumerate_nz_support_(), mu=mu_0.nz_probs, alpha=alpha
+    )
     _log.info(f"total init weights: {len(m)}")
 
     # Create histories
@@ -64,18 +63,17 @@ def compute_bwb_discrete_distribution(
     w_dist = float("inf")
     k = 0
     while (
-            k < max_iter  # Reaches maximum iteration
-            and toc - tic < max_time  # Reaches maximum time
-            and w_dist >= tol  # Achieves convergence in distance
+        k < max_iter  # Reaches maximum iteration
+        and toc - tic < max_time  # Reaches maximum time
+        and w_dist >= tol  # Achieves convergence in distance
     ):
         tic_ = time.time()
         _log.info(
-            _bar 
-            + f" {k = }, "
+            _bar + f" {k = }, "
             f"t = {toc - tic:.4f} [seg], "
             f"Δt = {diff_t * 1000:.4f} [ms], "
             f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.4f} [ms/iter] " + _bar
-            )
+        )
 
         if samples_posterior_history:
             samples_posterior_history.append([])
@@ -92,8 +90,10 @@ def compute_bwb_discrete_distribution(
 
             # Calculate optimal transport
             transport.fit(
-                Xs=X_k, mu_s=m,
-                Xt=t_X_i_k, mu_t=t_m_i_k,
+                Xs=X_k,
+                mu_s=m,
+                Xt=t_X_i_k,
+                mu_t=t_m_i_k,
             )
             T_X_k += transport.transform(X_k)
         T_X_k /= S_k
@@ -105,7 +105,7 @@ def compute_bwb_discrete_distribution(
 
         # Calculate Wasserstein distance
         diff = X_k - T_X_k
-        w_dist = float((gamma_k ** 2) * torch.sum(m * LA.norm(diff, dim=1) ** 2))
+        w_dist = float((gamma_k**2) * torch.sum(m * LA.norm(diff, dim=1) ** 2))
         _log.debug(f"{w_dist = :.8f}")
 
         # Add to history
@@ -134,16 +134,16 @@ def compute_bwb_discrete_distribution(
 
 
 def compute_bwb_distribution_draw(
-        posterior: distrib.PosteriorPiN[distrib.DistributionDraw],
-        learning_rate: Callable[[int], float],  # The \gamma_k schedule
-        reg: float = 3e-3,  # Regularization of the convolutional method
-        max_iter: int = 100_000,
-        max_time: float = float("inf"),  # In seconds
-        weights_history=False,  
-        distribution_history=False, 
-        samples_posterior_history=False,
+    posterior: distrib.PosteriorPiN[distrib.DistributionDraw],
+    learning_rate: Callable[[int], float],  # The \gamma_k schedule
+    reg: float = 3e-3,  # Regularization of the convolutional method
+    entrop_sharp=False,
+    max_iter: int = 100_000,
+    max_time: float = float("inf"),  # In seconds
+    weights_history=False,
+    distribution_history=False,
+    samples_posterior_history=False,
 ):
-
     # Paso 1: Sampling a mu_0
     mu_k: distrib.DistributionDraw = posterior.draw()
     dtype, device = mu_k.dtype, mu_k.device
@@ -163,17 +163,16 @@ def compute_bwb_distribution_draw(
     diff_t = 0
     k = 0
     while (
-            k < max_iter  # Reaches maximum iteration
-            and toc - tic < max_time  # Reaches maximum time
+        k < max_iter  # Reaches maximum iteration
+        and toc - tic < max_time  # Reaches maximum time
     ):
         tic_ = time.time()
         _log.info(
-            _bar 
-            + f" {k = }, "
+            _bar + f" {k = }, "
             f"t = {toc - tic:.4f} [seg], "
             f"Δt = {diff_t * 1000:.4f} [ms], "
             f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.4f} [ms/iter] " + _bar
-            )
+        )
 
         m_k: distrib.DistributionDraw = posterior.draw()
         if samples_posterior_history:
@@ -185,9 +184,13 @@ def compute_bwb_distribution_draw(
 
         gs_weights_kp1, _ = bregman.convolutional_barycenter2d(
             A=[gs_weights_k, m_k.grayscale_weights],
-            reg=reg, weights=[1-gamma_k, gamma_k],
-            numItermax=1_000, stopThr=1e-8,
-            warn=False, log=True,
+            weights=[1 - gamma_k, gamma_k],
+            reg=reg,
+            entrop_sharp=entrop_sharp,
+            numItermax=1_000,
+            stopThr=1e-8,
+            warn=False,
+            log=True,
         )
 
         # Add to history
@@ -213,4 +216,3 @@ def compute_bwb_distribution_draw(
         to_return.append(samples_posterior_history)
 
     return tuple(to_return)
-

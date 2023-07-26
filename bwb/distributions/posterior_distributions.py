@@ -4,7 +4,6 @@ import functools
 import time
 import typing
 
-import numpy as np
 import torch
 
 import bwb.distributions as distrib
