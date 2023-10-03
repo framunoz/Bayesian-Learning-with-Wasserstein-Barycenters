@@ -14,12 +14,13 @@ from bwb.utils import _ArrayLike, _DistributionT
 
 __all__ = [
     "PosteriorPiN",
+    "DiscretePosteriorPiN",
     "ExplicitPosteriorPiN",
 ]
 
 
 def _log_likelihood_default(model: distrib.DiscreteDistribution, data: torch.Tensor):
-    """ Default log-likelihood of the posterior.
+    """Default log-likelihood of the posterior.
 
     :param model: A model to obtain its log-likelihood
     :param data: The data to evaluate in the model
@@ -43,16 +44,15 @@ def _timeit_to_total_time(method):
     return timeit_wrapper
 
 
-def _set_generator(seed=None, device='cpu') -> torch.Generator:
+def _set_generator(seed=None, device="cpu") -> torch.Generator:
     gen = torch.Generator(device=device)
     if seed is None:
         gen.seed()
         return gen
     gen.manual_seed(seed)
-    return seed
+    return gen
 
 
-# noinspection PyAttributeOutsideInit
 class PosteriorPiN(abc.ABC, typing.Generic[_DistributionT]):
     r"""Base class for classes representing the posterior distribution:
 
@@ -62,53 +62,38 @@ class PosteriorPiN(abc.ABC, typing.Generic[_DistributionT]):
 
     """
 
-    def __init__(
-            self,
-            log_likelihood_fn,
-    ):
-        """
-        Initialiser.
-
-        :param log_likelihood_fn: The log-likelihood function. Is a function that receives a model
-        and data, and returns the log-likelihood.
-        """
-        self.log_likelihood_fn = log_likelihood_fn or _log_likelihood_default
-
-        # The history of the index samples
-        self.samples_history: list[int] = []
-        self.samples_counter: collections.Counter = collections.Counter()
+    def __init__(self, log_prob_fn) -> None:
+        self.log_prob_fn = log_prob_fn
 
         # To register the total time of the samples
-        self.total_time = 0.
+        self.total_time = 0.0
 
         self._fitted = False
 
     def fit(
-            self,
-            data: _ArrayLike,
-            models: data_loaders.BaseDistributionDataLoader[_DistributionT],
+        self,
+        data: _ArrayLike,
     ):
         """
         Fit the data of the distribution
 
         :param data: The data. It must be the indices of the discrete distribution.
-        :param models: A sequence of models.
         :return: itself.
         """
-        self.data_: torch.Tensor = torch.as_tensor(data, device=config.device)  # The original dtype must be maintained
-        self.models_: data_loaders.BaseDistributionDataLoader[_DistributionT] = models
-        self.models_index_: torch.Tensor = torch.arange(len(self.models_), device=config.device)
+        self.data_: torch.Tensor = torch.as_tensor(
+            data, device=config.device
+        )  # The original dtype must be maintained
         self._fitted = True
         return self
 
-    def log_likelihood(self, model: _DistributionT):
-        """The log-likelihood of the model."""
+    def log_prob(self, model: _DistributionT):
+        """The log-probability of the model."""
         validation.check_is_fitted(self)
-        return self.log_likelihood_fn(model, data=self.data_)
+        return self.log_prob_fn(model, data=self.data_)
 
-    def likelihood(self, model: _DistributionT):
-        """The likelihood of the model."""
-        return torch.exp(self.log_likelihood(model))
+    def prob(self, model: _DistributionT):
+        """The probability of the model."""
+        return torch.exp(self.log_prob(model))
 
     @abc.abstractmethod
     def _draw(self, *args, **kwargs):
@@ -120,11 +105,69 @@ class PosteriorPiN(abc.ABC, typing.Generic[_DistributionT]):
         """To use template pattern on ``_rvs`` method."""
         ...
 
-    @_timeit_to_total_time
     def draw(self, *args, **kwargs) -> _DistributionT:
         """Draw a sample."""
         validation.check_is_fitted(self)
-        to_return, i = self._draw(*args, **kwargs)
+        return self._draw(*args, **kwargs)
+
+    def rvs(self, size=1, *args, **kwargs) -> typing.Sequence[_DistributionT]:
+        """Samples as many distributions as the ``size`` parameter indicates."""
+        validation.check_is_fitted(self)
+        return self._rvs(size=size, *args, **kwargs)
+
+    def __repr__(self):
+        to_return = self.__class__.__name__
+
+        if not self._fitted:
+            to_return += "()"
+            return to_return
+
+        to_return += f"(n_data={len(self.data_)})"
+
+        return to_return
+
+
+# noinspection PyAttributeOutsideInit
+class DiscretePosteriorPiN(PosteriorPiN, abc.ABC, typing.Generic[_DistributionT]):
+    def __init__(
+        self,
+        log_prob_fn,
+    ):
+        """
+        Initialiser.
+
+        :param log_likelihood_fn: The log-likelihood function. Is a function that receives a model
+        and data, and returns the log-likelihood.
+        """
+        super().__init__(log_prob_fn or _log_likelihood_default)
+
+        # The history of the index samples
+        self.samples_history: list[int] = []
+        self.samples_counter: collections.Counter = collections.Counter()
+
+    def fit(
+        self,
+        data: _ArrayLike,
+        models: data_loaders.BaseDistributionDataLoader[_DistributionT],
+    ):
+        """
+        Fit the data of the distribution
+
+        :param data: The data. It must be the indices of the discrete distribution.
+        :param models: A sequence of models.
+        :return: itself.
+        """
+        super().fit(data)
+        self.models_: data_loaders.BaseDistributionDataLoader[_DistributionT] = models
+        self.models_index_: torch.Tensor = torch.arange(
+            len(self.models_), device=config.device
+        )
+        return self
+
+    @_timeit_to_total_time
+    def draw(self, *args, **kwargs) -> _DistributionT:
+        """Draw a sample."""
+        to_return, i = super().draw(*args, **kwargs)
         self.samples_history.append(i)
         self.samples_counter[i] += 1
         return to_return
@@ -132,24 +175,28 @@ class PosteriorPiN(abc.ABC, typing.Generic[_DistributionT]):
     @_timeit_to_total_time
     def rvs(self, size=1, *args, **kwargs) -> typing.Sequence[_DistributionT]:
         """Samples as many distributions as the ``size`` parameter indicates."""
-        validation.check_is_fitted(self)
-        to_return, list_i = self._rvs(size=size, *args, **kwargs)
+        to_return, list_i = super().rvs(size=size, *args, **kwargs)
         self.samples_history += list_i
         self.samples_counter.update(list_i)
         return to_return
 
     def __repr__(self):
-        if self._fitted:
-            return (self.__class__.__name__
-                    + "("
-                    + f"n_data={len(self.data_)}, "
-                    + f"n_models={len(self.models_)}"
-                    + ")")
-        return self.__class__.__name__ + "()"
+        to_return = self.__class__.__name__
+
+        if not self._fitted:
+            to_return += "()"
+            return to_return
+
+        to_return += "("
+        to_return += f"n_data={len(self.data_)}, "
+        to_return += f"n_models={len(self.models_)}"
+        to_return += ")"
+
+        return to_return
 
 
 # noinspection PyAttributeOutsideInit
-class ExplicitPosteriorPiN(PosteriorPiN[_DistributionT]):
+class ExplicitPosteriorPiN(DiscretePosteriorPiN[_DistributionT]):
     r"""Distribution that uses the strategy of calculating all likelihoods by brute force. This
     class implements likelihoods of the form
 
@@ -166,15 +213,15 @@ class ExplicitPosteriorPiN(PosteriorPiN[_DistributionT]):
     """
 
     def __init__(
-            self,
-            log_likelihood_fn=None,
+        self,
+        log_prob_fn=None,
     ):
-        super().__init__(log_likelihood_fn)
+        super().__init__(log_prob_fn)
 
     def fit(
-            self,
-            data,
-            models,
+        self,
+        data,
+        models,
     ):
         super(ExplicitPosteriorPiN, self).fit(data, models)
 
@@ -195,28 +242,39 @@ class ExplicitPosteriorPiN(PosteriorPiN[_DistributionT]):
         self.support_ = self.models_index_[likelihood_cache > 0]
 
         # Get the posterior probabilities.
-        self.probabilities_: torch.Tensor = (likelihood_cache / likelihood_cache.sum())
+        self.probabilities_: torch.Tensor = likelihood_cache / likelihood_cache.sum()
 
         return self
 
     def _draw(self, seed=None) -> _DistributionT:
         rng: torch.Generator = _set_generator(seed, device=config.device)
 
-        i = int(torch.multinomial(input=self.probabilities_, num_samples=1, generator=rng))
+        i = torch.multinomial(input=self.probabilities_, num_samples=1, generator=rng)
+        i = int(i)
         return self.models_[i], i
 
     def _rvs(self, size=1, seed=None, **kwargs) -> typing.Sequence[_DistributionT]:
         rng: torch.Generator = _set_generator(seed, device=config.device)
 
-        list_i = [int(i) for i in torch.multinomial(input=self.probabilities_, num_samples=size, generator=rng)]
+        list_i = [
+            int(i)
+            for i in torch.multinomial(
+                input=self.probabilities_, num_samples=size, generator=rng
+            )
+        ]
         return [self.models_[i] for i in list_i], list_i
 
     def __repr__(self):
-        if self._fitted:
-            return (self.__class__.__name__
-                    + "("
-                    + f"n_data={len(self.data_)}, "
-                    + f"n_models={len(self.models_)}, "
-                    + f"n_support={len(self.support_)}"
-                    + ")")
-        return self.__class__.__name__ + "()"
+        to_return = self.__class__.__name__
+
+        if not self._fitted:
+            to_return += "()"
+            return to_return
+
+        to_return += "("
+        to_return += f"n_data={len(self.data_)}, "
+        to_return += f"n_models={len(self.models_)}, "
+        to_return += f"n_support={len(self.support_)}"
+        to_return += ")"
+
+        return to_return
