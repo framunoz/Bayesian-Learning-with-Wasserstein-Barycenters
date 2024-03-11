@@ -259,7 +259,10 @@ class ExplicitPosteriorPiN(DiscretePosteriorPiN[_DistributionT]):
         list_i = [
             int(i)
             for i in torch.multinomial(
-                input=self.probabilities_, num_samples=size, generator=rng
+                input=self.probabilities_,
+                num_samples=size,
+                replacement=True,
+                generator=rng,
             )
         ]
         return [self.models_[i] for i in list_i], list_i

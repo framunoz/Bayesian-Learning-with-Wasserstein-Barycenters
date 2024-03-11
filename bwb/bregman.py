@@ -152,7 +152,8 @@ def _convolutional_barycenter2d(
     where A is a collection of 2D images.
     """
 
-    A = torch.stack(A)
+    if not isinstance(A, torch.Tensor):
+        A = torch.stack(A)
 
     nx = get_backend(A)
 

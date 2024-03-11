@@ -3,12 +3,11 @@ from typing import Callable, Union
 
 import torch
 from torch import linalg as LA
-from bwb import bregman
 
 import bwb.distributions as distrib
 import bwb.transports as tpt
-from bwb import logging
-from bwb import utils
+from bwb import bregman, logging, utils
+from wgan_gp.wgan_gp_vae.utils import BaseProjectorOnManifold
 
 __all__ = [
     "compute_bwb_discrete_distribution",
@@ -30,6 +29,7 @@ def compute_bwb_discrete_distribution(
     position_history=False,
     distribution_history=False,
     samples_posterior_history=False,
+    report_every=10,
 ):
     if isinstance(batch_size, int):
         aux = batch_size
@@ -68,12 +68,13 @@ def compute_bwb_discrete_distribution(
         and w_dist >= tol  # Achieves convergence in distance
     ):
         tic_ = time.time()
-        _log.info(
-            _bar + f" {k = }, "
-            f"t = {toc - tic:.4f} [seg], "
-            f"Δt = {diff_t * 1000:.4f} [ms], "
-            f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.4f} [ms/iter] " + _bar
-        )
+        if k % report_every == 0:
+            _log.info(
+                _bar + f" {k = }, "
+                f"t = {toc - tic:.4f} [seg], "
+                f"Δt = {diff_t * 1000:.4f} [ms], "
+                f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.4f} [ms/iter] " + _bar
+            )
 
         if samples_posterior_history:
             samples_posterior_history.append([])
@@ -143,6 +144,7 @@ def compute_bwb_distribution_draw(
     weights_history=False,
     distribution_history=False,
     samples_posterior_history=False,
+    report_every=10,
 ):
     # Paso 1: Sampling a mu_0
     mu_k: distrib.DistributionDraw = posterior.draw()
@@ -167,12 +169,13 @@ def compute_bwb_distribution_draw(
         and toc - tic < max_time  # Reaches maximum time
     ):
         tic_ = time.time()
-        _log.info(
-            _bar + f" {k = }, "
-            f"t = {toc - tic:.4f} [seg], "
-            f"Δt = {diff_t * 1000:.4f} [ms], "
-            f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.4f} [ms/iter] " + _bar
-        )
+        if k % report_every == 0:
+            _log.info(
+                _bar + f" {k = }, "
+                f"t = {toc - tic:.4f} [seg], "
+                f"Δt = {diff_t * 1000:.4f} [ms], "
+                f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.4f} [ms/iter] " + _bar
+            )
 
         m_k: distrib.DistributionDraw = posterior.draw()
         if samples_posterior_history:
@@ -192,6 +195,97 @@ def compute_bwb_distribution_draw(
             warn=False,
             log=True,
         )
+
+        # Add to history
+        if weights_history:
+            weights_history.append(gs_weights_k)
+        if distribution_history:
+            mu_kp1 = distrib.DistributionDraw.from_grayscale_weights(gs_weights_kp1)
+            distribution_history.append(mu_kp1)
+
+        # Update
+        k += 1
+        gs_weights_k = gs_weights_kp1
+        toc = time.time()
+        diff_t = toc - tic_
+
+    mu = distrib.DistributionDraw.from_grayscale_weights(gs_weights_kp1)
+    to_return = [mu]
+    if weights_history:
+        to_return.append(weights_history)
+    if distribution_history:
+        to_return.append(distribution_history)
+    if samples_posterior_history:
+        to_return.append(samples_posterior_history)
+
+    return tuple(to_return)
+
+
+def compute_bwb_distribution_draw_projected(
+    posterior: distrib.PosteriorPiN[distrib.DistributionDraw],
+    projector: BaseProjectorOnManifold,
+    learning_rate: Callable[[int], float],  # The \gamma_k schedule
+    reg: float = 3e-3,  # Regularization of the convolutional method
+    entrop_sharp=False,
+    max_iter: int = 100_000,
+    max_time: float = float("inf"),  # In seconds
+    weights_history=False,
+    distribution_history=False,
+    samples_posterior_history=False,
+    report_every=10,
+):
+    # Paso 1: Sampling a mu_0
+    mu_k: distrib.DistributionDraw = posterior.draw()
+    dtype, device = mu_k.dtype, mu_k.device
+    _log.info(f"{dtype = }, {device = }")
+
+    gs_weights_k = mu_k.grayscale_weights
+
+    # Create histories
+    if weights_history:
+        weights_history = [gs_weights_k]
+    if distribution_history:
+        distribution_history = [mu_k]
+    if samples_posterior_history:
+        samples_posterior_history = [[mu_k]]
+
+    tic, toc = time.time(), time.time()
+    diff_t = 0
+    k = 0
+    while (
+        k < max_iter  # Reaches maximum iteration
+        and toc - tic < max_time  # Reaches maximum time
+    ):
+        tic_ = time.time()
+        if k % report_every == 0:
+            _log.info(
+                _bar + f" {k = }, "
+                f"t = {toc - tic:.4f} [seg], "
+                f"Δt = {diff_t * 1000:.4f} [ms], "
+                f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.4f} [ms/iter] " + _bar
+            )
+
+        m_k: distrib.DistributionDraw = posterior.draw()
+        if samples_posterior_history:
+            samples_posterior_history.append([m_k])
+
+        # Calculate the distribution of mu_{k+1}
+        gamma_k = learning_rate(k)
+        _log.debug(f"{gamma_k = :.6f}")
+
+        gs_weights_kp1, _ = bregman.convolutional_barycenter2d(
+            A=[gs_weights_k, m_k.grayscale_weights],
+            weights=[1 - gamma_k, gamma_k],
+            reg=reg,
+            entrop_sharp=entrop_sharp,
+            numItermax=1_000,
+            stopThr=1e-8,
+            warn=False,
+            log=True,
+        )
+
+        # Project on Manifold
+        gs_weights_kp1 = projector(gs_weights_kp1).to(gs_weights_k)
 
         # Add to history
         if weights_history:
