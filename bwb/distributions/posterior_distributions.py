@@ -13,9 +13,9 @@ from bwb.config import config
 from bwb.utils import _ArrayLike, _DistributionT
 
 __all__ = [
-    "PosteriorPiN",
-    "DiscretePosteriorPiN",
-    "ExplicitPosteriorPiN",
+    "DistributionSampler",
+    "DiscreteDistributionSampler",
+    "ExplicitPosteriorSampler",
 ]
 
 
@@ -53,150 +53,110 @@ def _set_generator(seed=None, device="cpu") -> torch.Generator:
     return gen
 
 
-class PosteriorPiN(abc.ABC, t.Generic[_DistributionT]):
-    r"""Base class for classes representing the posterior distribution:
-
-    .. math::
-        \Pi_n(dm)
-        = \Pi(dm) \frac{\mathcal{L}_n(m)}{\int_{\mathcal{M}} \mathcal{L}_n(d\bar m) \Pi(d\bar m)}
-
+@t.runtime_checkable
+class DiscreteModelsSet(t.Protocol, t.Generic[_DistributionT]):
+    """
+    Protocol for classes that are a set of models with a discrete support.
     """
 
-    def __init__(self, log_prob_fn) -> None:
-        self.log_prob_fn = log_prob_fn
+    def _compute_probability(self, data: _ArrayLike, **kwargs) -> torch.Tensor:
+        """
+        Compute the probabilities of the data given the models.
 
-        # To register the total time of the samples
+        :param data: The data to compute the probabilities.
+        :return: A tensor with the probabilities.
+        """
+        ...
+
+    def _get(self, i: int, **kwargs) -> _DistributionT:
+        """Get the model at the index ``i``."""
+        ...
+
+    def __len__(self) -> int:
+        """Get the number of models."""
+        ...
+
+
+class DistributionSampler(abc.ABC, t.Generic[_DistributionT]):
+    r"""
+    Base class for distributions that sampling other distributions. i.e. it represents a distribution :math:`\Lambda(dm) \in \mathcal{P}(\mathcal{M)}`, where :math:`\mathcal{M}` is the set of models.
+    """
+
+    @abc.abstractmethod
+    def draw(self, *args, **kwargs) -> _DistributionT:
+        """Draw a sample."""
+        ...
+
+    @abc.abstractmethod
+    def rvs(self, size=1, *args, **kwargs) -> t.Sequence[_DistributionT]:
+        """Samples as many distributions as the ``size`` parameter indicates."""
+        ...
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}()"
+
+
+class DiscreteDistributionSampler(DistributionSampler[_DistributionT]):
+    r"""
+    Base class for distributions that have a discrete set of models. i.e. where the set of models is :math:`|\mathcal{M}| < +\infty`.
+
+    As the support is discrete, the distribution can be represented as a vector of probabilities, and therefore, the sampling process is reduced to drawing an index from a multinomial distribution. This property allows to save the samples and the number of times each model has been sampled, to get statistics about the sampling process.
+    """
+
+    def __init__(self, save_samples: bool = True):
+        self.save_samples = save_samples
+        self.samples_history: list[int] = []
+        self.samples_counter: c.Counter[int] = c.Counter()
+        self._models: dict[int, _DistributionT] = {}
         self.total_time = 0.0
 
-        self._fitted = False
-
-    def fit(
-        self,
-        data: _ArrayLike,
-    ):
-        """
-        Fit the data of the distribution
-
-        :param data: The data. It must be the indices of the discrete distribution.
-        :return: itself.
-        """
-        self.data_: torch.Tensor = torch.as_tensor(
-            data, device=config.device
-        )  # The original dtype must be maintained
-        self._fitted = True
-        return self
-
-    def log_prob(self, model: _DistributionT):
-        """The log-probability of the model."""
-        validation.check_is_fitted(self)
-        return self.log_prob_fn(model, data=self.data_)
-
-    def prob(self, model: _DistributionT):
-        """The probability of the model."""
-        return torch.exp(self.log_prob(model))
-
     @abc.abstractmethod
-    def _draw(self, *args, **kwargs):
-        """To use template pattern on ``draw`` method."""
+    def _draw(self, *args, **kwargs) -> tuple[_DistributionT, int]:
+        """To use template pattern on the draw method."""
         ...
-
-    @abc.abstractmethod
-    def _rvs(self, size=1, *args, **kwargs):
-        """To use template pattern on ``_rvs`` method."""
-        ...
-
-    def draw(self, *args, **kwargs) -> _DistributionT:
-        """Draw a sample."""
-        validation.check_is_fitted(self)
-        return self._draw(*args, **kwargs)
-
-    def rvs(self, size=1, *args, **kwargs) -> t.Sequence[_DistributionT]:
-        """Samples as many distributions as the ``size`` parameter indicates."""
-        validation.check_is_fitted(self)
-        return self._rvs(size=size, *args, **kwargs)
-
-    def __repr__(self):
-        to_return = self.__class__.__name__
-
-        if not self._fitted:
-            to_return += "()"
-            return to_return
-
-        to_return += f"(n_data={len(self.data_)})"
-
-        return to_return
-
-
-# noinspection PyAttributeOutsideInit
-class DiscretePosteriorPiN(PosteriorPiN, abc.ABC, t.Generic[_DistributionT]):
-    def __init__(
-        self,
-        log_prob_fn,
-    ):
-        """
-        Initialiser.
-
-        :param log_likelihood_fn: The log-likelihood function. Is a function that receives a model
-        and data, and returns the log-likelihood.
-        """
-        super().__init__(log_prob_fn or _log_likelihood_default)
-
-        # The history of the index samples
-        self.samples_history: list[int] = []
-        self.samples_counter: c.Counter = c.Counter()
-
-    def fit(
-        self,
-        data: _ArrayLike,
-        models: data_loaders.BaseDistributionDataLoader[_DistributionT],
-    ):
-        """
-        Fit the data of the distribution
-
-        :param data: The data. It must be the indices of the discrete distribution.
-        :param models: A sequence of models.
-        :return: itself.
-        """
-        super().fit(data)
-        self.models_: data_loaders.BaseDistributionDataLoader[_DistributionT] = models
-        self.models_index_: torch.Tensor = torch.arange(
-            len(self.models_), device=config.device
-        )
-        return self
 
     @_timeit_to_total_time
     def draw(self, *args, **kwargs) -> _DistributionT:
         """Draw a sample."""
-        to_return, i = super().draw(*args, **kwargs)
-        self.samples_history.append(i)
-        self.samples_counter[i] += 1
+        validation.check_is_fitted(self)
+        to_return, i = self._draw(*args, **kwargs)
+        if self.save_samples:  # Register the sample
+            self.samples_history.append(i)
+            self.samples_counter[i] += 1
         return to_return
+
+    @abc.abstractmethod
+    def _rvs(
+        self, size=1, *args, **kwargs
+    ) -> tuple[t.Sequence[_DistributionT], list[int]]:
+        """Samples as many distributions as the ``size`` parameter indicates."""
+        ...
 
     @_timeit_to_total_time
     def rvs(self, size=1, *args, **kwargs) -> t.Sequence[_DistributionT]:
         """Samples as many distributions as the ``size`` parameter indicates."""
-        to_return, list_i = super().rvs(size=size, *args, **kwargs)
-        self.samples_history += list_i
-        self.samples_counter.update(list_i)
+        validation.check_is_fitted(self)
+        to_return, list_indices = self._rvs(size, *args, **kwargs)
+        if self.save_samples:  # Register the samples
+            self.samples_history.extend(list_indices)
+            self.samples_counter.update(list_indices)
         return to_return
 
-    def __repr__(self):
+    @abc.abstractmethod
+    def get_model(self, i: int) -> _DistributionT:
+        """Get the model with index i."""
+        ...
+
+    def __repr__(self) -> str:
         to_return = self.__class__.__name__
 
-        if not self._fitted:
-            to_return += "()"
-            return to_return
-
-        to_return += "("
-        to_return += f"n_data={len(self.data_)}, "
-        to_return += f"n_models={len(self.models_)}"
-        to_return += ")"
+        if self.save_samples:
+            to_return += f"(samples={len(self.samples_history)})"
 
         return to_return
 
 
-# noinspection PyAttributeOutsideInit
-class ExplicitPosteriorPiN(DiscretePosteriorPiN[_DistributionT]):
+class ExplicitPosteriorSampler(DiscreteDistributionSampler[_DistributionT]):
     r"""Distribution that uses the strategy of calculating all likelihoods by brute force. This
     class implements likelihoods of the form
 
@@ -212,62 +172,75 @@ class ExplicitPosteriorPiN(DiscretePosteriorPiN[_DistributionT]):
 
     """
 
-    def __init__(
-        self,
-        log_prob_fn=None,
-    ):
-        super().__init__(log_prob_fn)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._fitted = False
 
+    @_timeit_to_total_time
     def fit(
         self,
-        data,
-        models,
+        data: _ArrayLike,
+        models: DiscreteModelsSet[_DistributionT],
+        batch_size: int = 256,
     ):
-        super(ExplicitPosteriorPiN, self).fit(data, models)
+        """
+        Fit the posterior distribution.
 
-        # Compute the log-likelihood of the models as cache
-        # Data with shape (1, n_data)
+        :param data: The data to fit the posterior.
+        :param models: The models to fit the posterior.
+        :param batch_size: The batch size to compute the probabilities.
+        :return: The fitted posterior.
+        """
+        assert isinstance(
+            models, DiscreteModelsSet
+        ), "The models must be a DiscreteModelsSet."
+
+        self.data_: torch.Tensor = torch.as_tensor(data, device=config.device)
+        self.models_: DiscreteModelsSet[_DistributionT] = models
+        self.models_index_: torch.Tensor = torch.arange(
+            len(models), device=config.device
+        )
+
         data = self.data_.reshape(1, -1)
 
-        # logits array with shape (n_models, n_support)
-        logits_models = models.logits_tensor
+        self.probabilities_: torch.Tensor = models._compute_probability(
+            data, batch_size=batch_size
+        )
 
-        # Take the evaluations of the logits, resulting in a tensor of shape (n_models, n_data)
-        evaluations = torch.take_along_dim(logits_models, data, 1)
+        self.support_ = self.models_index_[self.probabilities_ > 0]
 
-        # Get the likelihood as cache. The shape is (n_models,)
-        likelihood_cache = torch.exp(torch.sum(evaluations, 1))
-
-        # Define the support
-        self.support_ = self.models_index_[likelihood_cache > 0]
-
-        # Get the posterior probabilities.
-        self.probabilities_: torch.Tensor = likelihood_cache / likelihood_cache.sum()
+        self._fitted = True
 
         return self
 
-    def _draw(self, seed=None) -> _DistributionT:
-        rng: torch.Generator = _set_generator(seed, device=config.device)
+    def get_model(self, i: int) -> _DistributionT:
+        """Get the model with index i."""
+        validation.check_is_fitted(self)
+        if self._models.get(i) is None:
+            self._models[i] = self.models_._get(i)
+        return self._models[i]
 
-        i = torch.multinomial(input=self.probabilities_, num_samples=1, generator=rng)
+    def _draw(self, seed=None, *args, **kwargs) -> tuple[_DistributionT, int]:
+        rng: torch.Generator = _set_generator(seed=seed, device=config.device)
+
+        i = torch.multinomial(
+            input=self.probabilities_, num_samples=1, generator=rng
+        ).item()
         i = int(i)
-        return self.models_[i], i
+        return self.get_model(i), i
 
-    def _rvs(self, size=1, seed=None, **kwargs) -> t.Sequence[_DistributionT]:
-        rng: torch.Generator = _set_generator(seed, device=config.device)
+    def _rvs(
+        self, size=1, seed=None, *args, **kwargs
+    ) -> tuple[t.Sequence[_DistributionT], list[int]]:
+        rng: torch.Generator = _set_generator(seed=seed, device=config.device)
 
-        list_i = [
-            int(i)
-            for i in torch.multinomial(
-                input=self.probabilities_,
-                num_samples=size,
-                replacement=True,
-                generator=rng,
-            )
-        ]
-        return [self.models_[i] for i in list_i], list_i
+        indices = torch.multinomial(
+            input=self.probabilities_, num_samples=size, replacement=True, generator=rng
+        )
+        indices = indices.tolist()
+        return [self.get_model(i) for i in indices], indices
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         to_return = self.__class__.__name__
 
         if not self._fitted:
@@ -277,7 +250,47 @@ class ExplicitPosteriorPiN(DiscretePosteriorPiN[_DistributionT]):
         to_return += "("
         to_return += f"n_data={len(self.data_)}, "
         to_return += f"n_models={len(self.models_)}, "
-        to_return += f"n_support={len(self.support_)}"
+        to_return += f"n_support={len(self.support_)}, "
+        to_return += f"samples={len(self.samples_history)}"
         to_return += ")"
 
         return to_return
+
+
+class PosteriorPiN(DistributionSampler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Raise an warning of deprecation
+        import warnings
+
+        warnings.warn(
+            "PosteriorPiN is deprecated. Use DistributionSampler instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+
+class DiscretePosteriorPiN(DiscreteDistributionSampler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Raise an warning of deprecation
+        import warnings
+
+        warnings.warn(
+            "DiscretePosteriorPiN is deprecated. Use DiscreteDistributionSampler instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+
+class ExplicitPosteriorPiN(ExplicitPosteriorSampler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Raise an warning of deprecation
+        import warnings
+
+        warnings.warn(
+            "ExplicitPosteriorPiN is deprecated. Use ExplicitPosteriorSampler instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
