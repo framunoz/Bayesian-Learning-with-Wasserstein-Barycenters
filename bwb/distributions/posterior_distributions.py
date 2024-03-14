@@ -1,12 +1,12 @@
 import abc
-import collections
+import collections as c
 import functools
 import time
-import typing
+import typing as t
 
 import torch
 
-import bwb.distributions as distrib
+import bwb.distributions as dist
 import bwb.distributions.data_loaders as data_loaders
 import bwb.validation as validation
 from bwb.config import config
@@ -19,7 +19,7 @@ __all__ = [
 ]
 
 
-def _log_likelihood_default(model: distrib.DiscreteDistribution, data: torch.Tensor):
+def _log_likelihood_default(model: dist.DiscreteDistribution, data: torch.Tensor):
     """Default log-likelihood of the posterior.
 
     :param model: A model to obtain its log-likelihood
@@ -53,7 +53,7 @@ def _set_generator(seed=None, device="cpu") -> torch.Generator:
     return gen
 
 
-class PosteriorPiN(abc.ABC, typing.Generic[_DistributionT]):
+class PosteriorPiN(abc.ABC, t.Generic[_DistributionT]):
     r"""Base class for classes representing the posterior distribution:
 
     .. math::
@@ -110,7 +110,7 @@ class PosteriorPiN(abc.ABC, typing.Generic[_DistributionT]):
         validation.check_is_fitted(self)
         return self._draw(*args, **kwargs)
 
-    def rvs(self, size=1, *args, **kwargs) -> typing.Sequence[_DistributionT]:
+    def rvs(self, size=1, *args, **kwargs) -> t.Sequence[_DistributionT]:
         """Samples as many distributions as the ``size`` parameter indicates."""
         validation.check_is_fitted(self)
         return self._rvs(size=size, *args, **kwargs)
@@ -128,7 +128,7 @@ class PosteriorPiN(abc.ABC, typing.Generic[_DistributionT]):
 
 
 # noinspection PyAttributeOutsideInit
-class DiscretePosteriorPiN(PosteriorPiN, abc.ABC, typing.Generic[_DistributionT]):
+class DiscretePosteriorPiN(PosteriorPiN, abc.ABC, t.Generic[_DistributionT]):
     def __init__(
         self,
         log_prob_fn,
@@ -143,7 +143,7 @@ class DiscretePosteriorPiN(PosteriorPiN, abc.ABC, typing.Generic[_DistributionT]
 
         # The history of the index samples
         self.samples_history: list[int] = []
-        self.samples_counter: collections.Counter = collections.Counter()
+        self.samples_counter: c.Counter = c.Counter()
 
     def fit(
         self,
@@ -173,7 +173,7 @@ class DiscretePosteriorPiN(PosteriorPiN, abc.ABC, typing.Generic[_DistributionT]
         return to_return
 
     @_timeit_to_total_time
-    def rvs(self, size=1, *args, **kwargs) -> typing.Sequence[_DistributionT]:
+    def rvs(self, size=1, *args, **kwargs) -> t.Sequence[_DistributionT]:
         """Samples as many distributions as the ``size`` parameter indicates."""
         to_return, list_i = super().rvs(size=size, *args, **kwargs)
         self.samples_history += list_i
@@ -253,7 +253,7 @@ class ExplicitPosteriorPiN(DiscretePosteriorPiN[_DistributionT]):
         i = int(i)
         return self.models_[i], i
 
-    def _rvs(self, size=1, seed=None, **kwargs) -> typing.Sequence[_DistributionT]:
+    def _rvs(self, size=1, seed=None, **kwargs) -> t.Sequence[_DistributionT]:
         rng: torch.Generator = _set_generator(seed, device=config.device)
 
         list_i = [
