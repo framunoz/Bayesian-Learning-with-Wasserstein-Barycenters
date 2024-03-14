@@ -170,9 +170,7 @@ class DistributionDrawDataLoader(BaseDistributionDataLoader[dist.DistributionDra
         :return: A tuple with the probabilities and the logits.
         """
         # Data with shape (1, n_data)
-        data = torch.as_tensor(data, device=config.device, dtype=config.dtype).reshape(
-            1, -1
-        )
+        data = torch.as_tensor(data, device=config.device).reshape(1, -1)
 
         # logits array with shape (n_models, n_support)
         logits_models = self.logits_tensor
