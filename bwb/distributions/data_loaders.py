@@ -1,11 +1,11 @@
 import abc
 import time
-import typing
+import typing as t
 
 import torch
-import torchvision.transforms as transforms
+import torchvision.transforms as T
 
-import bwb.distributions as distrib
+import bwb.distributions as dist
 from bwb import logging
 from bwb.config import config
 from bwb.utils import _ArrayLike, _DistributionT
@@ -20,7 +20,7 @@ _log = logging.get_logger(__name__)
 
 
 class BaseDistributionDataLoader(
-    typing.MutableMapping[int, _DistributionT], typing.Generic[_DistributionT], abc.ABC
+    t.MutableMapping[int, _DistributionT], t.Generic[_DistributionT], abc.ABC
 ):
     """
     Base class for DataLoaders. It is a :py:class:`MutableMapping` that creates instances of
@@ -93,17 +93,17 @@ class BaseDistributionDataLoader(
 
 
 class DiscreteDistributionDataLoader(
-    BaseDistributionDataLoader[distrib.DiscreteDistribution]
+    BaseDistributionDataLoader[dist.DiscreteDistribution]
 ):
     """
     DataLoader for the :py:class:`bwb.distributions.discrete_distributions.DiscreteDistributions`.
     """
 
-    def _create_distribution_instance(self, index: int) -> distrib.DiscreteDistribution:
-        return distrib.DiscreteDistribution(self.probs_tensor[index])
+    def _create_distribution_instance(self, index: int) -> dist.DiscreteDistribution:
+        return dist.DiscreteDistribution(self.probs_tensor[index])
 
 
-class DistributionDrawDataLoader(BaseDistributionDataLoader[distrib.DistributionDraw]):
+class DistributionDrawDataLoader(BaseDistributionDataLoader[dist.DistributionDraw]):
     """A class of type :py:class:`MutableMapping` that wraps a dictionary. It stores information
     from probability arrays and logits. This class can be thought of as using the flyweight
     pattern, so as not to take up too much instantiation time, or if an instance already exists,
@@ -139,25 +139,55 @@ class DistributionDrawDataLoader(BaseDistributionDataLoader[distrib.Distribution
 
         # Set transforms
         list_transforms = [
-            transforms.Lambda(lambda x: x),  # Literally, do nothing
+            T.Lambda(lambda x: x),  # Literally, do nothing
         ]
         if final_shape:
             list_transforms += [
-                transforms.Lambda(lambda x: x.reshape(original_shape)),
-                transforms.Lambda(lambda x: x / torch.max(x)),
-                transforms.ToPILImage(),
-                transforms.Resize(final_shape),
-                transforms.ToTensor(),
-                transforms.Lambda(lambda x: x / x.sum()),
-                transforms.Lambda(lambda x: x.reshape(-1)),
+                T.Lambda(lambda x: x.reshape(original_shape)),
+                T.Lambda(lambda x: x / torch.max(x)),
+                T.ToPILImage(),
+                T.Resize(final_shape),
+                T.ToTensor(),
+                T.Lambda(lambda x: x / x.sum()),
+                T.Lambda(lambda x: x.reshape(-1)),
             ]
-        self.transform = transforms.Compose(list_transforms)
+        self.transform = T.Compose(list_transforms)
 
         toc = time.time()
         _log.debug(f"Δt={toc - tic:.2f} [seg]")
 
         super(DistributionDrawDataLoader, self).__init__(probs_tensor=probs_tensor)
 
-    def _create_distribution_instance(self, index) -> distrib.DistributionDraw:
+    def _create_distribution_instance(self, index) -> dist.DistributionDraw:
         weights = self.transform(self.probs_tensor[index])
-        return distrib.DistributionDraw.from_weights(weights, self.shape)
+        return dist.DistributionDraw.from_weights(weights, self.shape)
+
+    def _compute_probability(self, data: _ArrayLike, **kwargs) -> torch.Tensor:
+        """
+        Compute the probabilities of the data given the models.
+
+        :param data: The data to compute the probabilities.
+        :return: A tuple with the probabilities and the logits.
+        """
+        # Data with shape (1, n_data)
+        data = torch.as_tensor(data, device=config.device, dtype=config.dtype).reshape(
+            1, -1
+        )
+
+        # logits array with shape (n_models, n_support)
+        logits_models = self.logits_tensor
+
+        # Take the evaluations of the logits, resulting in a tensor of shape (n_models, n_data)
+        evaluations = torch.take_along_dim(logits_models, data, 1)
+
+        # Get the likelihood as cache. The shape is (n_models,)
+        likelihood_cache = torch.exp(torch.sum(evaluations, 1))
+
+        # Get the posterior probabilities.
+        probabilities = likelihood_cache / likelihood_cache.sum()
+
+        return probabilities
+
+    def _get(self, i: int, **kwargs) -> dist.DistributionDraw:
+        """Get the model at the index ``i``."""
+        return self[i]
