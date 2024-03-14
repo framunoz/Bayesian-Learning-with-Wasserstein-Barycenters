@@ -4,7 +4,7 @@ from typing import Callable, Union
 import torch
 from torch import linalg as LA
 
-import bwb.distributions as distrib
+import bwb.distributions as dist
 import bwb.transports as tpt
 from bwb import bregman, logging, utils
 from wgan_gp.wgan_gp_vae.utils import BaseProjectorOnManifold
@@ -19,7 +19,7 @@ _bar = "=" * 12
 
 def compute_bwb_discrete_distribution(
     transport: tpt.BaseTransport,
-    posterior: distrib.PosteriorPiN[distrib.DiscreteDistribution],
+    posterior: dist.PosteriorPiN[dist.DiscreteDistribution],
     learning_rate: Callable[[int], float],  # The \gamma_k schedule
     batch_size: Union[Callable[[int], int], int],  # The S_k schedule
     alpha: float = 1.0,
@@ -40,7 +40,7 @@ def compute_bwb_discrete_distribution(
     batch_size: Callable[[int], int]
 
     # Paso 1: Sampling a mu_0
-    mu_0: distrib.DiscreteDistribution = posterior.draw()
+    mu_0: dist.DiscreteDistribution = posterior.draw()
     dtype, device = mu_0.dtype, mu_0.device
     _log.info(f"{dtype = }, {device = }")
 
@@ -54,7 +54,7 @@ def compute_bwb_discrete_distribution(
     if position_history:
         position_history = [X_k]
     if distribution_history:
-        distribution_history = [distrib.DiscreteDistribution(support=X_k, weights=m)]
+        distribution_history = [dist.DiscreteDistribution(support=X_k, weights=m)]
     if samples_posterior_history:
         samples_posterior_history = [[mu_0]]
 
@@ -83,7 +83,7 @@ def compute_bwb_discrete_distribution(
         S_k = batch_size(k)
         for _ in range(S_k):
             # Paso 2: Draw \tilde\mu^i_k
-            t_mu_i_k: distrib.DiscreteDistribution = posterior.draw()
+            t_mu_i_k: dist.DiscreteDistribution = posterior.draw()
             if samples_posterior_history:
                 samples_posterior_history[-1].append(t_mu_i_k)
             t_X_i_k, t_m_i_k = t_mu_i_k.enumerate_nz_support_(), t_mu_i_k.nz_probs
@@ -114,7 +114,7 @@ def compute_bwb_discrete_distribution(
             position_history.append(X_kp1)
         if distribution_history:
             distribution_history.append(
-                distrib.DiscreteDistribution(support=X_kp1, weights=m)
+                dist.DiscreteDistribution(support=X_kp1, weights=m)
             )
 
         # Update
@@ -135,7 +135,7 @@ def compute_bwb_discrete_distribution(
 
 
 def compute_bwb_distribution_draw(
-    posterior: distrib.PosteriorPiN[distrib.DistributionDraw],
+    posterior: dist.PosteriorPiN[dist.DistributionDraw],
     learning_rate: Callable[[int], float],  # The \gamma_k schedule
     reg: float = 3e-3,  # Regularization of the convolutional method
     entrop_sharp=False,
@@ -147,7 +147,7 @@ def compute_bwb_distribution_draw(
     report_every=10,
 ):
     # Paso 1: Sampling a mu_0
-    mu_k: distrib.DistributionDraw = posterior.draw()
+    mu_k: dist.DistributionDraw = posterior.draw()
     dtype, device = mu_k.dtype, mu_k.device
     _log.info(f"{dtype = }, {device = }")
 
@@ -177,7 +177,7 @@ def compute_bwb_distribution_draw(
                 f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.4f} [ms/iter] " + _bar
             )
 
-        m_k: distrib.DistributionDraw = posterior.draw()
+        m_k: dist.DistributionDraw = posterior.draw()
         if samples_posterior_history:
             samples_posterior_history.append([m_k])
 
@@ -200,7 +200,7 @@ def compute_bwb_distribution_draw(
         if weights_history:
             weights_history.append(gs_weights_k)
         if distribution_history:
-            mu_kp1 = distrib.DistributionDraw.from_grayscale_weights(gs_weights_kp1)
+            mu_kp1 = dist.DistributionDraw.from_grayscale_weights(gs_weights_kp1)
             distribution_history.append(mu_kp1)
 
         # Update
@@ -209,7 +209,7 @@ def compute_bwb_distribution_draw(
         toc = time.time()
         diff_t = toc - tic_
 
-    mu = distrib.DistributionDraw.from_grayscale_weights(gs_weights_kp1)
+    mu = dist.DistributionDraw.from_grayscale_weights(gs_weights_kp1)
     to_return = [mu]
     if weights_history:
         to_return.append(weights_history)
@@ -222,7 +222,7 @@ def compute_bwb_distribution_draw(
 
 
 def compute_bwb_distribution_draw_projected(
-    posterior: distrib.PosteriorPiN[distrib.DistributionDraw],
+    posterior: dist.PosteriorPiN[dist.DistributionDraw],
     projector: BaseProjectorOnManifold,
     learning_rate: Callable[[int], float],  # The \gamma_k schedule
     reg: float = 3e-3,  # Regularization of the convolutional method
@@ -235,7 +235,7 @@ def compute_bwb_distribution_draw_projected(
     report_every=10,
 ):
     # Paso 1: Sampling a mu_0
-    mu_k: distrib.DistributionDraw = posterior.draw()
+    mu_k: dist.DistributionDraw = posterior.draw()
     dtype, device = mu_k.dtype, mu_k.device
     _log.info(f"{dtype = }, {device = }")
 
@@ -265,7 +265,7 @@ def compute_bwb_distribution_draw_projected(
                 f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.4f} [ms/iter] " + _bar
             )
 
-        m_k: distrib.DistributionDraw = posterior.draw()
+        m_k: dist.DistributionDraw = posterior.draw()
         if samples_posterior_history:
             samples_posterior_history.append([m_k])
 
@@ -291,7 +291,7 @@ def compute_bwb_distribution_draw_projected(
         if weights_history:
             weights_history.append(gs_weights_k)
         if distribution_history:
-            mu_kp1 = distrib.DistributionDraw.from_grayscale_weights(gs_weights_kp1)
+            mu_kp1 = dist.DistributionDraw.from_grayscale_weights(gs_weights_kp1)
             distribution_history.append(mu_kp1)
 
         # Update
@@ -300,7 +300,7 @@ def compute_bwb_distribution_draw_projected(
         toc = time.time()
         diff_t = toc - tic_
 
-    mu = distrib.DistributionDraw.from_grayscale_weights(gs_weights_kp1)
+    mu = dist.DistributionDraw.from_grayscale_weights(gs_weights_kp1)
     to_return = [mu]
     if weights_history:
         to_return.append(weights_history)
