@@ -3,11 +3,11 @@ import collections as c
 import functools
 import time
 import typing as t
+import warnings
 
 import torch
 
 import bwb.distributions as dist
-import bwb.distributions.data_loaders as data_loaders
 import bwb.validation as validation
 from bwb.config import config
 from bwb.utils import _ArrayLike, _DistributionT
@@ -107,7 +107,7 @@ class DiscreteDistributionSampler(DistributionSampler[_DistributionT]):
         self.save_samples = save_samples
         self.samples_history: list[int] = []
         self.samples_counter: c.Counter[int] = c.Counter()
-        self._models: dict[int, _DistributionT] = {}
+        self._models_cache: dict[int, _DistributionT] = {}
         self.total_time = 0.0
 
     @abc.abstractmethod
@@ -216,9 +216,9 @@ class ExplicitPosteriorSampler(DiscreteDistributionSampler[_DistributionT]):
     def get_model(self, i: int) -> _DistributionT:
         """Get the model with index i."""
         validation.check_is_fitted(self)
-        if self._models.get(i) is None:
-            self._models[i] = self.models_._get(i)
-        return self._models[i]
+        if self._models_cache.get(i) is None:
+            self._models_cache[i] = self.models_._get(i)
+        return self._models_cache[i]
 
     def _draw(self, seed=None, *args, **kwargs) -> tuple[_DistributionT, int]:
         rng: torch.Generator = _set_generator(seed=seed, device=config.device)
@@ -260,9 +260,8 @@ class ExplicitPosteriorSampler(DiscreteDistributionSampler[_DistributionT]):
 class PosteriorPiN(DistributionSampler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Raise an warning of deprecation
-        import warnings
 
+        # Raise an warning of deprecation
         warnings.warn(
             "PosteriorPiN is deprecated. Use DistributionSampler instead.",
             DeprecationWarning,
@@ -273,9 +272,8 @@ class PosteriorPiN(DistributionSampler):
 class DiscretePosteriorPiN(DiscreteDistributionSampler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Raise an warning of deprecation
-        import warnings
 
+        # Raise an warning of deprecation
         warnings.warn(
             "DiscretePosteriorPiN is deprecated. Use DiscreteDistributionSampler instead.",
             DeprecationWarning,
@@ -286,9 +284,8 @@ class DiscretePosteriorPiN(DiscreteDistributionSampler):
 class ExplicitPosteriorPiN(ExplicitPosteriorSampler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Raise an warning of deprecation
-        import warnings
 
+        # Raise an warning of deprecation
         warnings.warn(
             "ExplicitPosteriorPiN is deprecated. Use ExplicitPosteriorSampler instead.",
             DeprecationWarning,
