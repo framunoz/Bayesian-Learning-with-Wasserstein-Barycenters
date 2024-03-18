@@ -162,7 +162,7 @@ class DistributionDrawDataLoader(BaseDistributionDataLoader[dist.DistributionDra
         weights = self.transform(self.probs_tensor[index])
         return dist.DistributionDraw.from_weights(weights, self.shape)
 
-    def _compute_probability(self, data: _ArrayLike, **kwargs) -> torch.Tensor:
+    def compute_likelihood(self, data: _ArrayLike, **kwargs) -> torch.Tensor:
         """
         Compute the probabilities of the data given the models.
 
@@ -186,6 +186,6 @@ class DistributionDrawDataLoader(BaseDistributionDataLoader[dist.DistributionDra
 
         return probabilities
 
-    def _get(self, i: int, **kwargs) -> dist.DistributionDraw:
+    def get(self, i: int, **kwargs) -> dist.DistributionDraw:
         """Get the model at the index ``i``."""
         return self[i]
