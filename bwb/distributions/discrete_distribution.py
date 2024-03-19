@@ -180,7 +180,7 @@ class DistributionDraw(DiscreteDistribution):
             grayscale_weights,
             dtype=config.dtype,
             device=config.device,
-        )
+        ).squeeze()
 
         # Get the shape information
         shape = _shape_validation(
@@ -206,7 +206,7 @@ class DistributionDraw(DiscreteDistribution):
         # Save the grayscales for create images
         grayscale: torch.Tensor = torch.as_tensor(
             grayscale, dtype=torch.uint8, device=config.device  # Use uint8 for images
-        )
+        ).squeeze()
 
         # Get the shape information
         shape = _shape_validation(
