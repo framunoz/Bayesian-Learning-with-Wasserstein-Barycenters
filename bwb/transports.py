@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing
 
 import numpy as np
+
 # noinspection PyPackageRequirements
 import ot
 
@@ -18,14 +19,15 @@ class FitWithDistribution(typing.Protocol):
     distributions defined in the package.
     """
 
-    def fit(self, Xs=None, mu_s=None, ys=None, Xt=None, mu_t=None, yt=None) -> object:
-        ...
+    def fit(
+        self, Xs=None, mu_s=None, ys=None, Xt=None, mu_t=None, yt=None
+    ) -> object: ...
 
     @logging.register_init_method(_log)
     def fit_wd(
-            self,
-            dd_s: distrib.DiscreteDistribution,
-            dd_t: distrib.DiscreteDistribution,
+        self,
+        dd_s: distrib.DiscreteDistribution,
+        dd_t: distrib.DiscreteDistribution,
     ):
         # noinspection PyPep8Naming
         Xs, Xt = dd_s.enumerate_nz_support_(), dd_t.enumerate_nz_support_()
@@ -60,6 +62,7 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
 
     `inverse_transform_labels` method should always get as input a `yt` parameter
     """
+
     metric: str
     norm: str
     limit_max: int
@@ -199,7 +202,7 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
                 transp = self.coupling_ / nx.sum(self.coupling_, axis=1)[:, None]
 
                 # set nans to 0
-                transp[~ nx.isfinite(transp)] = 0
+                transp[~nx.isfinite(transp)] = 0
 
                 # compute transported samples
                 transp_Xs = nx.dot(transp, self.xt_)
@@ -207,8 +210,9 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
                 # perform out of sample mapping
                 indices = nx.arange(Xs.shape[0])
                 batch_ind = [
-                    indices[i:i + batch_size]
-                    for i in range(0, len(indices), batch_size)]
+                    indices[i : i + batch_size]
+                    for i in range(0, len(indices), batch_size)
+                ]
 
                 transp_Xs = []
                 for bi in batch_ind:
@@ -217,9 +221,8 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
                     idx = nx.argmin(D0, axis=1)
 
                     # transport the source samples
-                    transp = self.coupling_ / nx.sum(
-                        self.coupling_, axis=1)[:, None]
-                    transp[~ nx.isfinite(transp)] = 0
+                    transp = self.coupling_ / nx.sum(self.coupling_, axis=1)[:, None]
+                    transp[~nx.isfinite(transp)] = 0
                     transp_Xs_ = nx.dot(transp, self.xt_)
 
                     # define the transported points
@@ -268,7 +271,7 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
             transp = self.coupling_ / nx.sum(self.coupling_, axis=0)[None, :]
 
             # set nans to 0
-            transp[~ nx.isfinite(transp)] = 0
+            transp[~nx.isfinite(transp)] = 0
 
             for c in classes:
                 D1[int(c), ysTemp == c] = 1
@@ -278,8 +281,7 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
 
             return transp_ys.T
 
-    def inverse_transform(self, Xs=None, ys=None, Xt=None, yt=None,
-                          batch_size=128):
+    def inverse_transform(self, Xs=None, ys=None, Xt=None, yt=None, batch_size=128):
         r"""Transports target samples :math:`\mathbf{X_t}` onto source samples :math:`\mathbf{X_s}`
 
         Parameters
@@ -315,7 +317,7 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
                 transp_ = self.coupling_.T / nx.sum(self.coupling_, 0)[:, None]
 
                 # set nans to 0
-                transp_[~ nx.isfinite(transp_)] = 0
+                transp_[~nx.isfinite(transp_)] = 0
 
                 # compute transported samples
                 transp_Xt = nx.dot(transp_, self.xs_)
@@ -323,8 +325,9 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
                 # perform out of sample mapping
                 indices = nx.arange(Xt.shape[0])
                 batch_ind = [
-                    indices[i:i + batch_size]
-                    for i in range(0, len(indices), batch_size)]
+                    indices[i : i + batch_size]
+                    for i in range(0, len(indices), batch_size)
+                ]
 
                 transp_Xt = []
                 for bi in batch_ind:
@@ -332,9 +335,8 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
                     idx = nx.argmin(D0, axis=1)
 
                     # transport the target samples
-                    transp_ = self.coupling_.T / nx.sum(
-                        self.coupling_, 0)[:, None]
-                    transp_[~ nx.isfinite(transp_)] = 0
+                    transp_ = self.coupling_.T / nx.sum(self.coupling_, 0)[:, None]
+                    transp_[~nx.isfinite(transp_)] = 0
                     transp_Xt_ = nx.dot(transp_, self.xs_)
 
                     # define the transported points
@@ -373,7 +375,7 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
             transp = self.coupling_ / nx.sum(self.coupling_, 1)[:, None]
 
             # set nans to 0
-            transp[~ nx.isfinite(transp)] = 0
+            transp[~nx.isfinite(transp)] = 0
 
             for c in classes:
                 D1[int(c), ytTemp == c] = 1
@@ -441,11 +443,20 @@ class SinkhornTransport(BaseTransport):
             Sciences, 7(3), 1853-1882.
     """
 
-    def __init__(self, reg_e=1., method="sinkhorn", max_iter=1000,
-                 tol=10e-9, verbose=False, log=False,
-                 metric="sqeuclidean", norm="max",
-                 distribution_estimation=ot.da.distribution_estimation_uniform,
-                 out_of_sample_map='ferradans', limit_max=np.infty):
+    def __init__(
+        self,
+        reg_e=1.0,
+        method="sinkhorn",
+        max_iter=1000,
+        tol=10e-9,
+        verbose=False,
+        log=False,
+        metric="sqeuclidean",
+        norm="max",
+        distribution_estimation=ot.da.distribution_estimation_uniform,
+        out_of_sample_map="ferradans",
+        limit_max=np.infty,
+    ):
         self.reg_e = reg_e
         self.method = method
         self.max_iter = max_iter
@@ -492,9 +503,16 @@ class SinkhornTransport(BaseTransport):
 
         # coupling estimation
         returned_ = ot.bregman.sinkhorn(
-            a=self.mu_s, b=self.mu_t, M=self.cost_, reg=self.reg_e,
-            method=self.method, numItermax=self.max_iter, stopThr=self.tol,
-            verbose=self.verbose, log=self.log)
+            a=self.mu_s,
+            b=self.mu_t,
+            M=self.cost_,
+            reg=self.reg_e,
+            method=self.method,
+            numItermax=self.max_iter,
+            stopThr=self.tol,
+            verbose=self.verbose,
+            log=self.log,
+        )
 
         # deal with the value of log
         if self.log:
@@ -549,10 +567,16 @@ class EMDTransport(BaseTransport):
         Sciences, 7(3), 1853-1882.
     """
 
-    def __init__(self, metric="sqeuclidean", norm=None, log=False,
-                 distribution_estimation=ot.da.distribution_estimation_uniform,
-                 out_of_sample_map='ferradans', limit_max=10,
-                 max_iter=100000):
+    def __init__(
+        self,
+        metric="sqeuclidean",
+        norm=None,
+        log=False,
+        distribution_estimation=ot.da.distribution_estimation_uniform,
+        out_of_sample_map="ferradans",
+        limit_max=10,
+        max_iter=100000,
+    ):
         self.metric = metric
         self.norm = norm
         self.log = log
@@ -594,8 +618,12 @@ class EMDTransport(BaseTransport):
         super(EMDTransport, self).fit(Xs, mu_s, ys, Xt, mu_t, yt)
 
         returned_ = ot.lp.emd(
-            a=self.mu_s, b=self.mu_t, M=self.cost_, numItermax=self.max_iter,
-            log=self.log)
+            a=self.mu_s,
+            b=self.mu_t,
+            M=self.cost_,
+            numItermax=self.max_iter,
+            log=self.log,
+        )
 
         # coupling estimation
         if self.log:

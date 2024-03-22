@@ -18,6 +18,8 @@ __all__ = [
     "DiscreteDistribSampler",
     "UniformDiscreteSampler",
     "ExplicitPosteriorSampler",
+    "ContinuousDistribSampler",
+    "GeneratorDistribSampler",
 ]
 
 
@@ -80,7 +82,7 @@ class DiscreteModelsSet(t.Protocol, t.Generic[_DistributionT]):
         ...
 
 
-class DistributionSampler(abc.ABC, t.Generic[_DistributionT]):
+class DistributionSampler(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
     r"""
     Base class for distributions that sampling other distributions. i.e. it represents a distribution :math:`\Lambda(dm) \in \mathcal{P}(\mathcal{M)}`, where :math:`\mathcal{M}` is the set of models.
     """
@@ -132,6 +134,13 @@ class DiscreteDistribSampler(DistributionSampler[_DistributionT]):
         # The probabilities needs to be set!
         return self
 
+    def get_model(self, i: int) -> _DistributionT:
+        """Get the model with index i."""
+        validation.check_is_fitted(self, ["models_"])
+        if self._models_cache.get(i) is None:
+            self._models_cache[i] = self.models_.get(i)
+        return self._models_cache[i]
+
     def _draw(self, seed=None, *args, **kwargs) -> tuple[_DistributionT, int]:
         """To use template pattern on the draw method."""
         rng: torch.Generator = _set_generator(seed=seed, device=config.device)
@@ -175,13 +184,6 @@ class DiscreteDistribSampler(DistributionSampler[_DistributionT]):
             self.samples_counter.update(list_indices)
         return to_return
 
-    def get_model(self, i: int) -> _DistributionT:
-        """Get the model with index i."""
-        validation.check_is_fitted(self, ["models_"])
-        if self._models_cache.get(i) is None:
-            self._models_cache[i] = self.models_.get(i)
-        return self._models_cache[i]
-
     def __repr__(self) -> str:
         to_return = self.__class__.__name__
 
@@ -192,7 +194,20 @@ class DiscreteDistribSampler(DistributionSampler[_DistributionT]):
 
 
 class UniformDiscreteSampler(DiscreteDistribSampler[_DistributionT]):
-    r""" """
+    r"""
+    A class representing a distribution sampler with a discrete set of models, and the probabilities are set to be uniform.
+
+    This class inherits from the `DiscreteDistribSampler` class and provides methods to fit the sampler to a set of discrete models and generate samples from the fitted sampler.
+
+    Attributes:
+        probabilities_: A torch.Tensor representing the probabilities of each model in the sampler.
+        support_: The indices of the models in the sampler.
+
+    Methods:
+        fit: Fits the sampler to a set of discrete models.
+        __repr__: Returns a string representation of the sampler.
+
+    """
 
     @_timeit_to_total_time
     def fit(self, models: DiscreteModelsSet[_DistributionT], *args, **kwargs):
@@ -244,7 +259,7 @@ class ExplicitPosteriorSampler(DiscreteDistribSampler[_DistributionT]):
     def fit(
         self, models: DiscreteModelsSet[_DistributionT], data: _ArrayLike, **kwargs
     ):
-        """
+        r"""
         Fit the posterior distribution.
 
         :param data: The data to fit the posterior.
@@ -331,12 +346,22 @@ class GeneratorDistribSampler(ContinuousDistribSampler[_DistributionT]):
         """
 
         # Validation of the noise sampler
-        noise = noise_sampler(1)
-        if not isinstance(noise, torch.Tensor):
-            raise ValueError(
-                "The noise sampler must return a tensor, but it returns a "
-                f"{type(noise)}"
-            )
+        if not callable(noise_sampler):
+            raise TypeError("The noise sampler must be a callable.")
+        try:
+            noise = noise_sampler(42)
+            if not isinstance(noise, torch.Tensor):
+                raise ValueError(
+                    "The noise sampler must return a tensor, but it returns a "
+                    f"{type(noise)}"
+                )
+            if noise.shape[0] != 42:
+                raise ValueError(
+                    "The noise sampler must return a tensor of shape (42, ...), but it returns a "
+                    f"tensor of shape {noise.shape}"
+                )
+        except:
+            raise ValueError("The noise sampler must accept an integer.")
         self.noise_sampler_ = noise_sampler
 
         # Validation of the generator
