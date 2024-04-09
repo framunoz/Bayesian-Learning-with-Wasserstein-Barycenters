@@ -11,6 +11,7 @@ And change the level of any logger with::
 
 If you want to change the level of all loggers, omit the name.
 """
+
 import functools
 import logging
 import threading
@@ -38,7 +39,8 @@ STREAM_HANDLER.setFormatter(FORMATTER)
 
 class _SingletonMeta(type):
     """Metaclass to implements Singleton Pattern. Obtained from
-    https://refactoring.guru/design-patterns/singleton/python/example#example-1 """
+    https://refactoring.guru/design-patterns/singleton/python/example#example-1"""
+
     _instances = {}
     _lock: threading.Lock = threading.Lock()
 
@@ -62,7 +64,9 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
     loggers: dict[str, logging.Logger] = dict()
     """The loggers instances of the package"""
 
-    def attach_handlers(self, logger: logging.Logger, handlers: list[logging.Handler] = None):
+    def attach_handlers(
+        self, logger: logging.Logger, handlers: list[logging.Handler] = None
+    ):
         """
         Add handlers from the handler list to the logger, if they are not already in the logger.
         If they are already in the logger, it does not add them.
@@ -78,10 +82,9 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
             if handler not in logger.handlers:
                 logger.addHandler(handler)
 
-    def get_logger(self,
-                   name: str,
-                   level: int = LEVEL,
-                   handlers: list[logging.Handler] = None) -> logging.Logger:
+    def get_logger(
+        self, name: str, level: int = LEVEL, handlers: list[logging.Handler] = None
+    ) -> logging.Logger:
         """
         Gets the logger by its name. Additionally, attach the handlers and sets the level.
 
@@ -124,19 +127,71 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
             logger.setLevel(level)
         self.LEVEL = level
 
+    def __repr__(self):
+        return f"LoggerConfiguration(LEVEL={self.LEVEL}, HANDLERS={self.HANDLERS})"
+
+    def remove_all_handlers(self, logger: logging.Logger = None):
+        """
+        Removes all the handlers from the logger. If the logger is None, it removes all the handlers
+        from every logger in the package.
+
+        :param logger: The logger to remove the handlers. Default is None.
+        """
+        if logger is None:
+            for logger in self.loggers.values():
+                if logger.hasHandlers():
+                    for handler in logger.handlers:
+                        logger.removeHandler(handler)
+        else:
+            if logger.hasHandlers():
+                for handler in logger.handlers:
+                    logger.removeHandler(handler)
+
+        self.HANDLERS = []
+
+    def add_handler(self, handler: logging.Handler, logger: logging.Logger = None):
+        """
+        Add a handler to the logger. If the logger is None, add the handler to every logger in the
+        package.
+
+        :param handler: The handler to add.
+        :param logger: The logger to add the handler. Default is None.
+        """
+        if logger is None:
+            for logger in self.loggers.values():
+                logger.addHandler(handler)
+        else:
+            logger.addHandler(handler)
+
+        self.HANDLERS.append(handler)
+
+    def set_default_formatter(self, handler: logging.Handler = None):
+        """
+        Set the default formatter to the handler. If the handler is None, set the default formatter
+        to every handler in the package.
+
+        :param handler: The handler to set the formatter. Default is None.
+        """
+        if handler is None:
+            for handler in self.HANDLERS:
+                handler.setFormatter(FORMATTER)
+        else:
+            handler.setFormatter(FORMATTER)
+
 
 # Create the (single) instance of LoggerConfiguration
 log_config = LoggerConfiguration()
 
 
 # Alias of the methods in the instance of LoggerConfiguration
-def get_logger(name: str,
-               level: int = log_config.LEVEL,
-               handlers: list[logging.Handler] = None) -> logging.Logger:
+def get_logger(
+    name: str, level: int = log_config.LEVEL, handlers: list[logging.Handler] = None
+) -> logging.Logger:
     return log_config.get_logger(name, level, handlers)
 
 
-def set_level(level: int, name: str = None): log_config.set_level(level, name)
+def set_level(level: int, name: str = None):
+    log_config.set_level(level, name)
 
 
 get_logger.__doc__ = LoggerConfiguration.get_logger.__doc__
@@ -179,12 +234,16 @@ def register_total_time_method(logger: logging.Logger):
         @functools.wraps(method)
         def wrapper(*args, **kwargs):
             self: object = args[0]
-            logger.debug(f"Using the method '{self.__class__.__name__}.{method.__name__}'...")
+            logger.debug(
+                f"Using the method '{self.__class__.__name__}.{method.__name__}'..."
+            )
             tic = time.perf_counter()
             result = method(*args, **kwargs)
             toc = time.perf_counter()
-            logger.debug(f"The method '{self.__class__.__name__}.{method.__name__}' takes"
-                         f" {toc - tic:.4f} [seg]")
+            logger.debug(
+                f"The method '{self.__class__.__name__}.{method.__name__}' takes"
+                f" {toc - tic:.4f} [seg]"
+            )
             return result
 
         return wrapper
@@ -206,7 +265,9 @@ def register_init_method(logger: logging.Logger):
             self: object = args[0]  # We are in a method of a class
             class_name = self.__class__.__name__
             method_name = method.__name__
-            logger.debug(f"Using the method '{method_name}' in the class '{class_name}'.")
+            logger.debug(
+                f"Using the method '{method_name}' in the class '{class_name}'."
+            )
             # Compute the result
             result = method(*args, **kwargs)
             return result
