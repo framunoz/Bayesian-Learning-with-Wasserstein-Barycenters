@@ -375,6 +375,8 @@ class GeneratorDistribSampler(ContinuousDistribSampler[_DistributionT]):
 
         # Validation of the transform_out
         try:
+            noise = noise_sampler(1)
+            result = generator(noise)
             result = transform_out(result)
         except:
             raise ValueError(
@@ -397,7 +399,9 @@ class GeneratorDistribSampler(ContinuousDistribSampler[_DistributionT]):
         """
         validation.check_is_fitted(self, ["transform_out_", "generator_"])
         with torch.no_grad():
-            return self.transform_out_(self.generator_(noise))
+            gen_output = self.generator_(noise)
+        return self.transform_out_(gen_output)
+        # return self.transform_out_(self.generator_(noise))
 
     def _draw(self, seed=None, *args, **kwargs) -> tuple[_DistributionT, torch.Tensor]:
         noise: torch.Tensor = self.noise_sampler_(1)
