@@ -16,6 +16,7 @@ from bwb.utils import _DistributionT
 from wgan_gp.wgan_gp_vae.utils import ProjectorOnManifold
 
 __all__ = [
+    "Gamma",
     "BaseSGDW",
     "DiscreteDistributionSGDW",
     "DistributionDrawSGDW",
@@ -27,104 +28,80 @@ _log = logging.get_logger(__name__)
 _bar = "=" * 5
 
 
-class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
+def gamma(*, a: float = 1, b: float = 0, c: float = 1):
     """
-    Base class for Stochastic Gradient Descent in Wasserstein Space.
+    This function returns a gamma function with parameters a, b, and c.
 
-    This class provides a base implementation for Stochastic Gradient Descent in Wasserstein Space.
-    It defines the common attributes and methods used by the derived classes.
+    Parameters:
+        a (float): The shape parameter of the gamma distribution. Default is 1.
+        b (float): The scale parameter of the gamma distribution. Default is 0.
+        c (float): The location parameter of the gamma distribution. Default is 1.
 
-    :param learning_rate: A callable function that takes an integer argument (k) and returns the learning rate (\gamma_k) for iteration k.
-    :type learning_rate: callable
-    :param batch_size: A callable function that takes an integer argument (k) and returns the batch size (S_k) for iteration k. Alternatively, it can be a constant integer value.
-    :type batch_size: callable or int
-    :param tol: The tolerance value for convergence. Defaults to 1e-8.
-    :type tol: float
-    :param max_iter: The maximum number of iterations. Defaults to 100_000.
-    :type max_iter: int
-    :param max_time: The maximum time allowed for the algorithm to run. Defaults to infinity.
-    :type max_time: float
-    :param report_every: The frequency at which to report the metrics. Defaults to 10.
-    :type report_every: int
+    Returns:
+        function: A gamma function that takes a single parameter k and returns the value of the gamma function at k.
+    """
 
-    :raises TypeError: If learning_rate is not a callable or batch_size is not a callable or an integer.
-    :raises ValueError: If learning_rate does not return a float or batch_size does not return an integer.
+    def _gamma(k):
+        return a / (b ** (1 / c) + k) ** c
+
+    return _gamma
+
+
+class Gamma:
+    """
+    This class represents a gamma function.
+
+    Parameters:
+    - a (float): The parameter 'a' of the gamma function.
+    - b (float): The parameter 'b' of the gamma function.
+    - c (float): The parameter 'c' of the gamma function.
+    """
+
+    def __init__(self, a=1, b=0, c=1):
+        self.a = a
+        self.b = b
+        self.c = c
+
+    def __call__(self, k):
+        """
+        Compute the value of the gamma function for a given input.
+
+        Parameters:
+        - k (float): The input value.
+
+        Returns:
+        - float: The value of the gamma function for the given input.
+        """
+        return self.a / (self.b ** (1 / self.c) + k) ** self.c
+
+
+class Schedule:
+    """
+    This class contains the schedule for the learning rate and batch size.
     """
 
     def __init__(
         self,
-        distr_sampler: dist.DistributionSampler[_DistributionT],
-        learning_rate,  # The \gamma_k schedule
-        batch_size,  # The S_k schedule
-        tol: float = 1e-8,  # Tolerance to converge
-        max_iter: int = 100_000,  # Maximum number of iterations
-        max_time: float = float("inf"),  # Maximum time in seconds
-        report_every: int = 10,  # Report every k iterations
+        step_schedule: t.Callable[[int], float],
+        batch_size: t.Callable[[int], int] | int,
     ):
-        # Distribution sampler
-        self.distr_sampler = distr_sampler
-        """The distribution sampler for the algorithm."""
-
-        # Schedule parameters
-        self.learning_rate = learning_rate
+        self.step_schedule = step_schedule
         self.batch_size = batch_size
 
-        # History of the position and weights
-        self.pos_wgt_hist = False
-        self.distr_hist = False
-        self.distr_samp_hist = False
-
-        # Detention parameters
-        self.tol = tol
-        self.max_iter = max_iter
-        self.max_time = max_time
-        self.report_every = report_every
-
-        # Iteration metrics
-        self.k = 0
-        """The iteration number."""
-        self.tic = time.time()
-        """The start time of the algorithm."""
-        self.toc = time.time()
-        """The end time of the iteration."""
-        self.diff_t = 0
-        """The time difference between tic and toc."""
-        self.w_dist = float("inf")
-        """The Wasserstein distance."""
-
-        # Values for dtype and device
-        mu = self.distr_sampler.draw()
-        self.dtype = mu.dtype
-        """The data type for the algorithm. Defaults to the data type of the first distribution drawn from the sampler."""
-        self.device = mu.device
-        """The device for the algorithm. Defaults to the device of the first distribution drawn from the sampler."""
-        self.val = torch.tensor(1, dtype=self.dtype, device=self.device)
-        """A tensor with value 1, used to pass to the device."""
-
-        # Report Options
-        self.include_iter = True
-        """Whether to include the iteration number in the report."""
-        self.include_w_dist = False
-        """Whether to include the Wasserstein distance in the report."""
-        self.include_lr = True
-        """Whether to include the learning rate in the report."""
-        self.include_time = False
-        """Whether to include the iteration time in the report."""
-
     @property
-    def learning_rate(self) -> t.Callable[[int], float]:
-        """The learning rate schedule for the algorithm."""
+    def step_schedule(self) -> t.Callable[[int], float]:
+        """The step schedule for the algorithm."""
         return self._learning_rate
 
-    @learning_rate.setter
-    def learning_rate(self, learning_rate):
+    @step_schedule.setter
+    def step_schedule(self, learning_rate):
         # Check if learning_rate is callable
         if not callable(learning_rate):
             raise TypeError("learning_rate must be a callable")
 
         # Check if learning_rate is callable that accepts an integer and returns a float
         try:
-            if not isinstance(learning_rate(0), float):
+            if not isinstance(learning_rate(1), float):
                 raise ValueError("learning_rate must return a float")
         except Exception as e:
             raise ValueError("learning_rate must accept an integer argument") from e
@@ -158,44 +135,18 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
 
         self._batch_size: t.Callable[[int], int] = batch_size
 
-    @property
-    def pos_wgt_hist(self) -> list[t.Any]:
-        """Whether to store the history of the position and weights at each iteration."""
-        if isinstance(self._pos_wgt_hist, bool):
-            return []
-        return self._pos_wgt_hist
 
-    @pos_wgt_hist.setter
-    def pos_wgt_hist(self, pos_wgt_hist):
-        if not (isinstance(pos_wgt_hist, bool) or isinstance(pos_wgt_hist, list)):
-            raise TypeError("pos_wgt_hist must be a boolean or a list")
-        self._pos_wgt_hist = pos_wgt_hist
+class DetentionParameters:
+    """
+    This class contains the detention parameters for the algorithm.
+    """
 
-    @property
-    def distr_hist(self) -> list[_DistributionT]:
-        """Whether to store the history of the distributions at each iteration."""
-        if isinstance(self._distr_hist, bool):
-            return []
-        return self._distr_hist
-
-    @distr_hist.setter
-    def distr_hist(self, distr_hist):
-        if not (isinstance(distr_hist, bool) or isinstance(distr_hist, list)):
-            raise TypeError("distr_hist must be a boolean or a list")
-        self._distr_hist = distr_hist
-
-    @property
-    def distr_samp_hist(self) -> list[list[_DistributionT]]:
-        """Whether to store the history of the distributions sampled by the sampler at each iteration."""
-        if isinstance(self._distr_samp_hist, bool):
-            return [[]]
-        return self._distr_samp_hist
-
-    @distr_samp_hist.setter
-    def distr_samp_hist(self, distr_samp_hist):
-        if not (isinstance(distr_samp_hist, bool) or isinstance(distr_samp_hist, list)):
-            raise TypeError("distr_samp_hist must be a boolean or a list")
-        self._distr_samp_hist = distr_samp_hist
+    def __init__(
+        self, tol: float = 1e-8, max_iter: int = 100_000, max_time: float = float("inf")
+    ):
+        self.tol = tol
+        self.max_iter = max_iter
+        self.max_time = max_time
 
     @property
     def tol(self) -> float:
@@ -242,37 +193,379 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
             raise ValueError("max_time must be positive")
         self._max_time: float = float(max_time)
 
-    @property
-    def report_every(self) -> int:
-        """
-        The frequency at which to report the metrics.
-        """
-        return self._report_every
+    def __repr__(self) -> str:
+        time_fmt = ""
 
-    @report_every.setter
-    def report_every(self, report_every: int):
-        if not isinstance(report_every, num.Integral):
-            raise TypeError("report_every must be an integer")
-        if report_every <= 0:
-            raise ValueError("report_every must be positive")
-        self._report_every: int = int(report_every)
+        if self.max_time != float("inf"):
+            hours = int(self.max_time // 3600)
+            minutes = int((self.max_time % 3600) // 60)
+            seconds = self.max_time % 60
+            if hours > 0:
+                time_fmt += f"{hours}h "
+            if minutes > 0 or hours > 0:
+                time_fmt += f"{minutes}m "
+            time_fmt += f"{seconds:.2f}s"
+        else:
+            time_fmt = "∞"
+
+        max_iter_fmt = f"{self.max_iter:_}" if self.max_iter != float("inf") else "∞"
+
+        return f"DetentionParameters(tol={self.tol:.2e}, max_iter={max_iter_fmt}, max_time={time_fmt})"
+
+
+class Report:
+    """
+    This class contains the report logic of the algorithm.
+    """
+
+    def __init__(
+        self,
+        report_every: int = 10,
+        include_iter: bool = True,
+        include_w_dist: bool = False,
+        include_lr: bool = True,
+        include_time: bool = False,
+        len_bar: int = 5,
+    ):
+        self.report_every = report_every
+        self.include_iter = include_iter
+        self.include_w_dist = include_w_dist
+        self.include_lr = include_lr
+        self.include_time = include_time
+        self.len_bar = len_bar
+
+    def set_info(
+        self,
+        include_iter: bool = None,
+        include_w_dist: bool = None,
+        include_lr: bool = None,
+        include_time: bool = None,
+        len_bar: int = None,
+    ):
+        self.include_iter = (
+            include_iter if include_iter is not None else self.include_iter
+        )
+        self.include_w_dist = (
+            include_w_dist if include_w_dist is not None else self.include_w_dist
+        )
+        self.include_lr = include_lr if include_lr is not None else self.include_lr
+        self.include_time = (
+            include_time if include_time is not None else self.include_time
+        )
+        self.len_bar = len_bar if len_bar is not None else self.len_bar
+
+    def report(
+        self,
+        k: int,
+        tic: float,
+        toc: float,
+        w_dist: float,
+        gamma_k: float,
+    ):
+        bar = "=" * self.len_bar
+
+        report = bar + " "
+
+        if self.include_iter:
+            report += f"{k = }, "
+
+        if self.include_w_dist:
+            report += f"{w_dist = :.6f}, "
+
+        if self.include_lr:
+            report += f"gamma_k = {gamma_k:.4%}, "
+
+        if self.include_time:
+            report += f"t = {toc - tic:.2f} [seg], "
+            report += f"Δt = {(toc - tic) * 1000:.2f} [ms], "
+            report += f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.2f} [ms/iter], "
+
+        report = report[:-2] + " " + bar
+
+        return report
+
+    def is_report(self, k: int):
+        return k % self.report_every == 0
+
+
+class History(t.Generic[_DistributionT]):
+    """
+    This class contains the history logic of the algorithm.
+    """
+
+    def __init__(
+        self,
+        pos_wgt: bool = False,
+        distr: bool = False,
+        distr_samp: bool = False,
+    ):
+        self.pos_wgt = pos_wgt
+        self.distr = distr
+        self.distr_samp = distr_samp
+
+    @property
+    def create_distr(self) -> t.Callable[[t.Any], _DistributionT]:
+        """The function to create a distribution from the position and weight."""
+        return self._create_distribution
+
+    @create_distr.setter
+    def create_distr(self, create_distribution):
+        if not callable(create_distribution):
+            raise TypeError("create_distribution must be a callable")
+        self._create_distribution: t.Callable[[t.Any], _DistributionT] = (
+            create_distribution
+        )
+
+    @property
+    def pos_wgt(self) -> list[t.Any]:
+        """Whether to store the history of the position and weights at each iteration."""
+        if isinstance(self._pos_wgt, bool):
+            return []
+        return self._pos_wgt
+
+    @pos_wgt.setter
+    def pos_wgt(self, pos_wgt_hist):
+        if not (isinstance(pos_wgt_hist, bool) or isinstance(pos_wgt_hist, list)):
+            raise TypeError("pos_wgt_hist must be a boolean or a list")
+        self._pos_wgt = pos_wgt_hist
+
+    @property
+    def distr(self) -> list[_DistributionT]:
+        """Whether to store the history of the distributions at each iteration."""
+        if isinstance(self._distr, bool):
+            return []
+        return self._distr
+
+    @distr.setter
+    def distr(self, distr_hist):
+        if not (isinstance(distr_hist, bool) or isinstance(distr_hist, list)):
+            raise TypeError("distr_hist must be a boolean or a list")
+        self._distr = distr_hist
+
+    @property
+    def distr_samp(self) -> list[list[_DistributionT]]:
+        """Whether to store the history of the distributions sampled by the sampler at each iteration."""
+        if isinstance(self._distr_samp, bool):
+            return []
+        return self._distr_samp
+
+    @distr_samp.setter
+    def distr_samp(self, distr_samp_hist):
+        if not (isinstance(distr_samp_hist, bool) or isinstance(distr_samp_hist, list)):
+            raise TypeError("distr_samp_hist must be a boolean or a list")
+        self._distr_samp = distr_samp_hist
+
+    def set_params(
+        self,
+        pos_wgt: bool = None,
+        distr: bool = None,
+        distr_samp: bool = None,
+        create_distribution: t.Callable[[t.Any], _DistributionT] = None,
+    ):
+        self.pos_wgt = pos_wgt if pos_wgt is not None else self.pos_wgt
+        self.distr = distr if distr is not None else self.distr
+        self.distr_samp = distr_samp if distr_samp is not None else self.distr_samp
+        self.create_distr = (
+            create_distribution
+            if create_distribution is not None
+            else self.create_distr
+        )
+
+    def init_histories(self, mu_0, pos_wgt_0):
+        """
+        Initialize the histories for the algorithm.
+
+        This method should initialize the histories for the algorithm.
+
+        :param mu_0: The first sample from the distribution sampler.
+        :param pos_wgt_0: The position and weight that come from the first sample.
+        """
+        if self._pos_wgt:
+            self.pos_wgt = [pos_wgt_0]
+        if self._distr:
+            self.distr = [self.create_distr(pos_wgt_0)]
+        if self._distr_samp:
+            self.distr_samp = [[mu_0]]
+
+    def update_pos_wgt(self, pos_wgt_kp1):
+        """
+        Update the position and weight for the next iteration.
+
+        This method should update the position and weight for the next iteration.
+
+        :param pos_wgt_kp1: The position and weight that come from the next sample.
+        """
+        if self.pos_wgt:
+            self.pos_wgt.append(pos_wgt_kp1)
+
+    def update_distr(self, pos_wgt_kp1):
+        """
+        Update the distribution history for the next iteration.
+
+        This method should update the distribution history for the next iteration.
+
+        :param distr_kp1: The distribution created from the next sample.
+        """
+        if self.distr:
+            self.distr.append(self.create_distr(pos_wgt_kp1))
+
+    def update_distr_samp(self, lst_mu_k):
+        """
+        Update the distribution sampler history for the next iteration.
+
+        This method should update the distribution sampler history for the next iteration.
+
+        :param lst_mu_k: The list of distributions sampled by the sampler at the current iteration.
+        """
+        if self.distr_samp:
+            self.distr_samp.append(lst_mu_k)
+
+    def update_histories(self, pos_wgt_kp1, lst_mu_k):
+        """
+        Update the histories for the next iteration.
+
+        This method should update the histories for the next iteration.
+
+        :param pos_wgt_kp1: The position and weight that come from the next sample.
+        :param lst_mu_k: The list of distributions sampled by the sampler at the current iteration.
+        """
+        self.update_pos_wgt(pos_wgt_kp1)
+        self.update_distr(pos_wgt_kp1)
+        self.update_distr_samp(lst_mu_k)
+
+    def has_pos_wgt(self) -> bool:
+        if isinstance(self._pos_wgt, bool):
+            return self._pos_wgt
+        if self.pos_wgt:
+            return True
+        return False
+
+    def has_distr(self) -> bool:
+        if isinstance(self._distr, bool):
+            return self._distr
+        if self.distr:
+            return True
+        return False
+
+    def has_distr_samp(self) -> bool:
+        if isinstance(self._distr_samp, bool):
+            return self._distr_samp
+        if self.distr_samp:
+            return True
+        return False
+
+    def has_histories(self):
+        return self.has_pos_wgt() or self.has_distr() or self.has_distr_samp()
+
+    def __getitem__(self, key: t.Literal["pos_wgt", "distr", "distr_samp"]):
+        if key == "pos_wgt":
+            return self.pos_wgt
+        if key == "distr":
+            return self.distr
+        if key == "distr_samp":
+            return self.distr_samp
+        raise KeyError(f"Invalid key: {key}")
+
+    def __repr__(self) -> str:
+        return f"History(pos_wgt={self.has_pos_wgt()}, distr={self.has_distr()}, distr_samp={self.has_distr_samp()}, len={len(self)})"
+
+    def __len__(self) -> int:
+        if self.has_pos_wgt():
+            return len(self.pos_wgt)
+        if self.has_distr():
+            return len(self.distr)
+        if self.has_distr_samp():
+            return len(self.distr_samp)
+        return 0
+
+
+class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
+    """
+    Base class for Stochastic Gradient Descent in Wasserstein Space.
+
+    This class provides a base implementation for Stochastic Gradient Descent in Wasserstein Space.
+    It defines the common attributes and methods used by the derived classes.
+
+    :param learning_rate: A callable function that takes an integer argument (k) and returns the learning rate (\gamma_k) for iteration k.
+    :type learning_rate: callable
+    :param batch_size: A callable function that takes an integer argument (k) and returns the batch size (S_k) for iteration k. Alternatively, it can be a constant integer value.
+    :type batch_size: callable or int
+    :param tol: The tolerance value for convergence. Defaults to 1e-8.
+    :type tol: float
+    :param max_iter: The maximum number of iterations. Defaults to 100_000.
+    :type max_iter: int
+    :param max_time: The maximum time allowed for the algorithm to run. Defaults to infinity.
+    :type max_time: float
+    :param report_every: The frequency at which to report the metrics. Defaults to 10.
+    :type report_every: int
+
+    :raises TypeError: If learning_rate is not a callable or batch_size is not a callable or an integer.
+    :raises ValueError: If learning_rate does not return a float or batch_size does not return an integer.
+    """
+
+    def __init__(
+        self,
+        distr_sampler: dist.DistributionSampler[_DistributionT],
+        learning_rate,  # The \gamma_k schedule
+        batch_size,  # The S_k schedule
+        tol: float = 1e-8,  # Tolerance to converge
+        max_iter: int = 100_000,  # Maximum number of iterations
+        max_time: float = float("inf"),  # Maximum time in seconds
+        report_every: int = 10,  # Report every k iterations
+    ):
+        # Distribution sampler
+        self.distr_sampler = distr_sampler
+        """The distribution sampler for the algorithm."""
+
+        # Schedule parameters
+        self.schd = Schedule(learning_rate, batch_size)
+
+        # History of the position and weights
+        self.hist: History[_DistributionT] = History()
+
+        # Detention parameters
+        self.det_params = DetentionParameters(tol, max_iter, max_time)
+
+        # Report parameters
+        self.report = Report(report_every)
+
+        # Iteration metrics
+        self.k = 0
+        """The iteration number."""
+        self.tic = time.time()
+        """The start time of the algorithm."""
+        self.toc = time.time()
+        """The end time of the iteration."""
+        self.diff_t = 0
+        """The time difference between tic and toc."""
+        self.w_dist = float("inf")
+        """The Wasserstein distance."""
+
+        # Values for dtype and device
+        mu = self.distr_sampler.draw()
+        self.dtype = mu.dtype
+        """The data type for the algorithm. Defaults to the data type of the first distribution drawn from the sampler."""
+        self.device = mu.device
+        """The device for the algorithm. Defaults to the device of the first distribution drawn from the sampler."""
+        self.val = torch.tensor(1, dtype=self.dtype, device=self.device)
+        """A tensor with value 1, used to pass to the device."""
 
     def set_schedules(
         self,
-        learning_rate: t.Callable[[int], float],  # The \gamma_k schedule
+        step_schedule: t.Callable[[int], float],  # The \gamma_k schedule
         batch_size: t.Union[t.Callable[[int], int], int],  # The S_k schedule
     ):
         """
-        Set the learning rate and batch size schedules for the algorithm.
+        Set the step and batch size schedules for the algorithm.
 
-        :param learning_rate: A callable function that takes an integer argument (k) and returns the learning rate (\gamma_k) for iteration k.
+        :param step_schedule: A callable function that takes an integer argument (k) and returns the step (\gamma_k) for iteration k.
         :param batch_size: A callable function that takes an integer argument (k) and returns the batch size (S_k) for iteration k. Alternatively, it can be a constant integer value.
         :raises TypeError: If learning_rate is not a callable or batch_size is not a callable or an integer.
         :raises ValueError: If learning_rate does not return a float or batch_size does not return an integer.
         :return: The object itself.
         """
-        self.learning_rate = learning_rate
-        self.batch_size = batch_size
+        self.schd.step_schedule = step_schedule
+        self.schd.batch_size = batch_size
         return self
 
     def set_detention_params(
@@ -291,9 +584,9 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
         :raises TypeError: If tol is not a real number, max_iter is not an integer or max_time is not a real number.
         :raises ValueError: If tol is not positive, max_iter is not positive or max_time is not positive.
         """
-        self.tol: float = tol
-        self.max_iter: int = max_iter
-        self.max_time: float = max_time
+        self.det_params.tol = tol
+        self.det_params.max_iter = max_iter
+        self.det_params.max_time = max_time
         return self
 
     def init_iteration_metrics(self):
@@ -353,94 +646,10 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
         toc = toc or self.toc
         w_dist = w_dist or self.w_dist
         return (
-            k >= self.max_iter  # Reaches maximum iteration
-            or toc - tic >= self.max_time  # Reaches maximum time
-            or w_dist < self.tol  # Achieves convergence in distance
+            k >= self.det_params.max_iter  # Reaches maximum iteration
+            or toc - tic >= self.det_params.max_time  # Reaches maximum time
+            or w_dist < self.det_params.tol  # Achieves convergence in distance
         )
-
-    def report(
-        self,
-        include_iter: bool = None,
-        include_w_dist: bool = None,
-        include_lr: bool = None,
-        include_time: bool = None,
-        len_bar: int = 5,
-        k: int = None,
-        tic: float = None,
-        toc: float = None,
-        w_dist: float = None,
-    ):
-        """
-        Generate a report with various metrics.
-
-        :param include_iter: Whether to include the iteration number in the report. Defaults to True.
-        :type include_iter: bool
-        :param include_w_dist: Whether to include the Wasserstein distance in the report. Defaults to False.
-        :type include_w_dist: bool
-        :param include_lr: Whether to include the learning rate in the report. Defaults to True.
-        :type include_lr: bool
-        :param include_time: Whether to include the time metrics in the report. Defaults to True.
-        :type include_time: bool
-        :param len_bar: The length of the bar separating the report. Defaults to 5.
-        :type len_bar: int
-        :param k: The current iteration number. If not provided, the value from the object's attribute will be used.
-        :type k: int, optional
-        :param tic: The start time of the iteration. If not provided, the value from the object's attribute will be used.
-        :type tic: float, optional
-        :param toc: The end time of the iteration. If not provided, the value from the object's attribute will be used.
-        :type toc: float, optional
-        :param w_dist: The Wasserstein distance. If not provided, the value from the object's attribute will be used.
-        :type w_dist: float, optional
-
-        :return: The generated report.
-        :rtype: str
-        """
-        # Iteration metrics
-        k = k or self.k
-        tic = tic or self.tic
-        toc = toc or self.toc
-        w_dist = w_dist or self.w_dist
-        include_iter = include_iter if include_iter is not None else self.include_iter
-        include_w_dist = (
-            include_w_dist if include_w_dist is not None else self.include_w_dist
-        )
-        include_lr = include_lr if include_lr is not None else self.include_lr
-        include_time = include_time if include_time is not None else self.include_time
-
-        bar = "=" * len_bar
-
-        report = bar + " "
-
-        if include_iter:
-            report += f"{k = }, "
-
-        if include_w_dist:
-            report += f"{w_dist = :.6f}, "
-
-        if include_lr:
-            report += f"gamma_k = {self.learning_rate(k):.6f}, "
-
-        if include_time:
-            report += f"t = {toc - tic:.2f} [seg], "
-            report += f"Δt = {self.diff_t * 1000:.2f} [ms], "
-            report += f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.2f} [ms/iter], "
-
-        report = report[:-2] + " " + bar
-
-        return report
-
-    def print_report(self, *args, **kwargs):
-        """
-        Print a report with various metrics.
-
-        This method calls the report method and prints the generated report.
-
-        :param args: The arguments to pass to the report method.
-        :param kwargs: The keyword arguments to pass to the report method.
-        :return: None
-        """
-        if self.k % self.report_every == 0:
-            _log.info(self.report(*args, **kwargs))
 
     @abc.abstractmethod
     def _create_distribution(self, pos_wgt) -> _DistributionT:
@@ -453,55 +662,6 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
         :return: The distribution created from the position and weight.
         """
         pass
-
-    def init_histories(self, mu_0, pos_wgt_0) -> None:
-        """
-        Initialize the histories for the algorithm.
-
-        This method should initialize the histories for the algorithm.
-
-        :param mu_0: The first sample from the distribution sampler.
-        :param pos_wgt_0: The position and weight that come from the first sample.
-        """
-        if self._pos_wgt_hist:
-            self.pos_wgt_hist = [pos_wgt_0]
-        if self._distr_hist:
-            self.distr_hist = [self._create_distribution(pos_wgt_0)]
-        if self._distr_samp_hist:
-            self.distr_samp_hist = [[mu_0]]
-
-    def update_pos_wgt_hist(self, pos_wgt_kp1):
-        """
-        Update the position and weight for the next iteration.
-
-        This method should update the position and weight for the next iteration.
-
-        :param pos_wgt_kp1: The position and weight that come from the next sample.
-        """
-        if self.pos_wgt_hist:
-            self.pos_wgt_hist.append(pos_wgt_kp1)
-
-    def update_distr_hist(self, pos_wgt_kp1):
-        """
-        Update the distribution history for the next iteration.
-
-        This method should update the distribution history for the next iteration.
-
-        :param pos_wgt_kp1: The position and weight that come from the next sample.
-        """
-        if self.distr_hist:
-            self.distr_hist.append(self._create_distribution(pos_wgt_kp1))
-
-    def update_distr_samp_hist(self, lst_mu_k):
-        """
-        Update the distribution sampler history for the next iteration.
-
-        This method should update the distribution sampler history for the next iteration.
-
-        :param lst_mu_k: The list of distributions sampled by the sampler at the current iteration.
-        """
-        if self.distr_samp_hist:
-            self.distr_samp_hist.append(lst_mu_k)
 
     @abc.abstractmethod
     def first_sample(self) -> tuple[_DistributionT, t.Any]:
@@ -571,56 +731,66 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
         :param include_time: Whether to include the iteration time in the report.
         :return: A tuple containing the final position weights and optional history data.
         """
-        self.pos_wgt_hist = pos_wgt_hist
-        self.distr_hist = distr_hist
-        self.distr_samp_hist = distr_samp_hist
+        self.hist.set_params(
+            pos_wgt=pos_wgt_hist,
+            distr=distr_hist,
+            distr_samp=distr_samp_hist,
+            create_distribution=self._create_distribution,
+        )
+
+        self.report.set_info(
+            include_iter=include_iter,
+            include_w_dist=include_w_dist,
+            include_lr=include_lr,
+            include_time=include_time,
+        )
 
         # Step 1: Sampling a mu_0. For convention, we use mu_k to denote the current sample
         mu_k, pos_wgt_k = self.first_sample()
 
-        self.init_histories(mu_k, pos_wgt_k)
+        self.hist.init_histories(mu_k, pos_wgt_k)
 
         self.init_iteration_metrics()
         while not self.detention_criteria():
             # Time at the beginning of the iteration
             tic_ = time.time()
 
-            self.print_report(
-                include_iter=include_iter,
-                include_w_dist=include_w_dist,
-                include_lr=include_lr,
-                include_time=include_time,
-            )
+            # If the iteration is a multiple of report_every, print the report
+            if self.report.is_report(self.k):
+                _log.info(
+                    self.report.report(
+                        self.k,
+                        self.tic,
+                        self.toc,
+                        self.w_dist,
+                        self.schd.step_schedule(self.k),
+                    )
+                )
 
             # Step 2: Draw S_k samples from the distribution sampler
-            S_k = self.batch_size(self.k)
+            S_k = self.schd.batch_size(self.k)
             lst_mu_k = self.samp_distributions(S_k)
 
             # Step 3: Compute the distribution of mu_{k+1}
-            gamma_k = self.learning_rate(self.k)
+            gamma_k = self.schd.step_schedule(self.k)
             pos_wgt_kp1 = self.update_pos_wgt(pos_wgt_k, lst_mu_k, gamma_k)
 
             # Step 4 (optional): Compute the Wasserstein distance
             self.compute_wass_dist(pos_wgt_k, pos_wgt_kp1, gamma_k)
 
             # Step 5: Add to history
-            self.update_pos_wgt_hist(pos_wgt_kp1)
-            self.update_distr_hist(pos_wgt_kp1)
-            self.update_distr_samp_hist(lst_mu_k)
+            self.hist.update_histories(pos_wgt_kp1, lst_mu_k)
 
             # Step 6: Update
             pos_wgt_k = pos_wgt_kp1
             self.update_iteration_metrics(tic_)
 
-        to_return = [self._create_distribution(pos_wgt_k)]
-        if pos_wgt_hist:
-            to_return.append(self.pos_wgt_hist)
-        if distr_hist:
-            to_return.append(self.distr_hist)
-        if distr_samp_hist:
-            to_return.append(self.distr_samp_hist)
+        barycenter = self._create_distribution(pos_wgt_k)
 
-        return tuple(to_return)
+        if self.hist.has_histories():
+            return barycenter, self.hist
+
+        return barycenter
 
 
 class DiscreteDistributionSGDW(BaseSGDW[dist.DiscreteDistribution]):
