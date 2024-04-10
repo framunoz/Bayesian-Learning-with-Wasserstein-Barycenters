@@ -3,6 +3,7 @@ import numbers as num
 import time
 import typing as t
 import warnings
+from datetime import timedelta
 
 import ot
 import torch
@@ -194,98 +195,98 @@ class DetentionParameters:
         self._max_time: float = float(max_time)
 
     def __repr__(self) -> str:
-        time_fmt = ""
-
+        time_fmt = "∞"
         if self.max_time != float("inf"):
-            hours = int(self.max_time // 3600)
-            minutes = int((self.max_time % 3600) // 60)
-            seconds = self.max_time % 60
-            if hours > 0:
-                time_fmt += f"{hours}h "
-            if minutes > 0 or hours > 0:
-                time_fmt += f"{minutes}m "
-            time_fmt += f"{seconds:.2f}s"
-        else:
-            time_fmt = "∞"
-
+            max_time = round(self.max_time)
+            time_fmt = str(timedelta(seconds=max_time))
         max_iter_fmt = f"{self.max_iter:_}" if self.max_iter != float("inf") else "∞"
 
         return f"DetentionParameters(tol={self.tol:.2e}, max_iter={max_iter_fmt}, max_time={time_fmt})"
 
 
-class Report:
+class IterationParameters:
     """
-    This class contains the report logic of the algorithm.
+    This class contains the iteration parameters for the algorithm.
     """
 
-    def __init__(
-        self,
-        report_every: int = 10,
-        include_iter: bool = True,
-        include_w_dist: bool = False,
-        include_lr: bool = True,
-        include_time: bool = False,
-        len_bar: int = 5,
-    ):
-        self.report_every = report_every
-        self.include_iter = include_iter
-        self.include_w_dist = include_w_dist
-        self.include_lr = include_lr
-        self.include_time = include_time
-        self.len_bar = len_bar
+    def __init__(self, det_params: DetentionParameters):
+        self.det_params = det_params
+        """The detention parameters for the algorithm."""
+        self.k = 0
+        """The iteration number."""
+        self.tic = time.time()
+        """The start time of the algorithm."""
+        self.tic_ = time.time()
+        """The start time of the iteration."""
+        self.toc = time.time()
+        """The end time of the iteration."""
+        self.diff_t = 0
+        """The time difference between tic and toc."""
+        self.w_dist = float("inf")
+        """The Wasserstein distance."""
 
-    def set_info(
-        self,
-        include_iter: bool = None,
-        include_w_dist: bool = None,
-        include_lr: bool = None,
-        include_time: bool = None,
-        len_bar: int = None,
-    ):
-        self.include_iter = (
-            include_iter if include_iter is not None else self.include_iter
+    def init_params(self):
+        """
+        Initializes the iteration metrics.
+
+        This method sets the initial values for the iteration metrics used in the class.
+        It initializes the following attributes:
+        - k: The iteration number (initialized to 0).
+        - tic: The start time of the algorithm (initialized to the current time).
+        - tic_: The start time of the iteration (initialized to the current time).
+        - toc: The end time of the iteration (initialized to the current time).
+        - diff_t: The time difference between tic_ and toc.
+        - w_dist: The Wasserstein distance (initialized to infinity).
+        """
+        self.k = 0
+        self.tic = time.time()
+        self.tic_ = time.time()
+        self.toc = time.time()
+        self.diff_t = 0
+        self.w_dist = float("inf")
+
+    def start_iteration(self):
+        """
+        Start the iteration.
+
+        This method starts the iteration and sets the start time of the iteration to the current time.
+        """
+        self.tic_ = time.time()
+
+    def update_iteration(self):
+        """
+        Update the iteration metrics.
+
+        This method updates the iteration metrics used in the class.
+        It updates the following attributes:
+        - k: The iteration number (incremented by 1).
+        - tic_: The start time of the iteration (set to the current time).
+        - toc: The end time of the iteration (set to the current time).
+        - diff_t: The time difference between tic_ and toc.
+
+        :param tic_: The start time of the iteration.
+        :type tic_: float
+        :return: None
+        """
+        self.k += 1
+        self.toc = time.time()
+        self.diff_t = self.toc - self.tic_
+
+    def detention_criteria(self) -> bool:
+        """
+        Determines the detention criteria for the algorithm.
+
+        :return: True if the detention criteria is met, False otherwise.
+        """
+        return (
+            self.k >= self.det_params.max_iter  # Reaches maximum iteration
+            or self.toc - self.tic >= self.det_params.max_time  # Reaches maximum time
+            or self.w_dist < self.det_params.tol  # Achieves convergence in distance
         )
-        self.include_w_dist = (
-            include_w_dist if include_w_dist is not None else self.include_w_dist
-        )
-        self.include_lr = include_lr if include_lr is not None else self.include_lr
-        self.include_time = (
-            include_time if include_time is not None else self.include_time
-        )
-        self.len_bar = len_bar if len_bar is not None else self.len_bar
 
-    def report(
-        self,
-        k: int,
-        tic: float,
-        toc: float,
-        w_dist: float,
-        gamma_k: float,
-    ):
-        bar = "=" * self.len_bar
-
-        report = bar + " "
-
-        if self.include_iter:
-            report += f"{k = }, "
-
-        if self.include_w_dist:
-            report += f"{w_dist = :.6f}, "
-
-        if self.include_lr:
-            report += f"gamma_k = {gamma_k:.4%}, "
-
-        if self.include_time:
-            report += f"t = {toc - tic:.2f} [seg], "
-            report += f"Δt = {(toc - tic) * 1000:.2f} [ms], "
-            report += f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.2f} [ms/iter], "
-
-        report = report[:-2] + " " + bar
-
-        return report
-
-    def is_report(self, k: int):
-        return k % self.report_every == 0
+    def __repr__(self) -> str:
+        w_dist_fmt = f"{self.w_dist:.6f}" if self.w_dist != float("inf") else "∞"
+        return f"IterationParameters(k={self.k}, w_dist={w_dist_fmt}, t={self.toc - self.tic:.2f} [seg], Δt={self.diff_t * 1000:.2f} [ms])"
 
 
 class History(t.Generic[_DistributionT]):
@@ -458,13 +459,15 @@ class History(t.Generic[_DistributionT]):
         return self.has_pos_wgt() or self.has_distr() or self.has_distr_samp()
 
     def __getitem__(self, key: t.Literal["pos_wgt", "distr", "distr_samp"]):
-        if key == "pos_wgt":
-            return self.pos_wgt
-        if key == "distr":
-            return self.distr
-        if key == "distr_samp":
-            return self.distr_samp
-        raise KeyError(f"Invalid key: {key}")
+        match key:
+            case "pos_wgt":
+                return self.pos_wgt
+            case "distr":
+                return self.distr
+            case "distr_samp":
+                return self.distr_samp
+            case _:
+                raise KeyError(f"Invalid key: {key}")
 
     def __repr__(self) -> str:
         return f"History(pos_wgt={self.has_pos_wgt()}, distr={self.has_distr()}, distr_samp={self.has_distr_samp()}, len={len(self)})"
@@ -477,6 +480,84 @@ class History(t.Generic[_DistributionT]):
         if self.has_distr_samp():
             return len(self.distr_samp)
         return 0
+
+
+class Report:
+    """
+    This class contains the report logic of the algorithm.
+    """
+
+    def __init__(
+        self,
+        iter_params: IterationParameters,
+        report_every: int = 10,
+        include_iter: bool = True,
+        include_w_dist: bool = False,
+        include_lr: bool = True,
+        include_time: bool = False,
+        len_bar: int = 5,
+    ):
+        self.iter_params = iter_params
+        self.report_every = report_every
+        self.include_iter = include_iter
+        self.include_w_dist = include_w_dist
+        self.include_lr = include_lr
+        self.include_time = include_time
+        self.len_bar = len_bar
+
+    def set_params(
+        self,
+        include_iter: bool = None,
+        include_w_dist: bool = None,
+        include_lr: bool = None,
+        include_time: bool = None,
+        len_bar: int = None,
+    ):
+        self.include_iter = (
+            include_iter if include_iter is not None else self.include_iter
+        )
+        self.include_w_dist = (
+            include_w_dist if include_w_dist is not None else self.include_w_dist
+        )
+        self.include_lr = include_lr if include_lr is not None else self.include_lr
+        self.include_time = (
+            include_time if include_time is not None else self.include_time
+        )
+        self.len_bar = len_bar if len_bar is not None else self.len_bar
+
+    def make_report(
+        self,
+        gamma_k: float,
+    ):
+        """
+        Generate a report for the algorithm.
+        """
+        bar = "=" * self.len_bar
+
+        report = bar + " "
+
+        if self.include_iter:
+            report += f"k = {self.iter_params.k}, "
+
+        if self.include_w_dist:
+            report += f"Wass. dist. = {self.iter_params.w_dist:.6f}, "
+
+        if self.include_lr:
+            report += f"gamma_k = {gamma_k:.4%}, "
+
+        if self.include_time:
+            total_time = round(self.iter_params.toc - self.iter_params.tic)
+            time_fmt = str(timedelta(seconds=total_time))
+            report += f"t = {time_fmt}, "
+            report += f"Δt = {(self.iter_params.diff_t) * 1000:.2f} [ms], "
+            report += f"Δt per iter. = {(self.iter_params.toc - self.iter_params.tic) * 1000 / (self.iter_params.k + 1):.2f} [ms/iter], "
+
+        report = report[:-2] + " " + bar
+
+        return report
+
+    def is_report_iter(self) -> bool:
+        return self.iter_params.k % self.report_every == 0
 
 
 class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
@@ -520,26 +601,17 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
         # Schedule parameters
         self.schd = Schedule(learning_rate, batch_size)
 
-        # History of the position and weights
-        self.hist: History[_DistributionT] = History()
-
         # Detention parameters
         self.det_params = DetentionParameters(tol, max_iter, max_time)
 
-        # Report parameters
-        self.report = Report(report_every)
-
         # Iteration metrics
-        self.k = 0
-        """The iteration number."""
-        self.tic = time.time()
-        """The start time of the algorithm."""
-        self.toc = time.time()
-        """The end time of the iteration."""
-        self.diff_t = 0
-        """The time difference between tic and toc."""
-        self.w_dist = float("inf")
-        """The Wasserstein distance."""
+        self.iter_params = IterationParameters(self.det_params)
+
+        # History of the position and weights
+        self.hist: History[_DistributionT] = History()
+
+        # Report parameters
+        self.report = Report(self.iter_params, report_every=report_every)
 
         # Values for dtype and device
         mu = self.distr_sampler.draw()
@@ -588,68 +660,6 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
         self.det_params.max_iter = max_iter
         self.det_params.max_time = max_time
         return self
-
-    def init_iteration_metrics(self):
-        """
-        Initializes the iteration metrics.
-
-        This method sets the initial values for the iteration metrics used in the class.
-        It initializes the following attributes:
-        - k: The iteration number (initialized to 0).
-        - tic: The start time of the algorithm (initialized to the current time).
-        - toc: The end time of the iteration (initialized to the current time).
-        - diff_t: The time difference between tic and toc (initialized to 0).
-        - w_dist: The Wasserstein distance (initialized to infinity).
-        """
-        self.k = 0
-        self.tic = time.time()
-        self.toc = time.time()
-        self.diff_t = 0
-        self.w_dist = float("inf")
-
-    def update_iteration_metrics(self, tic_: float):
-        """
-        Update the iteration metrics.
-
-        This method updates the iteration metrics used in the class.
-        It updates the following attributes:
-        - k: The iteration number (incremented by 1).
-        - toc: The end time of the iteration (set to the current time).
-        - diff_t: The time difference between tic_ and toc.
-
-        :param tic_: The start time of the iteration.
-        :type tic_: float
-        :return: None
-        """
-        self.k += 1
-        self.toc = time.time()
-        self.diff_t = self.toc - tic_
-
-    def detention_criteria(
-        self, k: int = None, tic: float = None, toc: float = None, w_dist: float = None
-    ) -> bool:
-        """
-        Determines the detention criteria for the algorithm.
-
-        :param k: The current iteration number.
-        :type k: int
-        :param tic: The start time of the algorithm.
-        :type tic: float
-        :param toc: The end time of the iteration.
-        :type toc: float
-        :param w_dist: The convergence distance. Defaults to infinity.
-        :type w_dist: float
-        :return: True if the detention criteria is met, False otherwise.
-        """
-        k = k or self.k
-        tic = tic or self.tic
-        toc = toc or self.toc
-        w_dist = w_dist or self.w_dist
-        return (
-            k >= self.det_params.max_iter  # Reaches maximum iteration
-            or toc - tic >= self.det_params.max_time  # Reaches maximum time
-            or w_dist < self.det_params.tol  # Achieves convergence in distance
-        )
 
     @abc.abstractmethod
     def _create_distribution(self, pos_wgt) -> _DistributionT:
@@ -738,7 +748,7 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
             create_distribution=self._create_distribution,
         )
 
-        self.report.set_info(
+        self.report.set_params(
             include_iter=include_iter,
             include_w_dist=include_w_dist,
             include_lr=include_lr,
@@ -750,29 +760,20 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
 
         self.hist.init_histories(mu_k, pos_wgt_k)
 
-        self.init_iteration_metrics()
-        while not self.detention_criteria():
-            # Time at the beginning of the iteration
-            tic_ = time.time()
+        self.iter_params.init_params()
 
-            # If the iteration is a multiple of report_every, print the report
-            if self.report.is_report(self.k):
-                _log.info(
-                    self.report.report(
-                        self.k,
-                        self.tic,
-                        self.toc,
-                        self.w_dist,
-                        self.schd.step_schedule(self.k),
-                    )
-                )
+        while not self.iter_params.detention_criteria():
+            # Time at the beginning of the iteration
+            self.iter_params.start_iteration()
+
+            k = self.iter_params.k
 
             # Step 2: Draw S_k samples from the distribution sampler
-            S_k = self.schd.batch_size(self.k)
+            S_k = self.schd.batch_size(k)
             lst_mu_k = self.samp_distributions(S_k)
 
             # Step 3: Compute the distribution of mu_{k+1}
-            gamma_k = self.schd.step_schedule(self.k)
+            gamma_k = self.schd.step_schedule(k)
             pos_wgt_kp1 = self.update_pos_wgt(pos_wgt_k, lst_mu_k, gamma_k)
 
             # Step 4 (optional): Compute the Wasserstein distance
@@ -781,9 +782,13 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
             # Step 5: Add to history
             self.hist.update_histories(pos_wgt_kp1, lst_mu_k)
 
+            # If the iteration is a multiple of report_every, print the report
+            if self.report.is_report_iter():
+                _log.info(self.report.make_report(gamma_k))
+
             # Step 6: Update
             pos_wgt_k = pos_wgt_kp1
-            self.update_iteration_metrics(tic_)
+            self.iter_params.update_iteration()
 
         barycenter = self._create_distribution(pos_wgt_k)
 
