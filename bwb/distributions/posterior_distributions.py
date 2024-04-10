@@ -63,6 +63,18 @@ class DiscreteModelsSet(t.Protocol, t.Generic[_DistributionT]):
     Protocol for classes that are a set of models with a discrete support.
     """
 
+    def get(self, i: int, **kwargs) -> _DistributionT:
+        """Get the model at the index ``i``."""
+        ...
+
+    def __len__(self) -> int:
+        """Get the number of models."""
+        ...
+
+
+@t.runtime_checkable
+class DiscreteWeightedModelSet(DiscreteModelsSet[_DistributionT]):
+
     # NOTE: Esta parte igual está rara. No se debería de dejar que esta clase sepa cómo calcular las probabilidades, sólo debería de contener los modelos y ya.
     def compute_likelihood(self, data: _ArrayLike = None, **kwargs) -> torch.Tensor:
         """
@@ -71,14 +83,6 @@ class DiscreteModelsSet(t.Protocol, t.Generic[_DistributionT]):
         :param data: The data to compute the probabilities.
         :return: A tensor with the probabilities.
         """
-        ...
-
-    def get(self, i: int, **kwargs) -> _DistributionT:
-        """Get the model at the index ``i``."""
-        ...
-
-    def __len__(self) -> int:
-        """Get the number of models."""
         ...
 
 
@@ -257,7 +261,10 @@ class ExplicitPosteriorSampler(DiscreteDistribSampler[_DistributionT]):
 
     @_timeit_to_total_time
     def fit(
-        self, models: DiscreteModelsSet[_DistributionT], data: _ArrayLike, **kwargs
+        self,
+        models: DiscreteWeightedModelSet[_DistributionT],
+        data: _ArrayLike,
+        **kwargs,
     ):
         r"""
         Fit the posterior distribution.
