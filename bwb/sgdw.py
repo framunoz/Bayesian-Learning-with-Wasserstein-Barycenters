@@ -3,6 +3,7 @@ import numbers as num
 import time
 import typing as t
 import warnings
+from collections.abc import Iterator
 from datetime import timedelta
 
 import ot
@@ -204,7 +205,7 @@ class DetentionParameters:
         return f"DetentionParameters(tol={self.tol:.2e}, max_iter={max_iter_fmt}, max_time={time_fmt})"
 
 
-class IterationParameters:
+class IterationParameters(Iterator[int]):
     """
     This class contains the iteration parameters for the algorithm.
     """
@@ -238,7 +239,7 @@ class IterationParameters:
         - diff_t: The time difference between tic_ and toc.
         - w_dist: The Wasserstein distance (initialized to infinity).
         """
-        self.k = 0
+        self.k = -1
         self.tic = time.time()
         self.tic_ = time.time()
         self.toc = time.time()
@@ -286,7 +287,22 @@ class IterationParameters:
 
     def __repr__(self) -> str:
         w_dist_fmt = f"{self.w_dist:.6f}" if self.w_dist != float("inf") else "∞"
-        return f"IterationParameters(k={self.k}, w_dist={w_dist_fmt}, t={self.toc - self.tic:.2f} [seg], Δt={self.diff_t * 1000:.2f} [ms])"
+        time_fmt = str(timedelta(seconds=round(self.toc - self.tic)))
+        return f"IterationParameters(k={self.k:_}, w_dist={w_dist_fmt}, t={time_fmt}, Δt={self.diff_t * 1000:.2f} [ms])"
+
+    def __next__(self) -> int:
+        # At the beginning of the iteration, update the iteration metrics
+        self.update_iteration()
+
+        # If the detention criteria is met, raise StopIteration
+        if self.detention_criteria():
+            raise StopIteration
+
+        # Start the timer for the iteration
+        self.start_iteration()
+
+        # Return the iteration number
+        return self.k
 
 
 class History(t.Generic[_DistributionT]):
@@ -482,6 +498,16 @@ class History(t.Generic[_DistributionT]):
         return 0
 
 
+class ReportOptions(t.TypedDict, total=False):
+    iter: bool
+    w_dist: bool
+    step_schd: bool
+    time: bool
+    total_time: bool
+    dt: bool
+    dt_per_iter: bool
+
+
 class Report:
     """
     This class contains the report logic of the algorithm.
@@ -491,38 +517,45 @@ class Report:
         self,
         iter_params: IterationParameters,
         report_every: int = 10,
-        include_iter: bool = True,
-        include_w_dist: bool = False,
-        include_lr: bool = True,
-        include_time: bool = False,
+        include_dict: ReportOptions = None,
         len_bar: int = 5,
     ):
         self.iter_params = iter_params
         self.report_every = report_every
-        self.include_iter = include_iter
-        self.include_w_dist = include_w_dist
-        self.include_lr = include_lr
-        self.include_time = include_time
         self.len_bar = len_bar
+
+        # Dictionary by default
+        self.include: ReportOptions = {
+            "iter": True,
+            "w_dist": False,
+            "step_schd": True,
+            "time": False,
+            "total_time": True,
+            "dt": False,
+            "dt_per_iter": True,
+        }
+
+        # Update the dictionary
+        include_dict: ReportOptions = include_dict or {}
+        for key, value in include_dict.items():
+            self.add_key_value(key, value)
+
+    def add_key_value(self, key: str, value: t.Any):
+        if not isinstance(value, bool):
+            raise TypeError(f"Value must be a boolean, not {type(value)}")
+        if key not in self.include:
+            raise KeyError(f"Invalid key: {key}")
+        self.include[key] = value
 
     def set_params(
         self,
-        include_iter: bool = None,
-        include_w_dist: bool = None,
-        include_lr: bool = None,
-        include_time: bool = None,
+        include_dict: ReportOptions = None,
         len_bar: int = None,
     ):
-        self.include_iter = (
-            include_iter if include_iter is not None else self.include_iter
-        )
-        self.include_w_dist = (
-            include_w_dist if include_w_dist is not None else self.include_w_dist
-        )
-        self.include_lr = include_lr if include_lr is not None else self.include_lr
-        self.include_time = (
-            include_time if include_time is not None else self.include_time
-        )
+        include_dict = include_dict or {}
+        for key, value in include_dict.items():
+            self.add_key_value(key, value)
+
         self.len_bar = len_bar if len_bar is not None else self.len_bar
 
     def make_report(
@@ -536,21 +569,24 @@ class Report:
 
         report = bar + " "
 
-        if self.include_iter:
+        if self.include["iter"]:
             report += f"k = {self.iter_params.k}, "
 
-        if self.include_w_dist:
+        if self.include["w_dist"]:
             report += f"Wass. dist. = {self.iter_params.w_dist:.6f}, "
 
-        if self.include_lr:
-            report += f"gamma_k = {gamma_k:.4%}, "
+        if self.include["step_schd"]:
+            report += f"gamma_k = {gamma_k:.2%}, "
 
-        if self.include_time:
-            total_time = round(self.iter_params.toc - self.iter_params.tic)
-            time_fmt = str(timedelta(seconds=total_time))
-            report += f"t = {time_fmt}, "
-            report += f"Δt = {(self.iter_params.diff_t) * 1000:.2f} [ms], "
-            report += f"Δt per iter. = {(self.iter_params.toc - self.iter_params.tic) * 1000 / (self.iter_params.k + 1):.2f} [ms/iter], "
+        if self.include["time"]:
+            if self.include["total_time"]:
+                total_time = round(self.iter_params.toc - self.iter_params.tic)
+                time_fmt = str(timedelta(seconds=total_time))
+                report += f"t = {time_fmt}, "
+            if self.include["dt"]:
+                report += f"Δt = {(self.iter_params.diff_t) * 1000:.2f} [ms], "
+            if self.include["dt_per_iter"]:
+                report += f"Δt per iter. = {(self.iter_params.toc - self.iter_params.tic) * 1000 / (self.iter_params.k + 1):.2f} [ms/iter], "
 
         report = report[:-2] + " " + bar
 
@@ -662,7 +698,7 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
         return self
 
     @abc.abstractmethod
-    def _create_distribution(self, pos_wgt) -> _DistributionT:
+    def create_distribution(self, pos_wgt) -> _DistributionT:
         """
         Create a distribution from the position and weight.
 
@@ -708,7 +744,7 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
         """
         pass
 
-    def compute_wass_dist(self, pos_wgt_k, pos_wgt_kp1, gamma_k):
+    def _compute_wass_dist(self, pos_wgt_k, pos_wgt_kp1, gamma_k) -> float:
         """
         Compute the Wasserstein distance between two positions and weights.
 
@@ -718,17 +754,20 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
         :param pos_wgt_kp1: The position and weight that come from the next sample.
         :param gamma_k: The learning rate for the next sample.
         """
-        pass
+        return float("inf")
+
+    def compute_wass_dist(self, pos_wgt_k, pos_wgt_kp1, gamma_k) -> float:
+        self.iter_params.w_dist = self._compute_wass_dist(
+            pos_wgt_k, pos_wgt_kp1, gamma_k
+        )
+        return self.iter_params.w_dist
 
     def run(
         self,
         pos_wgt_hist=False,
         distr_hist=False,
         distr_samp_hist=False,
-        include_iter=None,
-        include_w_dist=None,
-        include_lr=None,
-        include_time=None,
+        include_dict: ReportOptions = None,
     ):
         """
         Run the algorithm.
@@ -745,15 +784,10 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
             pos_wgt=pos_wgt_hist,
             distr=distr_hist,
             distr_samp=distr_samp_hist,
-            create_distribution=self._create_distribution,
+            create_distribution=self.create_distribution,
         )
 
-        self.report.set_params(
-            include_iter=include_iter,
-            include_w_dist=include_w_dist,
-            include_lr=include_lr,
-            include_time=include_time,
-        )
+        self.report.set_params(include_dict=include_dict)
 
         # Step 1: Sampling a mu_0. For convention, we use mu_k to denote the current sample
         mu_k, pos_wgt_k = self.first_sample()
@@ -761,12 +795,7 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
         self.hist.init_histories(mu_k, pos_wgt_k)
 
         self.iter_params.init_params()
-
-        while not self.iter_params.detention_criteria():
-            # Time at the beginning of the iteration
-            self.iter_params.start_iteration()
-
-            k = self.iter_params.k
+        for k in self.iter_params:
 
             # Step 2: Draw S_k samples from the distribution sampler
             S_k = self.schd.batch_size(k)
@@ -788,9 +817,8 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
 
             # Step 6: Update
             pos_wgt_k = pos_wgt_kp1
-            self.iter_params.update_iteration()
 
-        barycenter = self._create_distribution(pos_wgt_k)
+        barycenter = self.create_distribution(pos_wgt_k)
 
         if self.hist.has_histories():
             return barycenter, self.hist
@@ -824,7 +852,7 @@ class DiscreteDistributionSGDW(BaseSGDW[dist.DiscreteDistribution]):
         self.alpha = alpha
         self.include_w_dist = True
 
-    def _create_distribution(self, pos_wgt) -> dist.DiscreteDistribution:
+    def create_distribution(self, pos_wgt) -> dist.DiscreteDistribution:
         X_k, m = pos_wgt
         return dist.DiscreteDistribution(support=X_k, weights=m)
 
@@ -854,12 +882,12 @@ class DiscreteDistributionSGDW(BaseSGDW[dist.DiscreteDistribution]):
         X_kp1 = (1 - gamma_k) * X_k + gamma_k * T_X_k
         return (X_kp1, m)
 
-    def compute_wass_dist(self, pos_wgt_k, pos_wgt_kp1, gamma_k):
+    def _compute_wass_dist(self, pos_wgt_k, pos_wgt_kp1, gamma_k):
         X_k, m = pos_wgt_k
         X_kp1, m = pos_wgt_kp1
         diff = X_k - X_kp1
         w_dist = float((gamma_k**2) * torch.sum(m * LA.norm(diff, dim=1) ** 2))
-        self.w_dist = w_dist
+        return w_dist
 
 
 class DistributionDrawSGDW(BaseSGDW[dist.DistributionDraw], metaclass=abc.ABCMeta):
@@ -885,7 +913,7 @@ class DistributionDrawSGDW(BaseSGDW[dist.DistributionDraw], metaclass=abc.ABCMet
         self.projector = projector
         self.set_geodesic_params()
 
-    def _create_distribution(self, pos_wgt) -> dist.DistributionDraw:
+    def create_distribution(self, pos_wgt) -> dist.DistributionDraw:
         gs_weights_k = pos_wgt
         return dist.DistributionDraw.from_grayscale_weights(gs_weights_k)
 
