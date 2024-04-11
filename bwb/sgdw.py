@@ -4,6 +4,7 @@ import time
 import typing as t
 import warnings
 from collections.abc import Iterator
+from copy import deepcopy
 from datetime import timedelta
 
 import ot
@@ -30,6 +31,7 @@ _log = logging.get_logger(__name__)
 _bar = "=" * 5
 
 
+# MARK: Step Schedules
 def gamma(*, a: float = 1, b: float = 0, c: float = 1):
     """
     This function returns a gamma function with parameters a, b, and c.
@@ -77,6 +79,7 @@ class Gamma:
         return self.a / (self.b ** (1 / self.c) + k) ** self.c
 
 
+# MARK: Schedule class
 class Schedule:
     """
     This class contains the schedule for the learning rate and batch size.
@@ -138,6 +141,7 @@ class Schedule:
         self._batch_size: t.Callable[[int], int] = batch_size
 
 
+# MARK: Detention Parameters
 class DetentionParameters:
     """
     This class contains the detention parameters for the algorithm.
@@ -205,6 +209,7 @@ class DetentionParameters:
         return f"DetentionParameters(tol={self.tol:.2e}, max_iter={max_iter_fmt}, max_time={time_fmt})"
 
 
+# MARK: Iteration Parameters
 class IterationParameters(Iterator[int]):
     """
     This class contains the iteration parameters for the algorithm.
@@ -290,6 +295,10 @@ class IterationParameters(Iterator[int]):
         time_fmt = str(timedelta(seconds=round(self.toc - self.tic)))
         return f"IterationParameters(k={self.k:_}, w_dist={w_dist_fmt}, t={time_fmt}, Δt={self.diff_t * 1000:.2f} [ms])"
 
+    def __iter__(self):
+        self.init_params()
+        return self
+
     def __next__(self) -> int:
         # At the beginning of the iteration, update the iteration metrics
         self.update_iteration()
@@ -305,6 +314,7 @@ class IterationParameters(Iterator[int]):
         return self.k
 
 
+# MARK: History class
 class History(t.Generic[_DistributionT]):
     """
     This class contains the history logic of the algorithm.
@@ -498,6 +508,7 @@ class History(t.Generic[_DistributionT]):
         return 0
 
 
+# MARK: Report Class
 class ReportOptions(t.TypedDict, total=False):
     iter: bool
     w_dist: bool
@@ -513,6 +524,16 @@ class Report:
     This class contains the report logic of the algorithm.
     """
 
+    INCLUDE_OPTIONS: ReportOptions = {
+        "iter": True,
+        "w_dist": False,
+        "step_schd": True,
+        "time": False,
+        "total_time": True,
+        "dt": False,
+        "dt_per_iter": True,
+    }
+
     def __init__(
         self,
         iter_params: IterationParameters,
@@ -525,15 +546,7 @@ class Report:
         self.len_bar = len_bar
 
         # Dictionary by default
-        self.include: ReportOptions = {
-            "iter": True,
-            "w_dist": False,
-            "step_schd": True,
-            "time": False,
-            "total_time": True,
-            "dt": False,
-            "dt_per_iter": True,
-        }
+        self.include: ReportOptions = deepcopy(self.INCLUDE_OPTIONS)
 
         # Update the dictionary
         include_dict: ReportOptions = include_dict or {}
@@ -596,6 +609,7 @@ class Report:
         return self.iter_params.k % self.report_every == 0
 
 
+# MARK: BaseSGDW Class
 class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
     """
     Base class for Stochastic Gradient Descent in Wasserstein Space.
@@ -794,7 +808,7 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
 
         self.hist.init_histories(mu_k, pos_wgt_k)
 
-        self.iter_params.init_params()
+        # The logic of the detention criteria are in the iterable `iter_params`
         for k in self.iter_params:
 
             # Step 2: Draw S_k samples from the distribution sampler
@@ -826,6 +840,7 @@ class BaseSGDW(t.Generic[_DistributionT], metaclass=abc.ABCMeta):
         return barycenter
 
 
+# MARK: SGDW with discrete distributions
 class DiscreteDistributionSGDW(BaseSGDW[dist.DiscreteDistribution]):
     def __init__(
         self,
@@ -890,6 +905,7 @@ class DiscreteDistributionSGDW(BaseSGDW[dist.DiscreteDistribution]):
         return w_dist
 
 
+# MARK: SGDW with distributions based in draws
 class DistributionDrawSGDW(BaseSGDW[dist.DistributionDraw], metaclass=abc.ABCMeta):
     def __init__(
         self,
@@ -1009,6 +1025,7 @@ class DebiesedDistributionDrawSGDW(DistributionDrawSGDW):
         )
 
 
+# MARK: Deprecated functions
 def compute_bwb_discrete_distribution(
     transport: tpt.BaseTransport,
     distrib_sampler: dist.DistributionSampler[dist.DiscreteDistribution],
