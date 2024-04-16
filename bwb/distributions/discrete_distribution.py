@@ -11,14 +11,62 @@ from PIL import Image
 from bwb import logging
 from bwb.config import config
 from bwb.utils import _grayscale
-from bwb.validation import _shape_validation, _shape_weights_validation
+from bwb.validation import _shape_validation
 
 __all__ = [
+    "IDistribution",
     "DiscreteDistribution",
     "DistributionDraw",
 ]
 
 _log = logging.get_logger(__name__)
+
+
+class IDistribution(t.Protocol):
+    """
+    Protocol for the discrete distributions, like the classes `DiscreteDistribution` and `DistributionDraw`.
+    """
+
+    @property
+    def original_support(self) -> torch.Tensor:
+        """Original support."""
+        ...
+
+    @property
+    def dtype(self) -> torch.dtype:
+        """dtype of the instance."""
+        ...
+
+    @property
+    def device(self) -> torch.device:
+        """device of the instance."""
+        ...
+
+    def enumerate_support_(self, expand=True) -> torch.Tensor:
+        """Enumerates the original support ``support`` and not its indices."""
+        ...
+
+    def sample_(self, sample_shape=torch.Size([])) -> torch.Tensor:
+        """Sample from the original support ``support``."""
+        ...
+
+    @property
+    def nz_logits(self) -> torch.Tensor:
+        """Non-zero logits."""
+        ...
+
+    @property
+    def nz_probs(self) -> torch.Tensor:
+        """Non-zero probs."""
+        ...
+
+    def enumerate_nz_support(self, expand=True) -> torch.Tensor:
+        """Enumerate non-zero support."""
+        ...
+
+    def enumerate_nz_support_(self, expand=True) -> torch.Tensor:
+        """Enumerate non-zero support using the original support."""
+        ...
 
 
 # noinspection PyAbstractClass
@@ -159,10 +207,9 @@ class DistributionDraw(DiscreteDistribution):
         :param shape: The shape of the image that represents the distribution.
         :return: an instance of :py:class:`DistributionDraw`
         """
-        warnings.warn(
-            "This method is deprecated, use the constructor instead.",
-            DeprecationWarning,
-        )
+        msg = "This method is deprecated, use the constructor instead."
+        warnings.warn(msg, DeprecationWarning, stacklevel=2)
+        _log.warning(msg)
         return cls(weights, shape)
 
     @classmethod
