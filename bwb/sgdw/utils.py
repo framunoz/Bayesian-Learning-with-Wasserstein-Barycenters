@@ -5,10 +5,6 @@ from copy import deepcopy
 from datetime import timedelta
 from typing import Iterator
 
-from bwb.utils import _DistributionT
-
-_PosWgt = t.TypeVar("_PosWgt")
-
 
 def gamma(*, a: float = 1, b: float = 0, c: float = 1):
     """
@@ -305,7 +301,7 @@ class HistoryOptions(t.TypedDict, total=False):
 HistoryOptionsLiteral = t.Literal["pos_wgt", "distr", "pos_wgt_samp", "distr_samp"]
 
 
-class History(t.Generic[_DistributionT, _PosWgt]):
+class History[DistributionT, pos_wgt_t]:
     """
     This class contains the history logic of the algorithm.
     """
@@ -334,16 +330,16 @@ class History(t.Generic[_DistributionT, _PosWgt]):
         self.options["distr_samp"] = distr_samp
 
         # Initialize the histories
-        self._create_distribution: t.Optional[t.Callable[[_PosWgt], _DistributionT]] = (
+        self._create_distribution: t.Optional[t.Callable[[pos_wgt_t], DistributionT]] = (
             None
         )
         self._get_pos_wgt_from_dist: t.Optional[
-            t.Callable[[_DistributionT], _PosWgt]
+            t.Callable[[DistributionT], pos_wgt_t]
         ] = None
-        self.pos_wgt: list[_PosWgt] = []
-        self.distr: list[_DistributionT] = []
-        self.pos_wgt_samp: list[list[_PosWgt]] = []
-        self.distr_samp: list[list[_DistributionT]] = []
+        self.pos_wgt: list[pos_wgt_t] = []
+        self.distr: list[DistributionT] = []
+        self.pos_wgt_samp: list[list[pos_wgt_t]] = []
+        self.distr_samp: list[list[DistributionT]] = []
 
     def add_key_value(self, key: HistoryOptionsLiteral, value: bool):
         if not isinstance(value, bool):
@@ -353,7 +349,7 @@ class History(t.Generic[_DistributionT, _PosWgt]):
         self.options[key] = value
 
     @property
-    def create_distr(self) -> t.Callable[[_PosWgt], _DistributionT]:
+    def create_distr(self) -> t.Callable[[pos_wgt_t], DistributionT]:
         """The function to create a distribution from the position and weight."""
         if self._create_distribution is None:
             raise ValueError("create_distr must be set")
@@ -363,12 +359,12 @@ class History(t.Generic[_DistributionT, _PosWgt]):
     def create_distr(self, create_distribution):
         if not callable(create_distribution):
             raise TypeError("create_distribution must be a callable")
-        self._create_distribution: t.Callable[[_PosWgt], _DistributionT] = (
+        self._create_distribution: t.Callable[[pos_wgt_t], DistributionT] = (
             create_distribution
         )
 
     @property
-    def get_pos_wgt_from_dist(self) -> t.Callable[[_DistributionT], _PosWgt]:
+    def get_pos_wgt_from_dist(self) -> t.Callable[[DistributionT], pos_wgt_t]:
         """The function to get the position and weight from the distribution."""
         if self._get_pos_wgt_from_dist is None:
             raise ValueError("get_pos_wgt_from_dist must be set")
@@ -378,7 +374,7 @@ class History(t.Generic[_DistributionT, _PosWgt]):
     def get_pos_wgt_from_dist(self, get_pos_wgt_from_dist):
         if not callable(get_pos_wgt_from_dist):
             raise TypeError("get_pos_wgt_from_dist must be a callable")
-        self._get_pos_wgt_from_dist: t.Callable[[_DistributionT], _PosWgt] = (
+        self._get_pos_wgt_from_dist: t.Callable[[DistributionT], pos_wgt_t] = (
             get_pos_wgt_from_dist
         )
 
@@ -388,8 +384,8 @@ class History(t.Generic[_DistributionT, _PosWgt]):
         distr: bool = None,
         pos_wgt_samp: bool = None,
         distr_samp: bool = None,
-        create_distribution: t.Callable[[_PosWgt], _DistributionT] = None,
-        get_pos_wgt_from_dist: t.Callable[[_DistributionT], _PosWgt] = None,
+        create_distribution: t.Callable[[pos_wgt_t], DistributionT] = None,
+        get_pos_wgt_from_dist: t.Callable[[DistributionT], pos_wgt_t] = None,
     ):
         self.options["pos_wgt"] = (
             pos_wgt if pos_wgt is not None else self.options["pos_wgt"]
@@ -413,7 +409,7 @@ class History(t.Generic[_DistributionT, _PosWgt]):
             else self.get_pos_wgt_from_dist
         )
 
-    def init_histories(self, lst_mu_0: t.Sequence[_DistributionT], pos_wgt_0: _PosWgt):
+    def init_histories(self, lst_mu_0: t.Sequence[DistributionT], pos_wgt_0: pos_wgt_t):
         """
         Initialize the histories for the algorithm.
 

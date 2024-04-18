@@ -1,3 +1,6 @@
+"""
+This module contains the classes that are used to load the data.
+"""
 import abc
 import time
 import typing as t
@@ -8,7 +11,7 @@ import torchvision.transforms as T
 import bwb.distributions as dist
 from bwb import logging
 from bwb.config import config
-from bwb.utils import _DistributionT, array_like_t
+from bwb.utils import array_like_t
 
 __all__ = [
     "BaseDistributionDataLoader",
@@ -19,9 +22,7 @@ __all__ = [
 _log = logging.get_logger(__name__)
 
 
-class BaseDistributionDataLoader(
-    t.MutableMapping[int, _DistributionT], t.Generic[_DistributionT], abc.ABC
-):
+class BaseDistributionDataLoader[DistributionT](t.MutableMapping[int, DistributionT], metaclass=abc.ABCMeta):
     """
     Base class for DataLoaders. It is a :py:class:`MutableMapping` that creates instances of
     distributions in a 'lazy' way, saving computation time. It ends up representing several
@@ -51,24 +52,24 @@ class BaseDistributionDataLoader(
         self.logits_tensor = torch.log(self.probs_tensor + config.eps)
 
         # And define the dictionary to wrap
-        self._models: dict[int, _DistributionT] = {i: None for i in range(_n_probs)}
+        self._models: dict[int, DistributionT] = {i: None for i in range(_n_probs)}
 
         toc = time.time()
         _log.debug(f"Δt={toc - tic:.2f} [seg]")
 
     @abc.abstractmethod
-    def _create_distribution_instance(self, index) -> _DistributionT:
+    def _create_distribution_instance(self, index) -> DistributionT:
         """To use template pattern on __get_item__"""
         raise NotImplementedError(
             "Must implement method '_create_distribution_instance'."
         )
 
-    def __getitem__(self, item: int) -> _DistributionT:
+    def __getitem__(self, item: int) -> DistributionT:
         if self._models[item] is None:
             self._models[item] = self._create_distribution_instance(item)
         return self._models[item]
 
-    def __setitem__(self, key: int, value: _DistributionT):
+    def __setitem__(self, key: int, value: DistributionT):
         self._models[key] = value
 
     def __delitem__(self, key: int):
@@ -92,9 +93,7 @@ class BaseDistributionDataLoader(
         )
 
 
-class DiscreteDistributionDataLoader(
-    BaseDistributionDataLoader[dist.DiscreteDistribution]
-):
+class DiscreteDistributionDataLoader(BaseDistributionDataLoader[dist.DiscreteDistribution]):
     """
     DataLoader for the :py:class:`bwb.distributions.discrete_distributions.DiscreteDistributions`.
     """
@@ -118,7 +117,7 @@ class DistributionDrawDataLoader(BaseDistributionDataLoader[dist.DistributionDra
     ):
         """
         :param models_array: Arreglo de modelos.
-        :param tuple[int, int] shape: Dimensiones de las imágenes originales.
+        :param tuple[int, int] original_shape: Dimensiones de las imágenes originales.
         :param int floor: Número que funciona como valor mínimo de las imágenes.
         """
         _log.debug("Creating a DistributionDrawDataLoader instance.")

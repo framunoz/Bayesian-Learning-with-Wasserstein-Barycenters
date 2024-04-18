@@ -18,7 +18,6 @@ from bwb.config import config
 __all__ = [
     "array_like_t",
     "device_t",
-    "_DistributionT",
     "timeit_to_total_time",
     "set_generator",
     "freq_labels_dist_sampler",
@@ -29,12 +28,12 @@ __all__ = [
 
 type array_like_t = np.ndarray | torch.Tensor | t.Iterable
 type device_t = str | torch.device | int | None
-_DistributionT = t.TypeVar("_DistributionT")
+
 _log = logging.get_logger(__name__)
 
 
 @t.runtime_checkable
-class PDiscreteDistribSampler(t.Protocol[_DistributionT]):
+class PDiscreteDistribSampler(t.Protocol):
     """
     Protocol for the distribution sampler.
     """

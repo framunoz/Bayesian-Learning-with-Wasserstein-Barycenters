@@ -1,28 +1,25 @@
 import abc
 import typing as t
 
+import numpy as np
 import torch
 from matplotlib import pyplot as plt
 
 from bwb.distributions import DistributionDraw
 from bwb.logging import get_logger
-from bwb.sgdw.sgdw import BaseSGDW
-from bwb.sgdw.sgdw import Runnable
-from bwb.sgdw.utils import _PosWgt
-from bwb.sgdw.utils import History
+from bwb.sgdw.sgdw import BaseSGDW, Runnable
 from bwb.sgdw.utils import ReportOptions
-from bwb.utils import _DistributionT
 
 _log = get_logger(__name__)
 
 
-class Plotter(Runnable[_DistributionT, _PosWgt], metaclass=abc.ABCMeta):
+class Plotter[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], metaclass=abc.ABCMeta):
     fig: t.Optional[plt.Figure]
     ax: t.Optional[plt.Axes]
 
     def __init__(
         self,
-        sgdw: BaseSGDW[_DistributionT, _PosWgt],
+        sgdw: BaseSGDW[DistributionT, pos_wgt_t],
         plot_every=100,
         n_cols=12,
         n_rows=2,
@@ -51,21 +48,35 @@ class Plotter(Runnable[_DistributionT, _PosWgt], metaclass=abc.ABCMeta):
         self.distr_samp_hist = False
 
     @abc.abstractmethod
-    def plot(self, init: int = None):
+    def plot(self, init: t.Optional[int] = None) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
+        """
+        Plot the distributions.
+
+        :param init: The initial step to plot.
+        :return: The figure and the axes.
+        """
         pass
 
+    @t.final
     def callback(self) -> None:
+        """
+        Callback function to plot the distributions.
+
+        :return: None
+        """
         k = self.sgdw.iter_params.k
 
         if k % self.plot_every == self.plot_every - 1:
             self.fig, self.ax = self.plot()
 
+    @t.final
+    @t.override
     def run(
         self,
         pos_wgt_hist: bool = False, distr_hist: bool = False,
         pos_wgt_samp_hist: bool = False, distr_samp_hist: bool = False,
         include_dict: t.Optional[ReportOptions] = None
-    ) -> t.Union[_DistributionT, tuple[_DistributionT, History[_DistributionT, _PosWgt]]]:
+    ) -> DistributionT:
         _log.info("Running the SGDW algorithm from the Plotter")
         self.sgdw.callback = self.callback
 
@@ -83,7 +94,7 @@ class PlotterComparison(Plotter[DistributionDraw, torch.Tensor]):
 
     def __init__(
         self,
-        sgdw: BaseSGDW[_DistributionT, _PosWgt],
+        sgdw: BaseSGDW[DistributionDraw, torch.Tensor],
         plot_every=12,
         n_cols=12,
         n_rows=1,
@@ -99,7 +110,9 @@ class PlotterComparison(Plotter[DistributionDraw, torch.Tensor]):
         self.pos_wgt_hist = True
         self.pos_wgt_samp_hist = True
 
-    def plot(self, init: int = None):
+    @t.final
+    @t.override
+    def plot(self, init: int = None) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
         create_distr = self.sgdw.create_distribution
         max_imgs = self.n_rows * self.n_cols
         max_k = self.sgdw.iter_params.k
