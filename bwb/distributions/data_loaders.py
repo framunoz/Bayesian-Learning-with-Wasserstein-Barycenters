@@ -8,7 +8,8 @@ import torchvision.transforms as T
 import bwb.distributions as dist
 from bwb import logging
 from bwb.config import config
-from bwb.utils import _ArrayLike, _DistributionT
+from bwb.utils import _ArrayLike
+from bwb.utils import _DistributionT
 
 __all__ = [
     "BaseDistributionDataLoader",
@@ -160,7 +161,7 @@ class DistributionDrawDataLoader(BaseDistributionDataLoader[dist.DistributionDra
 
     def _create_distribution_instance(self, index) -> dist.DistributionDraw:
         weights = self.transform(self.probs_tensor[index])
-        return dist.DistributionDraw.from_weights(weights, self.shape)
+        return dist.DistributionDraw(weights, self.shape)
 
     def compute_likelihood(self, data: _ArrayLike, **kwargs) -> torch.Tensor:
         """
