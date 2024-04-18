@@ -11,6 +11,7 @@ import torch
 from matplotlib import pyplot as plt
 
 import bwb.logging as logging
+from bwb.config import config
 
 _ArrayLike = np.ndarray | torch.Tensor | t.Iterable
 _DistributionT = t.TypeVar("_DistributionT")
@@ -94,18 +95,31 @@ def normalised_samples_ordered_dict(mcmc):
     return c.OrderedDict([(k, v / counter.total()) for k, v in counter.most_common()])
 
 
-@torch.jit.script
-def _grayscale(
+def __grayscale(
     to_return: torch.Tensor,
     weights: torch.Tensor,
     support: torch.Tensor,
 ) -> torch.Tensor:
-    support = torch.round(support).type(torch.int32)
+    support = torch.round(support)  # .type(torch.int32)
     support1, support2 = support[:, 0], support[:, 1]
     for w, pos1, pos2 in zip(weights, support1, support2):
         to_return[pos1, pos2] += w
-    to_return = (to_return / torch.max(to_return) * 255).type(torch.uint8)
+    to_return = (to_return / torch.max(to_return) * 255)  # .type(torch.uint8)
     return to_return
+
+
+_grayscale = torch.jit.script(
+    __grayscale,
+    example_inputs=[(
+        torch.rand((28, 28), dtype=torch.float32, device=config.device),  # to_return
+        torch.rand((784,), dtype=torch.float32, device=config.device),  # weights
+        torch.randint(-10, 10, size=(784, 2), dtype=torch.int32, device=config.device),  # support
+    ), (
+        torch.rand((28, 28), dtype=torch.float64, device=config.device),  # to_return
+        torch.rand((784,), dtype=torch.float64, device=config.device),  # weights
+        torch.randint(-10, 10, size=(784, 2), dtype=torch.int32, device=config.device),  # support
+    )]
+)
 
 
 @torch.jit.script

@@ -2,7 +2,6 @@ import typing as t
 import warnings
 
 import torch
-
 # noinspection PyPackageRequirements
 import torch.distributions
 import torchvision.transforms.functional as F
@@ -296,7 +295,7 @@ class DistributionDraw(DiscreteDistribution):
             weights = self.weights
             support = self.original_support
             # Compute the grayscale
-            self._grayscale = _grayscale(to_return, weights, support)
+            self._grayscale = _grayscale(to_return, weights, support).to(torch.uint8)
 
         return self._grayscale
 
