@@ -1,5 +1,6 @@
 __all__ = [
     "NotFittedError",
+    "AutocorrError",
 ]
 
 
@@ -10,3 +11,16 @@ class NotFittedError(ValueError, AttributeError):
     This class inherits from both ValueError and AttributeError to help with
     exception handling and backward compatibility."""
     ...
+
+
+class AutocorrError(Exception):
+    """Raised if the chain is too short to estimate an autocorrelation time.
+
+    The current estimate of the autocorrelation time can be accessed via the
+    ``tau`` attribute of this exception.
+
+    """
+
+    def __init__(self, tau, *args, **kwargs):
+        self.tau = tau
+        super(AutocorrError, self).__init__(*args, **kwargs)
