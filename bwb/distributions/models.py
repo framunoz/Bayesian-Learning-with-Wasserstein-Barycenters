@@ -8,7 +8,7 @@ import torch
 from torchvision.datasets import VisionDataset
 
 from bwb.distributions.discrete_distribution import DistributionDraw
-from bwb.utils import _ArrayLike
+from bwb.utils import array_like_t
 
 __all__ = [
     "PDiscreteModelsSet",
@@ -56,7 +56,7 @@ class PDiscreteWeightedModelSet[DistributionT](PDiscreteModelsSet[DistributionT]
     Protocol for classes that are a weighted set of models with a discrete support.
     """
 
-    def compute_likelihood(self, data: _ArrayLike = None, **kwargs) -> torch.Tensor:
+    def compute_likelihood(self, data: array_like_t = None, **kwargs) -> torch.Tensor:
         """
         Compute the probabilities of the data given the models.
 
@@ -72,7 +72,7 @@ class BaseDiscreteWeightedModelSet[DistributionT](BaseDiscreteModelsSet[Distribu
     """
 
     @abc.abstractmethod
-    def compute_likelihood(self, data: _ArrayLike = None, **kwargs) -> torch.Tensor:
+    def compute_likelihood(self, data: array_like_t = None, **kwargs) -> torch.Tensor:
         """
         Compute the probabilities of the data given the models.
 

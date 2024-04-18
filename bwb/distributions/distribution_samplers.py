@@ -14,7 +14,7 @@ import bwb.distributions as dist
 import bwb.validation as validation
 from bwb.config import config
 from bwb.distributions.models import PDiscreteModelsSet, PDiscreteWeightedModelSet
-from bwb.utils import _ArrayLike, _timeit_to_total_time, set_generator
+from bwb.utils import array_like_t, set_generator, timeit_to_total_time
 
 __all__ = [
     "DistributionSampler",
@@ -24,8 +24,6 @@ __all__ = [
     "ContinuousDistribSampler",
     "GeneratorDistribSampler",
 ]
-
-type device_t = str | torch.device | int | None
 
 
 def _log_likelihood_default(model: dist.DiscreteDistribution, data: torch.Tensor):
@@ -123,7 +121,7 @@ class DiscreteDistribSampler[DistributionT](DistributionSampler[DistributionT]):
 
         return self.get_model(i), i
 
-    @_timeit_to_total_time
+    @timeit_to_total_time
     def draw(self, seed=None) -> DistributionT:
         """Draw a sample."""
         validation.check_is_fitted(self, ["models_", "probabilities_"])
@@ -145,7 +143,7 @@ class DiscreteDistribSampler[DistributionT](DistributionSampler[DistributionT]):
         indices = indices.tolist()
         return [self.get_model(i) for i in indices], indices
 
-    @_timeit_to_total_time
+    @timeit_to_total_time
     def rvs(self, size=1, seed=None) -> t.Sequence[DistributionT]:
         """Samples as many distributions as the ``size`` parameter indicates."""
         validation.check_is_fitted(self, ["models_", "probabilities_"])
@@ -183,7 +181,7 @@ class UniformDiscreteSampler[DistributionT](DiscreteDistribSampler[DistributionT
 
     """
 
-    @_timeit_to_total_time
+    @timeit_to_total_time
     def fit(self, models: PDiscreteModelsSet[DistributionT], *args, **kwargs):
         super().fit(models)
         self.probabilities_: torch.Tensor = torch.ones(
@@ -230,11 +228,11 @@ class ExplicitPosteriorSampler[DistributionT](DiscreteDistribSampler[Distributio
 
     """
 
-    @_timeit_to_total_time
+    @timeit_to_total_time
     def fit(
         self,
         models: PDiscreteWeightedModelSet[DistributionT],
-        data: _ArrayLike,
+        data: array_like_t,
         **kwargs,
     ):
         r"""
