@@ -1,2 +1,2 @@
 from .discrete_distribution import *
-from .posterior_distributions import *
+from .distribution_samplers import *

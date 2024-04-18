@@ -1,7 +1,9 @@
+"""
+This module contains the classes that represent the distribution samplers. These classes are used to sample
+distributions from a set of models, and they are divided into two main categories: discrete and continuous samplers.
+"""
 import abc
 import collections as c
-import functools
-import time
 import typing as t
 import warnings
 
@@ -11,7 +13,8 @@ import torch.nn as nn
 import bwb.distributions as dist
 import bwb.validation as validation
 from bwb.config import config
-from bwb.utils import _ArrayLike
+from bwb.distributions.models import PDiscreteModelsSet, PDiscreteWeightedModelSet
+from bwb.utils import _ArrayLike, _timeit_to_total_time, set_generator
 
 __all__ = [
     "DistributionSampler",
@@ -21,6 +24,8 @@ __all__ = [
     "ContinuousDistribSampler",
     "GeneratorDistribSampler",
 ]
+
+type device_t = str | torch.device | int | None
 
 
 def _log_likelihood_default(model: dist.DiscreteDistribution, data: torch.Tensor):
@@ -33,73 +38,22 @@ def _log_likelihood_default(model: dist.DiscreteDistribution, data: torch.Tensor
     return torch.sum(model.log_prob(data))
 
 
-def _timeit_to_total_time(method):
-    """Function that records the total time it takes to execute a method, and stores it in the
-    ``total_time`` attribute of the class instance."""
-
-    @functools.wraps(method)
-    def timeit_wrapper(*args, **kwargs):
-        tic = time.perf_counter()
-        result = method(*args, **kwargs)
-        toc = time.perf_counter()
-        args[0].total_time += toc - tic
-        return result
-
-    return timeit_wrapper
-
-
-def _set_generator(seed=None, device="cpu") -> torch.Generator:
-    gen = torch.Generator(device=device)
-    if seed is None:
-        gen.seed()
-        return gen
-    gen.manual_seed(seed)
-    return gen
-
-
-@t.runtime_checkable
-class DiscreteModelsSet[DistributionT](t.Protocol):
-    """
-    Protocol for classes that are a set of models with a discrete support.
-    """
-
-    def get(self, i: int, **kwargs) -> DistributionT:
-        """Get the model at the index ``i``."""
-        ...
-
-    def __len__(self) -> int:
-        """Get the number of models."""
-        ...
-
-
-@t.runtime_checkable
-class DiscreteWeightedModelSet[DistributionT](DiscreteModelsSet[DistributionT], t.Protocol):
-
-    def compute_likelihood(self, data: _ArrayLike = None, **kwargs) -> torch.Tensor:
-        """
-        Compute the probabilities of the data given the models.
-
-        :param data: The data to compute the probabilities.
-        :return: A tensor with the probabilities.
-        """
-        ...
-
-
 class DistributionSampler[DistributionT](metaclass=abc.ABCMeta):
     r"""
-    Base class for distributions that sampling other distributions. i.e. it represents a distribution :math:`\Lambda(dm) \in \mathcal{P}(\mathcal{M)}`, where :math:`\mathcal{M}` is the set of models.
+    Base class for distributions that sampling other distributions. i.e. it represents a distribution
+    :math:`\Lambda(dm) \in \mathcal{P}(\mathcal{M)}`, where :math:`\mathcal{M}` is the set of models.
     """
 
     def __init__(self) -> None:
         self.total_time = 0.0  # Total time to draw samples
 
     @abc.abstractmethod
-    def draw(self, *args, **kwargs) -> DistributionT:
+    def draw(self, seed: t.Optional[int] = None) -> DistributionT:
         """Draw a sample."""
         ...
 
     @abc.abstractmethod
-    def rvs(self, size=1, *args, **kwargs) -> t.Sequence[DistributionT]:
+    def rvs(self, size: int = 1, seed: t.Optional[int] = None) -> t.Sequence[DistributionT]:
         """Samples as many distributions as the ``size`` parameter indicates."""
         ...
 
@@ -107,11 +61,15 @@ class DistributionSampler[DistributionT](metaclass=abc.ABCMeta):
         return f"{self.__class__.__name__}()"
 
 
+# noinspection PyAttributeOutsideInit
 class DiscreteDistribSampler[DistributionT](DistributionSampler[DistributionT]):
     r"""
-    Base class for distributions that have a discrete set of models. i.e. where the set of models is :math:`|\mathcal{M}| < +\infty`.
+    Base class for distributions that have a discrete set of models. i.e. where the set of models is
+    :math:`|\mathcal{M}| < +\infty`.
 
-    As the support is discrete, the distribution can be represented as a vector of probabilities, and therefore, the sampling process is reduced to drawing an index from a multinomial distribution. This property allows to save the samples and the number of times each model has been sampled, to get statistics about the sampling process.
+    As the support is discrete, the distribution can be represented as a vector of probabilities, and therefore, the
+    sampling process is reduced to drawing an index from a multinomial distribution. This property allows to save the
+    samples and the number of times each model has been sampled, to get statistics about the sampling process.
     """
 
     SAVE_SAMPLES = False
@@ -124,19 +82,27 @@ class DiscreteDistribSampler[DistributionT](DistributionSampler[DistributionT]):
         self._models_cache: dict[int, DistributionT] = {}
         self._fitted = False
 
-    def fit(self, models: DiscreteModelsSet[DistributionT], *args, **kwargs):
+    @classmethod
+    def set_save_samples(cls, save_samples: bool) -> None:
+        """Set the attribute ``save_samples`` to the class."""
+        if not isinstance(save_samples, bool):
+            raise TypeError("The save_samples must be a boolean.")
+        cls.SAVE_SAMPLES = save_samples
+
+    def fit(self, models: PDiscreteModelsSet[DistributionT], *args, **kwargs):
         """Fit the distribution."""
-        assert isinstance(models, DiscreteModelsSet), (
+        assert isinstance(models, PDiscreteModelsSet), (
             "The models must be a DiscreteModelsSet.\n"
-            f"Missing methods: {set(dir(DiscreteModelsSet)) - set(dir(models)) - {'_abc_impl', '_is_runtime_protocol', '__abstractmethods__'} }"
+            f"Missing methods: {set(dir(PDiscreteModelsSet)) - set(dir(models)) - {'_abc_impl', '_is_runtime_protocol',
+                                                                                   '__abstractmethods__'} }"
         )
 
-        self.models_: DiscreteModelsSet[DistributionT] = models  # The set of models
+        self.models_: PDiscreteModelsSet[DistributionT] = models  # The set of models
         self.models_index_: torch.Tensor = torch.arange(
             len(models), device=config.device
         )  # The index of the models
 
-        # The probabilities needs to be set!
+        # The probabilities need to be set!
         return self
 
     def get_model(self, i: int) -> DistributionT:
@@ -146,9 +112,9 @@ class DiscreteDistribSampler[DistributionT](DistributionSampler[DistributionT]):
             self._models_cache[i] = self.models_.get(i)
         return self._models_cache[i]
 
-    def _draw(self, seed=None, *args, **kwargs) -> tuple[DistributionT, int]:
+    def _draw(self, seed=None) -> tuple[DistributionT, int]:
         """To use template pattern on the draw method."""
-        rng: torch.Generator = _set_generator(seed=seed, device=config.device)
+        rng: torch.Generator = set_generator(seed=seed, device=config.device)
 
         i = torch.multinomial(
             input=self.probabilities_, num_samples=1, generator=rng
@@ -158,20 +124,20 @@ class DiscreteDistribSampler[DistributionT](DistributionSampler[DistributionT]):
         return self.get_model(i), i
 
     @_timeit_to_total_time
-    def draw(self, seed=None, *args, **kwargs) -> DistributionT:
+    def draw(self, seed=None) -> DistributionT:
         """Draw a sample."""
         validation.check_is_fitted(self, ["models_", "probabilities_"])
-        to_return, i = self._draw(seed, *args, **kwargs)
+        to_return, i = self._draw(seed)
         if self.save_samples:  # Register the sample
             self.samples_history.append(i)
             self.samples_counter[i] += 1
         return to_return
 
     def _rvs(
-        self, size=1, seed=None, *args, **kwargs
+        self, size=1, seed=None
     ) -> tuple[t.Sequence[DistributionT], list[int]]:
         """Samples as many distributions as the ``size`` parameter indicates."""
-        rng: torch.Generator = _set_generator(seed=seed, device=config.device)
+        rng: torch.Generator = set_generator(seed=seed, device=config.device)
 
         indices = torch.multinomial(
             input=self.probabilities_, num_samples=size, replacement=True, generator=rng
@@ -180,10 +146,10 @@ class DiscreteDistribSampler[DistributionT](DistributionSampler[DistributionT]):
         return [self.get_model(i) for i in indices], indices
 
     @_timeit_to_total_time
-    def rvs(self, size=1, seed=None, *args, **kwargs) -> t.Sequence[DistributionT]:
+    def rvs(self, size=1, seed=None) -> t.Sequence[DistributionT]:
         """Samples as many distributions as the ``size`` parameter indicates."""
         validation.check_is_fitted(self, ["models_", "probabilities_"])
-        to_return, list_indices = self._rvs(size, seed, *args, **kwargs)
+        to_return, list_indices = self._rvs(size, seed)
         if self.save_samples:  # Register the samples
             self.samples_history.extend(list_indices)
             self.samples_counter.update(list_indices)
@@ -198,11 +164,14 @@ class DiscreteDistribSampler[DistributionT](DistributionSampler[DistributionT]):
         return to_return
 
 
+# noinspection PyAttributeOutsideInit
 class UniformDiscreteSampler[DistributionT](DiscreteDistribSampler[DistributionT]):
     r"""
-    A class representing a distribution sampler with a discrete set of models, and the probabilities are set to be uniform.
+    A class representing a distribution sampler with a discrete set of models, and the probabilities are set to be
+    uniform.
 
-    This class inherits from the `DiscreteDistribSampler` class and provides methods to fit the sampler to a set of discrete models and generate samples from the fitted sampler.
+    This class inherits from the `DiscreteDistribSampler` class and provides methods to fit the sampler to a set of
+    discrete models and generate samples from the fitted sampler.
 
     Attributes:
         probabilities_: A torch.Tensor representing the probabilities of each model in the sampler.
@@ -215,7 +184,7 @@ class UniformDiscreteSampler[DistributionT](DiscreteDistribSampler[DistributionT
     """
 
     @_timeit_to_total_time
-    def fit(self, models: DiscreteModelsSet[DistributionT], *args, **kwargs):
+    def fit(self, models: PDiscreteModelsSet[DistributionT], *args, **kwargs):
         super().fit(models)
         self.probabilities_: torch.Tensor = torch.ones(
             len(models),
@@ -244,6 +213,7 @@ class UniformDiscreteSampler[DistributionT](DiscreteDistribSampler[DistributionT
         return to_return
 
 
+# noinspection PyAttributeOutsideInit
 class ExplicitPosteriorSampler[DistributionT](DiscreteDistribSampler[DistributionT]):
     r"""Distribution that uses the strategy of calculating all likelihoods by brute force. This
     class implements likelihoods of the form
@@ -263,7 +233,7 @@ class ExplicitPosteriorSampler[DistributionT](DiscreteDistribSampler[Distributio
     @_timeit_to_total_time
     def fit(
         self,
-        models: DiscreteWeightedModelSet[DistributionT],
+        models: PDiscreteWeightedModelSet[DistributionT],
         data: _ArrayLike,
         **kwargs,
     ):
@@ -272,7 +242,6 @@ class ExplicitPosteriorSampler[DistributionT](DiscreteDistribSampler[Distributio
 
         :param data: The data to fit the posterior.
         :param models: The models to fit the posterior.
-        :param batch_size: The batch size to compute the probabilities.
         :return: The fitted posterior.
         """
         super().fit(models)
@@ -307,12 +276,14 @@ class ExplicitPosteriorSampler[DistributionT](DiscreteDistribSampler[Distributio
 
 class ContinuousDistribSampler[DistributionT](DistributionSampler[DistributionT], abc.ABC):
     r"""
-    Class for distributions that have a continuous set of models. i.e. where the set of models is :math:`|\mathcal{M}| = +\infty`.
+    Class for distributions that have a continuous set of models. i.e. where the set of models is
+    :math:`|\mathcal{M}| = +\infty`.
     """
 
     ...
 
 
+# noinspection PyAttributeOutsideInit
 class GeneratorDistribSampler[DistributionT](ContinuousDistribSampler[DistributionT]):
     r"""
     Class for distributions that have a continuous set of models, and the models can be generated by a generator model.
@@ -320,11 +291,11 @@ class GeneratorDistribSampler[DistributionT](ContinuousDistribSampler[Distributi
 
     SAVE_SAMPLES = False
 
-    def __init__(self, save_samples: bool = None, *args, **kwargs) -> None:
+    def __init__(self, save_samples: bool = None) -> None:
         """
         :param save_samples: If True, the samples are saved in the attribute ``samples_history``.
         """
-        super().__init__(*args, **kwargs)
+        super().__init__()
         self.save_samples = save_samples or self.SAVE_SAMPLES
         self.samples_history: list[torch.Tensor] = []
         self._fitted = False
@@ -334,8 +305,6 @@ class GeneratorDistribSampler[DistributionT](ContinuousDistribSampler[Distributi
         generator: nn.Module,
         transform_out: t.Callable[[torch.Tensor], DistributionT],
         noise_sampler: t.Callable[[int], torch.Tensor],
-        *args,
-        **kwargs,
     ):
         """
         Fits the distribution sampler.
@@ -346,8 +315,6 @@ class GeneratorDistribSampler[DistributionT](ContinuousDistribSampler[Distributi
         :type transform_out: Callable[[torch.Tensor], DistributionT]
         :param noise_sampler: A callable function that generates noise samples.
         :type noise_sampler: Callable[[int], torch.Tensor]
-        :param *args: Additional positional arguments.
-        :param **kwargs: Additional keyword arguments.
         :raises ValueError: If the noise sampler does not return a tensor.
         :raises ValueError: If the generator fails to generate a sample from the noise.
         :raises ValueError: If the transform_out fails to transform the output of the generator.
@@ -413,19 +380,17 @@ class GeneratorDistribSampler[DistributionT](ContinuousDistribSampler[Distributi
         return self.transform_out_(gen_output)
         # return self.transform_out_(self.generator_(noise))
 
-    def _draw(self, seed=None, *args, **kwargs) -> tuple[DistributionT, torch.Tensor]:
+    def _draw(self, seed=None) -> tuple[DistributionT, torch.Tensor]:
         noise: torch.Tensor = self.noise_sampler_(1)
         to_return: DistributionT = self.transform_noise(noise)
         return to_return, noise
 
-    def draw(self, seed=None, *args, **kwargs) -> DistributionT:
+    def draw(self, seed=None) -> DistributionT:
         """
         Draw a sample.
 
         :param seed: The seed to draw the sample.
         :type seed: int
-        :param *args: Additional positional arguments.
-        :param **kwargs: Additional keyword arguments.
         :raises NotFittedError: If the distribution sampler is not fitted.
         :return: The drawn sample.
         :rtype: DistributionT
@@ -433,13 +398,13 @@ class GeneratorDistribSampler[DistributionT](ContinuousDistribSampler[Distributi
         validation.check_is_fitted(
             self, ["generator_", "transform_out_", "noise_sampler_"]
         )
-        to_return, noise = self._draw(seed, *args, **kwargs)
+        to_return, noise = self._draw(seed)
         if self.save_samples:
             self.samples_history.append(noise)
         return to_return
 
     def _rvs(
-        self, size=1, seed=None, *args, **kwargs
+        self, size=1, seed=None
     ) -> tuple[t.Sequence[DistributionT], torch.Tensor]:
         noises: torch.Tensor = self.noise_sampler_(size)
         to_return: list[DistributionT] = [
@@ -447,7 +412,7 @@ class GeneratorDistribSampler[DistributionT](ContinuousDistribSampler[Distributi
         ]
         return to_return, noises
 
-    def rvs(self, size=1, seed=None, *args, **kwargs) -> t.Sequence[DistributionT]:
+    def rvs(self, size=1, seed=None) -> t.Sequence[DistributionT]:
         """
         Samples as many distributions as the `size` parameter indicates.
 
@@ -455,8 +420,6 @@ class GeneratorDistribSampler[DistributionT](ContinuousDistribSampler[Distributi
         :type size: int
         :param seed: Seed for the random number generator. If None, a random seed will be used.
         :type seed: int, optional
-        :param args: Additional positional arguments to be passed to the underlying sampling method.
-        :param kwargs: Additional keyword arguments to be passed to the underlying sampling method.
         :raises NotFittedError: If the distribution sampler is not fitted.
         :return: A sequence of sampled distributions.
         :rtype: Sequence[DistributionT]
@@ -464,7 +427,7 @@ class GeneratorDistribSampler[DistributionT](ContinuousDistribSampler[Distributi
         validation.check_is_fitted(
             self, ["generator_", "transform_out_", "noise_sampler_"]
         )
-        to_return, noises = self._rvs(size, seed, *args, **kwargs)
+        to_return, noises = self._rvs(size, seed)
         if self.save_samples:
             self.samples_history.extend(noises)
         return to_return
@@ -482,11 +445,11 @@ class GeneratorDistribSampler[DistributionT](ContinuousDistribSampler[Distributi
         return to_return
 
 
-class PosteriorPiN(DistributionSampler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class PosteriorPiN(DistributionSampler, metaclass=abc.ABCMeta):
+    def __init__(self):
+        super().__init__()
 
-        # Raise an warning of deprecation
+        # Raise a warning of deprecation
         warnings.warn(
             "PosteriorPiN is deprecated. Use DistributionSampler instead.",
             DeprecationWarning,
@@ -498,7 +461,7 @@ class DiscretePosteriorPiN(DiscreteDistribSampler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Raise an warning of deprecation
+        # Raise a warning of deprecation
         warnings.warn(
             "DiscretePosteriorPiN is deprecated. Use DiscreteDistributionSampler instead.",
             DeprecationWarning,
@@ -510,7 +473,7 @@ class ExplicitPosteriorPiN(ExplicitPosteriorSampler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Raise an warning of deprecation
+        # Raise a warning of deprecation
         warnings.warn(
             "ExplicitPosteriorPiN is deprecated. Use ExplicitPosteriorSampler instead.",
             DeprecationWarning,
