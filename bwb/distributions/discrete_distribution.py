@@ -1,3 +1,6 @@
+"""
+Models for discrete distributions.
+"""
 import typing as t
 import warnings
 
@@ -9,7 +12,7 @@ from PIL import Image
 
 from bwb import logging
 from bwb.config import config
-from bwb.utils import _grayscale
+from bwb.utils import grayscale_parser
 from bwb.validation import _shape_validation
 
 __all__ = [
@@ -21,6 +24,7 @@ __all__ = [
 _log = logging.get_logger(__name__)
 
 
+# noinspection PyPropertyDefinition
 class IDistribution(t.Protocol):
     """
     Protocol for the discrete distributions, like the classes `DiscreteDistribution` and `DistributionDraw`.
@@ -249,6 +253,12 @@ class DistributionDraw(DiscreteDistribution):
         cls,
         grayscale,
     ):
+        """
+        Build an instance from the grayscale image.
+
+        :param grayscale: The grayscale image.
+        :return: an instance of :py:class:`DistributionDraw`
+        """
         # Save the grayscales for create images
         grayscale: torch.Tensor = torch.as_tensor(
             grayscale, dtype=torch.uint8, device=config.device  # Use uint8 for images
@@ -289,13 +299,10 @@ class DistributionDraw(DiscreteDistribution):
             )
 
         else:
-            to_return = torch.zeros(
-                self.shape, dtype=config.dtype, device=config.device
-            )
             weights = self.weights
             support = self.original_support
             # Compute the grayscale
-            self._grayscale = _grayscale(to_return, weights, support).to(torch.uint8)
+            self._grayscale = grayscale_parser(self.shape, weights, support, dtype=config.dtype, device=config.device)
 
         return self._grayscale
 
