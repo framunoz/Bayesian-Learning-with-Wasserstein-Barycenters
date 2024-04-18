@@ -11,8 +11,7 @@ import bwb.bregman
 import bwb.distributions as dist
 import bwb.transports as tpt
 from bwb import logging, utils
-from bwb.sgdw.utils import (DetentionParameters, History, IterationParameters,
-                            Report, ReportOptions, Schedule, _PosWgt)
+from bwb.sgdw.utils import _PosWgt, DetentionParameters, History, IterationParameters, Report, ReportOptions, Schedule
 from bwb.utils import _DistributionT
 from wgan_gp.wgan_gp_vae.utils import ProjectorOnManifold
 
@@ -28,8 +27,26 @@ _log = logging.get_logger(__name__)
 _bar = "=" * 5
 
 
+class Runnable(t.Generic[_DistributionT, _PosWgt], metaclass=abc.ABCMeta):
+
+    @abc.abstractmethod
+    def run(
+        self,
+        pos_wgt_hist: bool = False,
+        distr_hist: bool = False,
+        pos_wgt_samp_hist: bool = False,
+        distr_samp_hist: bool = False,
+        include_dict: t.Optional[ReportOptions] = None
+    ) -> t.Union[_DistributionT, tuple[_DistributionT, History[_DistributionT, _PosWgt]]]:
+        """
+        Run the algorithm.
+        """
+        ...
+
+
 # MARK: BaseSGDW Class
-class BaseSGDW(t.Generic[_DistributionT, _PosWgt], metaclass=abc.ABCMeta):
+# noinspection PyMethodOverriding
+class BaseSGDW(Runnable[_DistributionT, _PosWgt], metaclass=abc.ABCMeta):
     """
     Base class for Stochastic Gradient Descent in Wasserstein Space.
 
@@ -92,6 +109,67 @@ class BaseSGDW(t.Generic[_DistributionT, _PosWgt], metaclass=abc.ABCMeta):
         self.val = torch.tensor(1, dtype=self.dtype, device=self.device)
         """A tensor with value 1, used to pass to the device."""
 
+        # Callback
+        self._callback: t.Callable[[], None] = lambda: None
+
+    @property
+    def callback(self) -> t.Callable[[], None]:
+        return self._callback
+
+    @callback.setter
+    def callback(self, callback):
+        self._callback = callback
+
+    @abc.abstractmethod
+    def create_distribution(self, pos_wgt: _PosWgt) -> _DistributionT:
+        """
+        Create a distribution from the position and weight.
+
+        This method should create a distribution from the position and weight and return it.
+
+        :param pos_wgt: The position and weight.
+        :return: The distribution created from the position and weight.
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_pos_wgt(self, mu: _DistributionT) -> _PosWgt:
+        """
+        Get the position and weight from a distribution.
+
+        This method should get the position and weight from a distribution and return it.
+
+        :param mu: The distribution.
+        :return: The position and weight from the distribution.
+        """
+        pass
+
+    @abc.abstractmethod
+    def first_sample(self) -> tuple[t.Sequence[_DistributionT], _PosWgt]:
+        """
+        Draw the first sample from the distribution sampler. This corresponds to the first step of the algorithm.
+
+        This method should draw the first sample from the distribution sampler and return it.
+
+        :return: The first sample from the distribution sampler and the position and weight that come from the sample.
+        """
+        pass
+
+    @abc.abstractmethod
+    def update_pos_wgt(
+        self, pos_wgt_k: _PosWgt, lst_mu_k: t.Sequence[_DistributionT], gamma_k: float
+    ) -> _PosWgt:
+        """
+        Update the position and weight for the next iteration.
+
+        This method should update the position and weight for the next iteration and return it.
+
+        :param pos_wgt_k: The position and weight that come from the current sample.
+        :param lst_mu_k: The list of distributions drawn from the sampler at the current iteration.
+        :param gamma_k: The learning rate for the next sample.
+        """
+        pass
+
     def set_schedules(
         self,
         step_schedule: t.Callable[[int], float],  # The \gamma_k schedule
@@ -131,41 +209,6 @@ class BaseSGDW(t.Generic[_DistributionT, _PosWgt], metaclass=abc.ABCMeta):
         self.det_params.max_time = max_time
         return self
 
-    @abc.abstractmethod
-    def create_distribution(self, pos_wgt: _PosWgt) -> _DistributionT:
-        """
-        Create a distribution from the position and weight.
-
-        This method should create a distribution from the position and weight and return it.
-
-        :param pos_wgt: The position and weight.
-        :return: The distribution created from the position and weight.
-        """
-        pass
-
-    @abc.abstractmethod
-    def get_pos_wgt(self, mu: _DistributionT) -> _PosWgt:
-        """
-        Get the position and weight from a distribution.
-
-        This method should get the position and weight from a distribution and return it.
-
-        :param mu: The distribution.
-        :return: The position and weight from the distribution.
-        """
-        pass
-
-    @abc.abstractmethod
-    def first_sample(self) -> tuple[t.Sequence[_DistributionT], _PosWgt]:
-        """
-        Draw the first sample from the distribution sampler. This corresponds to the first step of the algorithm.
-
-        This method should draw the first sample from the distribution sampler and return it.
-
-        :return: The first sample from the distribution sampler and the position and weight that come from the sample.
-        """
-        pass
-
     # noinspection PyPep8Naming
     def samp_distributions(self, S_k: int) -> t.Sequence[_DistributionT]:
         """
@@ -177,21 +220,6 @@ class BaseSGDW(t.Generic[_DistributionT, _PosWgt], metaclass=abc.ABCMeta):
         :return: A list of distributions drawn from the sampler.
         """
         return self.distr_sampler.rvs(S_k)
-
-    @abc.abstractmethod
-    def update_pos_wgt(
-        self, pos_wgt_k: _PosWgt, lst_mu_k: t.Sequence[_DistributionT], gamma_k: float
-    ) -> _PosWgt:
-        """
-        Update the position and weight for the next iteration.
-
-        This method should update the position and weight for the next iteration and return it.
-
-        :param pos_wgt_k: The position and weight that come from the current sample.
-        :param lst_mu_k: The list of distributions drawn from the sampler at the current iteration.
-        :param gamma_k: The learning rate for the next sample.
-        """
-        pass
 
     def _compute_wass_dist(
         self, pos_wgt_k: _PosWgt, pos_wgt_kp1: _PosWgt, gamma_k: float
@@ -220,18 +248,44 @@ class BaseSGDW(t.Generic[_DistributionT, _PosWgt], metaclass=abc.ABCMeta):
         wass_dist = self._compute_wass_dist(pos_wgt_k, pos_wgt_kp1, gamma_k)
         return self.iter_params.update_wass_dist(wass_dist)
 
-    def _create_barycenter(self, pos_wgt: _PosWgt) -> _DistributionT:
+    def create_barycenter(self, pos_wgt: _PosWgt) -> _DistributionT:
         """
         Create the barycenter from the position and weight. This method is called at the end of the algorithm. To use
         template pattern
         """
         return self.create_distribution(pos_wgt)
 
-    def callback(self):
+    def init_algorithm(self) -> tuple[t.Sequence[_DistributionT], _PosWgt]:
         """
-        Callback function to be called at the end of the algorithm. To be implemented by the user.
+        Initialize the algorithm.
         """
-        pass
+        # Step 1: Sampling a mu_0
+        lst_mu_k, pos_wgt_k = self.first_sample()
+
+        self.hist.init_histories(lst_mu_k, pos_wgt_k)
+
+        return lst_mu_k, pos_wgt_k
+
+    def step_algorithm(self, k: int, pos_wgt_k: _PosWgt) -> _PosWgt:
+        """
+        Run a step of the algorithm.
+        """
+        # Step 2: Draw S_k samples from the distribution sampler
+        S_k = self.schd.batch_size(k)
+        lst_mu_k = self.samp_distributions(S_k)
+
+        # Step 3: Compute the distribution of mu_{k+1}
+        gamma_k = self.schd.step_schedule(k)
+        pos_wgt_kp1 = self.update_pos_wgt(pos_wgt_k, lst_mu_k, gamma_k)
+
+        # Step 4 (optional): Compute the Wasserstein distance
+        self.compute_wass_dist(pos_wgt_k, pos_wgt_kp1, gamma_k)
+
+        # Step 5 (optional): Add to history
+        self.hist.update_histories(pos_wgt_kp1, lst_mu_k)
+
+        # If the iteration is a multiple of report_every, print the report
+        return pos_wgt_kp1
 
     @t.overload
     def run(
@@ -240,7 +294,7 @@ class BaseSGDW(t.Generic[_DistributionT, _PosWgt], metaclass=abc.ABCMeta):
         distr_hist: t.Literal[False] = ...,
         pos_wgt_samp_hist: t.Literal[False] = ...,
         distr_samp_hist: t.Literal[False] = ...,
-        include_dict: ReportOptions = ...,
+        include_dict: t.Optional[ReportOptions] = ...,
     ) -> _DistributionT: ...
 
     @t.overload
@@ -250,7 +304,7 @@ class BaseSGDW(t.Generic[_DistributionT, _PosWgt], metaclass=abc.ABCMeta):
         distr_hist: bool = ...,
         pos_wgt_samp_hist: bool = ...,
         distr_samp_hist: bool = ...,
-        include_dict: ReportOptions = ...,
+        include_dict: t.Optional[ReportOptions] = ...,
     ) -> tuple[_DistributionT, History[_DistributionT, _PosWgt]]: ...
 
     @t.overload
@@ -260,7 +314,7 @@ class BaseSGDW(t.Generic[_DistributionT, _PosWgt], metaclass=abc.ABCMeta):
         distr_hist: t.Literal[True] = ...,
         pos_wgt_samp_hist: bool = ...,
         distr_samp_hist: bool = ...,
-        include_dict: ReportOptions = ...,
+        include_dict: t.Optional[ReportOptions] = ...,
     ) -> tuple[_DistributionT, History[_DistributionT, _PosWgt]]: ...
 
     @t.overload
@@ -270,7 +324,7 @@ class BaseSGDW(t.Generic[_DistributionT, _PosWgt], metaclass=abc.ABCMeta):
         distr_hist: bool = ...,
         pos_wgt_samp_hist: t.Literal[True] = ...,
         distr_samp_hist: bool = ...,
-        include_dict: ReportOptions = ...,
+        include_dict: t.Optional[ReportOptions] = ...,
     ) -> tuple[_DistributionT, History[_DistributionT, _PosWgt]]: ...
 
     @t.overload
@@ -280,7 +334,7 @@ class BaseSGDW(t.Generic[_DistributionT, _PosWgt], metaclass=abc.ABCMeta):
         distr_hist: bool = ...,
         pos_wgt_samp_hist: bool = ...,
         distr_samp_hist: t.Literal[True] = ...,
-        include_dict: ReportOptions = ...,
+        include_dict: t.Optional[ReportOptions] = ...,
     ) -> tuple[_DistributionT, History[_DistributionT, _PosWgt]]: ...
 
     def run(
@@ -289,7 +343,7 @@ class BaseSGDW(t.Generic[_DistributionT, _PosWgt], metaclass=abc.ABCMeta):
         distr_hist=False,
         pos_wgt_samp_hist=False,
         distr_samp_hist=False,
-        include_dict: ReportOptions = None,
+        include_dict: t.Optional[ReportOptions] = None,
     ):
         """
         Run the algorithm.
@@ -314,39 +368,22 @@ class BaseSGDW(t.Generic[_DistributionT, _PosWgt], metaclass=abc.ABCMeta):
 
         self.report.set_params(include_dict=include_dict)
 
-        # Step 1: Sampling a mu_0. For convention, we use mu_k to denote the current sample
-        lst_mu_k, pos_wgt_k = self.first_sample()
-
-        self.hist.init_histories(lst_mu_k, pos_wgt_k)
+        _, pos_wgt_k = self.init_algorithm()
 
         # The logic of the detention criteria and update are in the iterable class `IterationParameters`
         for k in self.iter_params:
-
-            # Step 2: Draw S_k samples from the distribution sampler
-            S_k = self.schd.batch_size(k)
-            lst_mu_k = self.samp_distributions(S_k)
-
-            # Step 3: Compute the distribution of mu_{k+1}
-            gamma_k = self.schd.step_schedule(k)
-            pos_wgt_kp1 = self.update_pos_wgt(pos_wgt_k, lst_mu_k, gamma_k)
-
-            # Step 4 (optional): Compute the Wasserstein distance
-            self.compute_wass_dist(pos_wgt_k, pos_wgt_kp1, gamma_k)
-
-            # Step 5 (optional): Add to history
-            self.hist.update_histories(pos_wgt_kp1, lst_mu_k)
+            # Run a step of the algorithm
+            pos_wgt_k = self.step_algorithm(k, pos_wgt_k)
 
             # If the iteration is a multiple of report_every, print the report
             if self.report.is_report_iter():
+                gamma_k = self.schd.step_schedule(k)
                 _log.info(self.report.make_report(gamma_k))
 
             # Callback
             self.callback()
 
-            # Step 6: Update
-            pos_wgt_k = pos_wgt_kp1
-
-        barycenter = self._create_barycenter(pos_wgt_k)
+        barycenter = self.create_barycenter(pos_wgt_k)
 
         if self.hist.has_histories():
             return barycenter, self.hist
@@ -431,7 +468,7 @@ class DiscreteDistributionSGDW(BaseSGDW[dist.DiscreteDistribution, _DiscretePosW
         X_k, m = pos_wgt_k
         X_kp1, m = pos_wgt_kp1
         diff = X_k - X_kp1
-        w_dist = float((gamma_k**2) * torch.sum(m * LA.norm(diff, dim=1) ** 2))
+        w_dist = float((gamma_k ** 2) * torch.sum(m * LA.norm(diff, dim=1) ** 2))
         return w_dist
 
 
@@ -548,7 +585,7 @@ class DistributionDrawSGDW(
             gs_weights_kp1 = self.projector(gs_weights_kp1).to(self.val)
         return gs_weights_kp1
 
-    def _create_barycenter(self, pos_wgt):
+    def create_barycenter(self, pos_wgt):
         # In the last iteration, project to the manifold
         if self.projector is not None:
             pos_wgt = self.projector(pos_wgt).to(self.val)
@@ -641,10 +678,10 @@ def compute_bwb_discrete_distribution(
         if k % report_every == 0:
             _log.info(
                 _bar + f" {k = }, "
-                f"w_dist = {w_dist:.4f}, "
-                f"t = {toc - tic:.2f} [seg], "
-                f"Δt = {diff_t * 1000:.2f} [ms], "
-                f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.2f} [ms/iter] " + _bar
+                       f"w_dist = {w_dist:.4f}, "
+                       f"t = {toc - tic:.2f} [seg], "
+                       f"Δt = {diff_t * 1000:.2f} [ms], "
+                       f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.2f} [ms/iter] " + _bar
             )
 
         if distrib_sampler_history:
@@ -680,7 +717,7 @@ def compute_bwb_discrete_distribution(
 
         # Compute Wasserstein distance
         diff = X_k - T_X_k
-        w_dist = float((gamma_k**2) * torch.sum(m * LA.norm(diff, dim=1) ** 2))
+        w_dist = float((gamma_k ** 2) * torch.sum(m * LA.norm(diff, dim=1) ** 2))
 
         # Add to history
         if position_history:
@@ -752,9 +789,9 @@ def compute_bwb_distribution_draw(
         if k % report_every == 0:
             _log.info(
                 _bar + f" {k = }, "
-                f"t = {toc - tic:.2f} [seg], "
-                f"Δt = {diff_t * 1000:.2f} [ms], "
-                f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.2f} [ms/iter] " + _bar
+                       f"t = {toc - tic:.2f} [seg], "
+                       f"Δt = {diff_t * 1000:.2f} [ms], "
+                       f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.2f} [ms/iter] " + _bar
             )
 
         m_k: dist.DistributionDraw = distrib_sampler.draw()
@@ -846,9 +883,9 @@ def compute_bwb_distribution_draw_projected(
         if k % report_every == 0:
             _log.info(
                 _bar + f" {k = }, "
-                f"t = {toc - tic:.2f} [seg], "
-                f"Δt = {diff_t * 1000:.2f} [ms], "
-                f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.2f} [ms/iter] " + _bar
+                       f"t = {toc - tic:.2f} [seg], "
+                       f"Δt = {diff_t * 1000:.2f} [ms], "
+                       f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.2f} [ms/iter] " + _bar
             )
 
         m_k: dist.DistributionDraw = distrib_sampler.draw()
