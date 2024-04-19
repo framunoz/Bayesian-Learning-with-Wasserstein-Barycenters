@@ -10,10 +10,11 @@ import ot
 import torch
 from torch import linalg as LA
 
+import bwb._logging as logging
 import bwb.bregman
 import bwb.distributions as dist
 import bwb.transports as tpt
-from bwb import logging, utils
+from bwb import utils
 from bwb.sgdw.utils import DetentionParameters, History, IterationParameters, Report, ReportOptions, Schedule
 from wgan_gp.wgan_gp_vae.utils import ProjectorOnManifold
 

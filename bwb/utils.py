@@ -12,7 +12,7 @@ import numpy as np
 import PIL.Image
 import torch
 
-import bwb.logging as logging
+import bwb._logging as logging
 from bwb.config import config
 from bwb.exceptions import AutocorrError
 

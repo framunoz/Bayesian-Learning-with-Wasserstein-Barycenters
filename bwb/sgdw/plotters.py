@@ -5,12 +5,12 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 
+import bwb._logging as logging
 from bwb.distributions import DistributionDraw
-from bwb.logging import get_logger
 from bwb.sgdw.sgdw import BaseSGDW, Runnable
 from bwb.sgdw.utils import ReportOptions
 
-_log = get_logger(__name__)
+_log = logging.get_logger(__name__)
 
 
 class Plotter[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], metaclass=abc.ABCMeta):

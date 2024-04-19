@@ -4,8 +4,8 @@ from typing import Protocol
 import ot.backend
 import torch
 
+import bwb._logging as logging
 import bwb.transports as tpt
-from bwb import logging
 from bwb.utils import _partition
 from bwb.validation import check_is_fitted
 

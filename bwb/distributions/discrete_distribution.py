@@ -10,7 +10,7 @@ import torch.distributions
 import torchvision.transforms.functional as F
 from PIL import Image
 
-from bwb import logging
+import bwb._logging as logging
 from bwb.config import config
 from bwb.utils import grayscale_parser
 from bwb.validation import _shape_validation

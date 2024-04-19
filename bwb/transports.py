@@ -3,12 +3,10 @@ from __future__ import annotations
 import typing
 
 import numpy as np
-
-# noinspection PyPackageRequirements
 import ot
 
+import bwb._logging as logging
 from bwb import distributions as distrib
-from bwb import logging
 
 _log = logging.get_logger(__name__)
 

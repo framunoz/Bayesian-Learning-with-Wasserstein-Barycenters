@@ -10,9 +10,9 @@ import PIL.Image
 import seaborn as sns
 from matplotlib import pyplot as plt
 
-from bwb.logging import get_logger
+import bwb._logging as logging
 
-_log = get_logger(__name__)
+_log = logging.get_logger(__name__)
 
 
 # noinspection PyMissingOrEmptyDocstring,PyPropertyDefinition

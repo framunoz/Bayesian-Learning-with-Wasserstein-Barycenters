@@ -1,7 +1,6 @@
 import torch
 
-from bwb import logging
-from bwb.logging import _SingletonMeta
+import bwb._logging as logging
 
 _log = logging.get_logger(__name__)
 
