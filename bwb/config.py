@@ -1,3 +1,9 @@
+"""
+Configuration module for the library. This module contains the configuration class and some helper functions to
+change the configuration. The configuration is a singleton, so it is shared across the whole library.
+"""
+import threading
+
 import torch
 
 import bwb._logging as logging
@@ -5,7 +11,26 @@ import bwb._logging as logging
 _log = logging.get_logger(__name__)
 
 
+# noinspection DuplicatedCode
+class _SingletonMeta(type):
+    """Metaclass to implements Singleton Pattern. Obtained from
+    https://refactoring.guru/design-patterns/singleton/python/example#example-1"""
+
+    _instances = {}
+    _lock: threading.Lock = threading.Lock()
+
+    def __call__(cls, *args, **kwargs):
+        with cls._lock:
+            if cls not in cls._instances:
+                instance = super().__call__(*args, **kwargs)
+                cls._instances[cls] = instance
+        return cls._instances[cls]
+
+
 class Config(metaclass=_SingletonMeta):
+    """
+    Configuration class for the library. This class is a singleton, so it is shared across the whole library.
+    """
     # The dtype selected by default
     dtype = torch.float64
 
@@ -35,7 +60,8 @@ conf = config  # Alias for config
 
 def use_half_precision():
     """
-    Use half precision (float16) for all tensors. This may be much faster on GPUs, but has reduced precision and may more often cause numerical instability. Only recommended on GPUs.
+    Use half precision (float16) for all tensors. This may be much faster on GPUs, but has reduced precision and may
+    more often cause numerical instability. Only recommended on GPUs.
     """
     if config.device.type == 'cpu':
         print('WARNING: half precision not recommend on CPU')
@@ -44,21 +70,24 @@ def use_half_precision():
 
 def use_single_precision():
     """
-    Use single precision (float32) for all tensors. This may be faster on GPUs, but has reduced precision and may more often cause numerical instability.
+    Use single precision (float32) for all tensors. This may be faster on GPUs, but has reduced precision and may more
+    often cause numerical instability.
     """
     config.dtype = torch.float32
 
 
 def use_double_precision():
     """
-    Use double precision (float64) for all tensors. This is the recommended precision for numerical stability, but can be significantly slower.
+    Use double precision (float64) for all tensors. This is the recommended precision for numerical stability,
+    but can be significantly slower.
     """
     config.dtype = torch.float64
 
 
 def use_cpu(n=None):
     """
-    Use the CPU instead of the GPU for tensor calculations. This is the default if no GPU is available. If you have more than one CPU, you can use a specific CPU by setting `n`.
+    Use the CPU instead of the GPU for tensor calculations. This is the default if no GPU is available.
+    If you have more than one CPU, you can use a specific CPU by setting `n`.
     """
     if n is None:
         config.device = torch.device('cpu')
@@ -68,7 +97,8 @@ def use_cpu(n=None):
 
 def use_gpu(n=None):
     """
-    Use the GPU instead of the CPU for tensor calculations. This is the default if a GPU is available. If you have more than one GPU, you can use a specific GPU by setting `n`.
+    Use the GPU instead of the CPU for tensor calculations. This is the default if a GPU is available.
+    If you have more than one GPU, you can use a specific GPU by setting `n`.
     """
     if not torch.cuda.is_available():
         _log.error("CUDA is not available")
@@ -98,6 +128,7 @@ def print_gpu_information():
 
 def set_eps(val):
     """
-    Set the positive minimum for kernel parameters. This is usually slightly larger than zero to avoid numerical instabilities. Default is at 1e-8.
+    Set the positive minimum for kernel parameters. This is usually slightly larger than zero to avoid numerical
+    instabilities. Default is at 1e-8.
     """
     config.eps = val
