@@ -16,7 +16,7 @@ matplotlib = "^3.8.4"
 seaborn = "^0.13.2"
 ipyplot = "^1.1.2"
 quick-torch = "^1.0.4"
-pyro-ppl = "^1.9.0"
+hamiltorch = { git = "https://github.com/AdamCobb/hamiltorch" }
 
 
 [[tool.poetry.source]]
@@ -29,6 +29,7 @@ priority = "explicit"
 jupyter = "^1.0.0"
 mypy = "^1.9.0"
 monkeytype = "^23.3.0"
+pyro-ppl = "^1.9.0"
 
 [build-system]
 requires = ["poetry-core"]

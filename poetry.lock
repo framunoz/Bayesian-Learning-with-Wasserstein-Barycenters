@@ -708,6 +708,26 @@ files = [
 ]
 
 [[package]]
+name = "hamiltorch"
+version = "0.4.1"
+description = "A PyTorch-based library for Riemannian Manifold Hamiltonian Monte Carlo (RMHMC) and inference in Bayesian neural networks"
+optional = false
+python-versions = "*"
+files = []
+develop = false
+
+[package.dependencies]
+numpy = "*"
+termcolor = "*"
+torch = ">=1.6.0"
+
+[package.source]
+type = "git"
+url = "https://github.com/AdamCobb/hamiltorch"
+reference = "HEAD"
+resolved_reference = "ec972d4686385f7839d8f062e6a7a13365f00174"
+
+[[package]]
 name = "httpcore"
 version = "1.0.5"
 description = "A minimal low-level HTTP client."
@@ -3066,6 +3086,20 @@ files = [
 mpmath = ">=0.19"
 
 [[package]]
+name = "termcolor"
+version = "2.4.0"
+description = "ANSI color formatting for output in terminal"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "termcolor-2.4.0-py3-none-any.whl", hash = "sha256:9297c0df9c99445c2412e832e882a7884038a25617c60cea2ad69488d4040d63"},
+    {file = "termcolor-2.4.0.tar.gz", hash = "sha256:aab9e56047c8ac41ed798fa36d892a37aca6b3e9159f3e0c24bc64a9b3ac7b7a"},
+]
+
+[package.extras]
+tests = ["pytest", "pytest-cov"]
+
+[[package]]
 name = "terminado"
 version = "0.18.1"
 description = "Tornado websocket backend for the Xterm.js Javascript terminal emulator library."
@@ -3396,4 +3430,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "c8dd788f0c08f7a2b01ec1ffba4fe1b0cf017d10629eecd05eda7b8896b4f840"
+content-hash = "fbdd044113d80278283a4954dd02353623ebe2c85f09e4f1fa172e985e5f8e0e"
