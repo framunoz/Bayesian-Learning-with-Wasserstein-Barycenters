@@ -5,7 +5,7 @@ import torch
 
 import bwb._logging as logging
 import bwb.transports as tpt
-from bwb.utils import _partition
+from bwb.utils import partition
 from bwb.validation import check_is_fitted
 
 _log = logging.get_logger(__name__)
@@ -107,7 +107,7 @@ class PartitionedBarycentricProjGeodesic(BarycentricProjGeodesic):
     @logging.register_init_method(_log)
     def _fit(self, Xs=None, mu_s=None, Xt=None, mu_t=None):
         # nx = ot.backend.get_backend(Xs, mu_s, Xt, mu_t)
-        Xs, mu_s = _partition(X=Xs, mu=mu_s, alpha=torch.tensor(self.alpha))
+        Xs, mu_s = partition(X=Xs, mu=mu_s, alpha=self.alpha)
         # Xs, mu_s = nx.from_numpy(X_, type_as=Xs), nx.from_numpy(mu_, type_as=mu_s)
 
         return super(PartitionedBarycentricProjGeodesic, self)._fit(Xs, mu_s, Xt, mu_t)

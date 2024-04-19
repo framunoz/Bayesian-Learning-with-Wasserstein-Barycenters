@@ -36,21 +36,19 @@ _log = logging.get_logger(__name__)
 
 
 @t.runtime_checkable
-class PDiscreteDistribSampler(t.Protocol):
+class DiscreteDistribSamplerP(t.Protocol):
     """
     Protocol for the distribution sampler.
     """
     samples_counter: c.Counter[int]
-    ...
 
 
 @t.runtime_checkable
-class PDraw(t.Protocol):
+class DrawP(t.Protocol):
     """
     Protocol for the draw.
     """
     image: PIL.Image.Image
-    ...
 
 
 def next_pow_two(n):
@@ -219,14 +217,14 @@ def set_generator(seed: int = None, device: device_t = "cpu") -> torch.Generator
     return gen
 
 
-def freq_labels_dist_sampler(dist_sampler: PDiscreteDistribSampler) -> t.Sequence[str]:
+def freq_labels_dist_sampler(dist_sampler: DiscreteDistribSamplerP) -> t.Sequence[str]:
     """
     Function that returns the most common labels in the dist_sampler.
 
     :param dist_sampler: The distribution sampler to analyse.
     :return: A list of strings with the most common labels in the dist_sampler.
     """
-    if not isinstance(dist_sampler, PDiscreteDistribSampler):
+    if not isinstance(dist_sampler, DiscreteDistribSamplerP):
         msg = "The dist_sampler must be an instance of PDiscreteDistribSampler."
         _log.error(msg)
         raise TypeError(msg)
@@ -236,7 +234,7 @@ def freq_labels_dist_sampler(dist_sampler: PDiscreteDistribSampler) -> t.Sequenc
     ]
 
 
-def normalised_samples_ordered_dict(posterior: PDiscreteDistribSampler):
+def normalised_samples_ordered_dict(posterior: DiscreteDistribSamplerP):
     """
     Function that returns an ordered dictionary with the normalised samples in the posterior instance.
 
