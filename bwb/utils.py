@@ -19,6 +19,7 @@ from bwb.exceptions import AutocorrError
 __all__ = [
     "array_like_t",
     "device_t",
+    "seed_t",
     "timeit_to_total_time",
     "set_generator",
     "freq_labels_dist_sampler",
@@ -31,6 +32,7 @@ __all__ = [
 
 type array_like_t = np.ndarray | torch.Tensor | t.Iterable
 type device_t = str | torch.device | int | None
+type seed_t = int | None
 
 _log = logging.get_logger(__name__)
 
@@ -201,7 +203,7 @@ def timeit_to_total_time(method):
     return timeit_wrapper
 
 
-def set_generator(seed: int = None, device: device_t = "cpu") -> torch.Generator:
+def set_generator(seed: seed_t = None, device: device_t = "cpu") -> torch.Generator:
     """
     Set the generator for the random number generator.
 

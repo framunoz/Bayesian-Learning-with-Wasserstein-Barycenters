@@ -14,7 +14,7 @@ import bwb.distributions as dist
 import bwb.validation as validation
 from bwb.config import config
 from bwb.distributions.models import DiscreteModelsSetP
-from bwb.utils import set_generator, timeit_to_total_time
+from bwb.utils import seed_t, set_generator, timeit_to_total_time
 
 __all__ = [
     "DistributionSampler",
@@ -24,10 +24,7 @@ __all__ = [
     "BaseGeneratorDistribSampler",
     "GeneratorDistribSampler",
     "GeneratorP",
-    "seed_t",
 ]
-
-type seed_t = int | None
 
 
 class GeneratorP(t.Protocol):
