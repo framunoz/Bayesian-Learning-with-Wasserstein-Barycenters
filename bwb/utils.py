@@ -375,7 +375,7 @@ def plot_list_of_images(list_of_images: t.Sequence[PIL.Image.Image], **kwargs):
         ipyplot.plot_images(list_of_images, **kwargs)
 
 
-def plot_list_of_draws(list_of_draws: t.Sequence[PDraw], **kwargs):
+def plot_list_of_draws(list_of_draws: t.Sequence[DrawP], **kwargs):
     """
     Function that plots a list of DistributionDraws instances.
 
