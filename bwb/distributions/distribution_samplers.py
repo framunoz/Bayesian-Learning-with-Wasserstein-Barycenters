@@ -5,8 +5,11 @@ distributions from a set of models, and they are divided into two main categorie
 import abc
 import collections as c
 import copy
+import gzip
+import pickle
 import typing as t
 import warnings
+from pathlib import Path
 
 import torch
 
@@ -15,9 +18,9 @@ import bwb.distributions as dist
 import bwb.validation as validation
 from bwb.config import config
 from bwb.distributions.models import DiscreteModelsSetP
-from bwb.utils import seed_t, set_generator, timeit_to_total_time
+from bwb.utils import is_gzip, path_t, seed_t, set_generator, timeit_to_total_time
 
-_log = logging.getLogger(__name__)
+_log = logging.get_logger(__name__)
 
 __all__ = [
     "DistributionSampler",
@@ -68,6 +71,43 @@ class DistributionSampler[DistributionT](metaclass=abc.ABCMeta):
         :return: A sequence of sampled distributions.
         """
         ...
+
+    def save(self, filename: path_t) -> None:
+        """
+        Save the object to a file.
+
+        :param filename: The path to the file.
+        :return: None
+        """
+        filename: Path = Path(filename)
+
+        if is_gzip(filename):
+            f = gzip.open(filename, "wb")
+        else:
+            f = open(filename, "wb")
+
+        pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
+        f.close()
+
+    @classmethod
+    def load(cls, filename: path_t) -> t.Self:
+        """
+        Load the object from a file.
+
+        :param filename: The path to the file.
+        :return: The loaded object.
+        """
+        filename: Path = Path(filename)
+
+        if is_gzip(filename):
+            f = gzip.open(filename, "rb")
+        else:
+            f = open(filename, "rb")
+
+        obj = pickle.load(f)
+        f.close()
+
+        return obj
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"

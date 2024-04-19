@@ -6,6 +6,7 @@ import functools
 import time
 import typing as t
 import warnings
+from pathlib import Path
 
 import ipyplot
 import numpy as np
@@ -18,10 +19,12 @@ from bwb.exceptions import AutocorrError
 
 __all__ = [
     "array_like_t",
+    "set_generator",
     "device_t",
     "seed_t",
+    "is_gzip",
+    "path_t",
     "timeit_to_total_time",
-    "set_generator",
     "freq_labels_dist_sampler",
     "grayscale_parser",
     "normalised_samples_ordered_dict",
@@ -33,6 +36,7 @@ __all__ = [
 type array_like_t = np.ndarray | torch.Tensor | t.Iterable
 type device_t = str | torch.device | int | None
 type seed_t = int | None
+type path_t = str | Path
 
 _log = logging.get_logger(__name__)
 
@@ -217,6 +221,17 @@ def set_generator(seed: seed_t = None, device: device_t = "cpu") -> torch.Genera
         return gen
     gen.manual_seed(seed)
     return gen
+
+
+def is_gzip(filename: path_t) -> bool:
+    """
+    Function that checks if a file is a gzip file.
+
+    :param filename: The filename to check.
+    :return: A boolean indicating if the file is a gzip file.
+    """
+    filename: Path = Path(filename)
+    return filename.suffix == ".gz"
 
 
 def freq_labels_dist_sampler(dist_sampler: DiscreteDistribSamplerP) -> t.Sequence[str]:
