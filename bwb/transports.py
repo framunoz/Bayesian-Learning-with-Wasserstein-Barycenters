@@ -99,13 +99,11 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
 
         # check the necessary inputs parameters are here
         if ot.utils.check_params(Xs=Xs, Xt=Xt):
-
             # pairwise distance
             self.cost_ = ot.utils.dist(Xs, Xt, metric=self.metric)
             self.cost_ = ot.utils.cost_normalization(self.cost_, self.norm)
 
             if (ys is not None) and (yt is not None):
-
                 if self.limit_max != np.infty:
                     self.limit_max = self.limit_max * nx.max(self.cost_)
 
@@ -193,9 +191,7 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
 
         # check the necessary inputs parameters are here
         if ot.utils.check_params(Xs=Xs):
-
             if nx.array_equal(self.xs_, Xs):
-
                 # perform standard barycentric mapping
                 transp = self.coupling_ / nx.sum(self.coupling_, axis=1)[:, None]
 
@@ -208,7 +204,7 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
                 # perform out of sample mapping
                 indices = nx.arange(Xs.shape[0])
                 batch_ind = [
-                    indices[i : i + batch_size]
+                    indices[i:i + batch_size]
                     for i in range(0, len(indices), batch_size)
                 ]
 
@@ -259,7 +255,6 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
 
         # check the necessary inputs parameters are here
         if ot.utils.check_params(ys=ys):
-
             ysTemp = ot.utils.label_normalization(nx.copy(ys))
             classes = nx.unique(ysTemp)
             n = len(classes)
@@ -308,9 +303,7 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
 
         # check the necessary inputs parameters are here
         if ot.utils.check_params(Xt=Xt):
-
             if nx.array_equal(self.xt_, Xt):
-
                 # perform standard barycentric mapping
                 transp_ = self.coupling_.T / nx.sum(self.coupling_, 0)[:, None]
 
@@ -323,7 +316,7 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
                 # perform out of sample mapping
                 indices = nx.arange(Xt.shape[0])
                 batch_ind = [
-                    indices[i : i + batch_size]
+                    indices[i:i + batch_size]
                     for i in range(0, len(indices), batch_size)
                 ]
 
@@ -363,7 +356,6 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
 
         # check the necessary inputs parameters are here
         if ot.utils.check_params(yt=yt):
-
             ytTemp = ot.utils.label_normalization(nx.copy(yt))
             classes = nx.unique(ytTemp)
             n = len(classes)
