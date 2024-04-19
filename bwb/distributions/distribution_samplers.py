@@ -20,7 +20,6 @@ __all__ = [
     "DistributionSampler",
     "DiscreteDistribSampler",
     "UniformDiscreteSampler",
-    "ExplicitPosteriorSampler",
     "ContinuousDistribSampler",
     "BaseGeneratorDistribSampler",
     "GeneratorDistribSampler",
@@ -30,8 +29,6 @@ __all__ = [
 
 type seed_t = int | None
 
-def _log_likelihood_default(model: dist.DiscreteDistribution, data: torch.Tensor):
-    """Default log-likelihood of the posterior.
 
 class GeneratorP(t.Protocol):
     """
@@ -222,67 +219,6 @@ class UniformDiscreteSampler[DistributionT](DiscreteDistribSampler[DistributionT
 
         to_return += "("
         to_return += f"n_models={len(self.models_)}, "
-        to_return += f"samples={len(self.samples_history)}"
-        to_return += ")"
-
-        return to_return
-
-
-# noinspection PyAttributeOutsideInit
-class ExplicitPosteriorSampler[DistributionT](DiscreteDistribSampler[DistributionT]):
-    r"""Distribution that uses the strategy of calculating all likelihoods by brute force. This
-    class implements likelihoods of the form
-
-    .. math::
-        \mathcal{L}_n(m) = \prod_{i=1}^{n} \rho_{m}(x_i)
-
-    using the log-likelihood for stability. Finally, to compute the sampling probabilities, for a
-    discrete set :math:`\mathcal{M}` of models, using a uniform prior, we have the posterior
-    explicit by
-
-    .. math::
-        \Pi_n(m) = \frac{\mathcal{L}_n(m)}{\sum_{\bar m \in \mathcal{M}} \mathcal{L}_n(\bar m)}
-
-    """
-
-    @timeit_to_total_time
-    def fit(
-        self,
-        models: PDiscreteWeightedModelSet[DistributionT],
-        data: array_like_t,
-        **kwargs,
-    ):
-        r"""
-        Fit the posterior distribution.
-
-        :param data: The data to fit the posterior.
-        :param models: The models to fit the posterior.
-        :return: The fitted posterior.
-        """
-        super().fit(models)
-        self.data_: torch.Tensor = torch.as_tensor(data, device=config.device)
-
-        data = self.data_.reshape(1, -1)
-
-        self.probabilities_: torch.Tensor = models.compute_likelihood(data, **kwargs)
-
-        self.support_ = self.models_index_[self.probabilities_ > config.eps]
-
-        self._fitted = True
-
-        return self
-
-    def __repr__(self) -> str:
-        to_return = self.__class__.__name__
-
-        if not self._fitted:
-            to_return += "()"
-            return to_return
-
-        to_return += "("
-        to_return += f"n_data={len(self.data_)}, "
-        to_return += f"n_models={len(self.models_)}, "
-        to_return += f"n_support={len(self.support_)}, "
         to_return += f"samples={len(self.samples_history)}"
         to_return += ")"
 
@@ -545,18 +481,6 @@ class DiscretePosteriorPiN(DiscreteDistribSampler):
         # Raise a warning of deprecation
         warnings.warn(
             "DiscretePosteriorPiN is deprecated. Use DiscreteDistributionSampler instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-
-class ExplicitPosteriorPiN(ExplicitPosteriorSampler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # Raise a warning of deprecation
-        warnings.warn(
-            "ExplicitPosteriorPiN is deprecated. Use ExplicitPosteriorSampler instead.",
             DeprecationWarning,
             stacklevel=2,
         )
