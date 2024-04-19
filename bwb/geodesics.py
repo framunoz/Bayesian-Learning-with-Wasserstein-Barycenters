@@ -1,7 +1,6 @@
 import abc
 from typing import Protocol
 
-import ot.backend
 import torch
 
 import bwb._logging as logging
