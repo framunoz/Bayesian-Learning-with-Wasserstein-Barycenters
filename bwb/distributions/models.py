@@ -11,16 +11,16 @@ from bwb.distributions.discrete_distribution import DistributionDraw
 from bwb.utils import array_like_t
 
 __all__ = [
-    "PDiscreteModelsSet",
+    "DiscreteModelsSetP",
     "BaseDiscreteModelsSet",
-    "PDiscreteWeightedModelSet",
+    "DiscreteWeightedModelSetP",
     "BaseDiscreteWeightedModelSet",
     "ModelDataset",
 ]
 
 
 @t.runtime_checkable
-class PDiscreteModelsSet[DistributionT](t.Protocol):
+class DiscreteModelsSetP[DistributionT](t.Protocol):
     """
     Protocol for classes that are a set of models with a discrete support.
     """
@@ -51,7 +51,7 @@ class BaseDiscreteModelsSet[DistributionT](metaclass=abc.ABCMeta):
 
 
 @t.runtime_checkable
-class PDiscreteWeightedModelSet[DistributionT](PDiscreteModelsSet[DistributionT], t.Protocol):
+class DiscreteWeightedModelSetP[DistributionT](DiscreteModelsSetP[DistributionT], t.Protocol):
     """
     Protocol for classes that are a weighted set of models with a discrete support.
     """
