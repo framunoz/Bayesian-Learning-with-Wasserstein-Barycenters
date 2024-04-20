@@ -161,8 +161,9 @@ class ExplicitPosteriorSampler[DistributionT](DiscreteDistribSampler[Distributio
 # noinspection PyAttributeOutsideInit
 class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.DistributionDraw]):
     """
-    Base class for MCMC posterior samplers. This class try to mirror the `emcee` package, but using the `hamiltorch`
-    package as a backend. For this reason, many of the methods could be similar.
+    Base class for MCMC posterior samplers. This class try to mirror the `emcee` package, but
+    using the ``hamiltorch`` package as a backend. For this reason, many of the methods could be
+    similar.
     """
 
     def __init__(
@@ -178,10 +179,19 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
         **kwargs,
     ) -> None:
         super().__init__(save_samples=save_samples)
+        # The log-likelihood and log-prior functions
         self.log_likelihood_fn = log_likelihood_fn
         self.log_prior_fn = log_prior_fn
-        self.samples_history: list[list[torch.Tensor]] = [[]]
+
+        # The history of steps
+        self.n_walkers: int = 1
+        self.n_steps: int = 0
+        self.chains: list[list[torch.Tensor]] = self._create_empty_chains(1)
+
+        # The cache for the samples
         self.samples_cache: list[torch.Tensor] = []
+
+        # Arguments for the hamiltorch.sample function
         self._hamiltorch_kwargs = dict(
             num_samples=num_samples,
             num_steps_per_sample=num_steps_per_sample,
@@ -276,11 +286,12 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
         debug = hamiltorch_kwargs["debug"]
 
         if debug == 2:
-            samples, self.log = hamiltorch.sample(**hamiltorch_kwargs)
+            chain, self.log = hamiltorch.sample(**hamiltorch_kwargs)
         else:
-            samples = hamiltorch.sample(**hamiltorch_kwargs)
+            chain = hamiltorch.sample(**hamiltorch_kwargs)
 
-        self.samples_history[0].extend(samples)
+        self.chains[0].extend(chain)
+        self.n_steps += len(chain)
 
         return self
 
@@ -296,7 +307,7 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
             (default: ``0``)
         :return: The MCMC samples
         """
-        to_return = torch.stack(self.samples_history[0][discard::thin]).unsqueeze(1)
+        to_return = torch.stack(self.chains[0][discard::thin]).unsqueeze(1)
         if flat:
             to_return = to_return.reshape(-1, to_return.shape[-1])
         return to_return
@@ -368,24 +379,11 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
 
     @t.final
     @t.override
-    def draw(self, seed: seed_t = None) -> dist.DistributionDraw:
-        if not self._fitted:
-            check_is_fitted(self, ["generator_", "transform_out_", "noise_sampler_", "data_"])
-        return self._draw(seed)[0]
-
-    @t.final
-    @t.override
-    def rvs(self, size: int = 1, seed: seed_t = None) -> t.Sequence[dist.DistributionDraw]:
-        if not self._fitted:
-            check_is_fitted(self, ["generator_", "transform_out_", "noise_sampler_", "data_"])
-        return self._rvs(size, seed)[0]
-
-    @t.final
-    @t.override
     def create_distribution(self, input_: torch.Tensor) -> dist.DistributionDraw:
         return dist.DistributionDraw.from_grayscale_weights(input_.squeeze())
 
-    def _additional_repr_(self, sep) -> str:
+    @t.override
+    def _additional_repr_(self, sep: str) -> str:
         to_return = ""
 
         if hasattr(self, "data_"):
@@ -394,8 +392,8 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
         if self.samples_cache:
             to_return += f"n_cached_samples={len(self.samples_cache)}" + sep
 
-        if self.samples_history[0]:
-            to_return += f"n_total_iterations={len(self.samples_history[0])}" + sep
+        if self.chains[0]:
+            to_return += f"n_steps={self.n_steps}" + sep
 
         return to_return
 
@@ -421,7 +419,7 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
             generator=generator, transform_out=transform_out, noise_sampler=noise_sampler, data=data
         )
 
-        new.samples_history = copy.copy(self.samples_history)
+        new.chains = copy.copy(self.chains)
         new.samples_cache = copy.copy(self.samples_cache)
         new.log = copy.copy(self.log)
 
@@ -454,7 +452,7 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
             generator=generator, transform_out=transform_out, noise_sampler=noise_sampler, data=data
         )
 
-        new.samples_history = copy.deepcopy(self.samples_history, memo)
+        new.chains = copy.deepcopy(self.chains, memo)
         new.samples_cache = copy.deepcopy(self.samples_cache, memo)
         new.log = copy.deepcopy(self.log, memo)
 
@@ -469,6 +467,25 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
         :return: The object itself.
         """
         self.samples_cache = []
+        return self
+
+    def _create_empty_chains(self, n_walkers: int = None) -> list[list[torch.Tensor]]:
+        """
+        Create an empty list of chains.
+
+        :param n_walkers: The number of walkers.
+        :return: The list of chains.
+        """
+        return [[] for _ in range(n_walkers or self.n_walkers)]
+
+    def reset_chain(self) -> t.Self:
+        """
+        Reset the chain.
+
+        :return: The object itself.
+        """
+        self.chains = self._create_empty_chains()
+        self.n_steps = 0
         return self
 
     def _get_hamiltorch_kwargs(self, **kwargs) -> dict:
@@ -511,7 +528,7 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
         self.n_workers = n_workers
         self.n_walkers = n_walkers
         self.parallel = parallel
-        self.samples_history: list[list[torch.Tensor]] = [[] for _ in range(n_walkers)]
+        self.chains: list[list[torch.Tensor]] = self._create_empty_chains(n_walkers)
 
     @timeit_to_total_time
     def run(
@@ -545,20 +562,20 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
 
         params_hmc = hamiltorch.util.multi_chain(chain, n_workers, seeds, parallel)
 
-        other_list = []
+        log_list = []
         for i, params in enumerate(params_hmc):
             if debug == 2:
-                params, other = params
-                self.samples_history[i].extend(params)
-                other_list.append(other)
-            self.samples_history[i].extend(params)
+                params, log = params
+                log_list.append(log)
+            self.chains[i].extend(params)
+            self.n_steps += len(params)
 
-        self.log = other_list
+        self.log = log_list
 
         return self
 
     def get_chain(self, flat: bool = False, thin: int = 1, discard: int = 0) -> torch.Tensor:
-        samples_per_chain = [torch.stack(samples) for samples in self.samples_history]
+        samples_per_chain = [torch.stack(chain) for chain in self.chains]
         to_return = torch.stack(samples_per_chain, dim=1)
         to_return = to_return[discard::thin]
         if flat:
@@ -604,7 +621,7 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
             generator=generator, transform_out=transform_out, noise_sampler=noise_sampler, data=data
         )
 
-        new.samples_history = copy.copy(self.samples_history)
+        new.chains = copy.copy(self.chains)
         new.samples_cache = copy.copy(self.samples_cache)
         new.log = copy.copy(self.log)
 
@@ -640,7 +657,7 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
             generator=generator, transform_out=transform_out, noise_sampler=noise_sampler, data=data
         )
 
-        new.samples_history = copy.deepcopy(self.samples_history, memo)
+        new.chains = copy.deepcopy(self.chains, memo)
         new.samples_cache = copy.deepcopy(self.samples_cache, memo)
         new.log = copy.deepcopy(self.log, memo)
 
@@ -707,7 +724,7 @@ class NUTSPosteriorSampler(LatentMCMCPosteriorSampler):
             generator=generator, transform_out=transform_out, noise_sampler=noise_sampler, data=data
         )
 
-        new.samples_history = copy.copy(self.samples_history)
+        new.chains = copy.copy(self.chains)
         new.samples_cache = copy.copy(self.samples_cache)
         new.log = copy.copy(self.log)
 
@@ -744,7 +761,7 @@ class NUTSPosteriorSampler(LatentMCMCPosteriorSampler):
             generator=generator, transform_out=transform_out, noise_sampler=noise_sampler, data=data
         )
 
-        new.samples_history = copy.deepcopy(self.samples_history, memo)
+        new.chains = copy.deepcopy(self.chains, memo)
         new.samples_cache = copy.deepcopy(self.samples_cache, memo)
         new.log = copy.deepcopy(self.log, memo)
 
@@ -765,118 +782,145 @@ class ExplicitPosteriorPiN(ExplicitPosteriorSampler):
         )
 
 
+def _noise_sampler(size):
+    """Dummy noise_sampler."""
+    return torch.rand((size, 128, 1, 1)).to(config.device)
+
+
+def _generator(z):
+    """Dummy generator."""
+    return torch.rand((1, 32, 32)).to(config.device)
+
+
+def _transform_out(x):
+    """Dummy transform_out."""
+    return x
+
+
 # noinspection DuplicatedCode
 def __main():
     from icecream import ic
+    from pathlib import Path
+
+    BASE_LATENT_MCMC_POSTERIOR_SAMPLER = False
+    LATENT_MCMC_POSTERIOR_SAMPLER = False
+    NUTS_POSTERIOR_SAMPLER = True
+
     input_size = 128
     output_size = (32, 32)
     n_data = 100
     data_ = torch.randint(0, output_size[0] * output_size[1], (n_data,)).to(config.device)
 
-    def noise_sampler(size):
-        """Dummy noise_sampler."""
-        return torch.rand((size, input_size, 1, 1)).to(config.device)
-
-    def generator(z):
-        """Dummy generator."""
-        return torch.rand((1, output_size[0], output_size[1])).to(config.device)
-
-    def transform_out(x):
-        """Dummy transform_out."""
-        return x
-
     # ======== BaseLatentMCMCPosteriorSampler ========
-    # Test representation
-    ic()
-    posterior = BaseLatentMCMCPosteriorSampler()
-    ic(posterior)
+    if BASE_LATENT_MCMC_POSTERIOR_SAMPLER:
+        # Test representation
+        ic()
+        posterior = BaseLatentMCMCPosteriorSampler()
+        ic(posterior)
 
-    # Test fit
-    try:
+        # Test fit
+        try:
+            posterior.draw()
+        except Exception as e:
+            ic(e)
+        try:
+            posterior.rvs(10)
+        except Exception as e:
+            ic(e)
+        posterior.fit(_generator, _transform_out, _noise_sampler, data_)
+        ic("fit test", posterior)
+
+        # Test draw and rvs
         posterior.draw()
-    except Exception as e:
-        ic(e)
-    try:
         posterior.rvs(10)
-    except Exception as e:
-        ic(e)
-    posterior.fit(generator, transform_out, noise_sampler, data_)
-    ic("fit test", posterior)
+        ic("sample test", posterior)
 
-    # Test draw and rvs
-    posterior.draw()
-    posterior.rvs(10)
-    ic("sample test", posterior)
-
-    # Test copy and deep copy
-    posterior_ = copy.copy(posterior)
-    ic("copy test", posterior_)
-    posterior_ = copy.deepcopy(posterior)
-    ic("deep copy test", posterior_)
+        # Test copy and deep copy
+        posterior_ = copy.copy(posterior)
+        ic("copy test", posterior_)
+        posterior_ = copy.deepcopy(posterior)
+        ic("deep copy test", posterior_)
 
     # ======== LatentMCMCPosteriorSampler ========
-    ic()
-    # Test representation
-    posterior = LatentMCMCPosteriorSampler()
-    ic(posterior)
-    ic(LatentMCMCPosteriorSampler(parallel=True))
-    ic(LatentMCMCPosteriorSampler(n_walkers=2))
-    ic(LatentMCMCPosteriorSampler(n_workers=2, parallel=True))
+    if LATENT_MCMC_POSTERIOR_SAMPLER:
+        ic()
+        # Test representation
+        posterior = LatentMCMCPosteriorSampler()
+        ic(posterior)
+        ic(LatentMCMCPosteriorSampler(parallel=True))
+        ic(LatentMCMCPosteriorSampler(n_walkers=2))
+        ic(LatentMCMCPosteriorSampler(n_workers=2, parallel=True))
 
-    # Test fit
-    try:
+        # Test fit
+        try:
+            posterior.draw()
+        except Exception as e:
+            ic(e)
+        try:
+            posterior.rvs(10)
+        except Exception as e:
+            ic(e)
+        posterior.fit(_generator, _transform_out, _noise_sampler, data_)
+        ic("fit test", posterior)
+
+        # Test draw and rvs
         posterior.draw()
-    except Exception as e:
-        ic(e)
-    try:
         posterior.rvs(10)
-    except Exception as e:
-        ic(e)
-    posterior.fit(generator, transform_out, noise_sampler, data_)
-    ic("fit test", posterior)
+        ic("sample test", posterior)
 
-    # Test draw and rvs
-    posterior.draw()
-    posterior.rvs(10)
-    ic("sample test", posterior)
-
-    # Test copy and deep copy
-    posterior_ = copy.copy(posterior)
-    ic("copy test", posterior_)
-    posterior_ = copy.deepcopy(posterior)
-    ic("deep copy test", posterior_)
+        # Test copy and deep copy
+        posterior_ = copy.copy(posterior)
+        ic("copy test", posterior_)
+        posterior_ = copy.deepcopy(posterior)
+        ic("deep copy test", posterior_)
 
     # ======== NUTSPosteriorSampler ========
-    ic()
-    # Test representation
-    posterior = NUTSPosteriorSampler()
-    ic(posterior)
-    ic(NUTSPosteriorSampler(parallel=True))
-    ic(NUTSPosteriorSampler(n_walkers=2))
-    ic(NUTSPosteriorSampler(n_workers=2, parallel=True))
+    if NUTS_POSTERIOR_SAMPLER:
+        ic()
+        # Test representation
+        posterior = NUTSPosteriorSampler()
+        ic(posterior)
+        ic(NUTSPosteriorSampler(parallel=True))
+        ic(NUTSPosteriorSampler(n_walkers=2))
+        ic(NUTSPosteriorSampler(n_workers=2, parallel=True))
 
-    # Test fit
-    try:
+        # Test fit
+        try:
+            posterior.draw()
+        except Exception as e:
+            ic(e)
+        try:
+            posterior.rvs(10)
+        except Exception as e:
+            ic(e)
+        posterior.fit(_generator, _transform_out, _noise_sampler, data_)
+        ic("fit test", posterior)
+
+        # Test draw and rvs
         posterior.draw()
-    except Exception as e:
-        ic(e)
-    try:
         posterior.rvs(10)
-    except Exception as e:
-        ic(e)
-    posterior.fit(generator, transform_out, noise_sampler, data_)
-    ic("fit test", posterior)
+        ic("sample test", posterior)
 
-    # Test draw and rvs
-    posterior.draw()
-    posterior.rvs(10)
-    ic("sample test", posterior)
+        # Test copy and deep copy
+        posterior_ = copy.copy(posterior)
+        ic("copy test", posterior_)
+        posterior_ = copy.deepcopy(posterior)
+        ic("deep copy test", posterior_)
 
-    # Test copy and deep copy
-    posterior_ = copy.copy(posterior)
-    ic("copy test", posterior_)
-    posterior_ = copy.deepcopy(posterior)
-    ic("deep copy test", posterior_)
+        # Save test
+        SAVE_PATH = Path("posterior_sampler.pkl")
+        ic(posterior.noise_sampler_)
+        posterior.save(SAVE_PATH)
+        posterior_ = NUTSPosteriorSampler.load(SAVE_PATH)
+        ic("save test", posterior_)
+        SAVE_PATH.unlink()
+
+        # Save test with gzip
+        SAVE_PATH = Path("posterior_sampler.pkl.gz")
+        posterior.save(SAVE_PATH)
+        posterior_ = NUTSPosteriorSampler.load(SAVE_PATH)
+        ic("save test with gzip", posterior_)
+        SAVE_PATH.unlink()
 
 
 if __name__ == '__main__':
