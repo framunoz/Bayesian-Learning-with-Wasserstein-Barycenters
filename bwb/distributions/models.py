@@ -7,6 +7,7 @@ import typing as t
 import torch
 from torchvision.datasets import VisionDataset
 
+from bwb.config import conf
 from bwb.distributions.discrete_distribution import DistributionDraw
 from bwb.utils import array_like_t
 
@@ -66,7 +67,9 @@ class DiscreteWeightedModelSetP[DistributionT](DiscreteModelsSetP[DistributionT]
         ...
 
 
-class BaseDiscreteWeightedModelSet[DistributionT](BaseDiscreteModelsSet[DistributionT], metaclass=abc.ABCMeta):
+class BaseDiscreteWeightedModelSet[DistributionT](
+    BaseDiscreteModelsSet[DistributionT], metaclass=abc.ABCMeta
+):
     """
     Base class for a weighted set of models with a discrete support.
     """
@@ -84,14 +87,26 @@ class BaseDiscreteWeightedModelSet[DistributionT](BaseDiscreteModelsSet[Distribu
 
 class ModelDataset(BaseDiscreteModelsSet[DistributionDraw]):
     """
-    An adapter class that adapts a torchvision.vision.VisionDataset to a BaseDiscreteModelsSet.
+    An adapter class that adapts a ``torchvision.vision.VisionDataset`` to a
+    ``BaseDiscreteModelsSet``.
     """
 
-    def __init__(self, dataset: VisionDataset):
+    def __init__(
+        self,
+        dataset: VisionDataset,
+        device: torch.device = None,
+        dtype: torch.dtype = None,
+    ) -> None:
         self.dataset = dataset
+        self.device = device if device is not None else conf.device
+        self.dtype = dtype if dtype is not None else conf.dtype
 
     def __len__(self) -> int:
         return len(self.dataset)
 
     def get(self, i: int, **kwargs) -> DistributionDraw:
-        return DistributionDraw.from_grayscale_weights(self.dataset[i][0])
+        return DistributionDraw.from_grayscale_weights(
+            self.dataset[i][0],
+            device=self.device,
+            dtype=self.dtype
+        )
