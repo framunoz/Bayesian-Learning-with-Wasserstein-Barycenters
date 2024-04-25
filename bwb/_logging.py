@@ -198,6 +198,56 @@ get_logger.__doc__ = LoggerConfiguration.get_logger.__doc__
 set_level.__doc__ = LoggerConfiguration.set_level.__doc__
 
 
+class register_total_time:
+    """
+    Class that registers the total time it takes to execute a piece of code, and shows it with the
+    logger. It can be used as a context manager or as a decorator.
+    """
+
+    def __init__(self, logger: logging.Logger):
+        self.logger = logger
+        self.tic = time.perf_counter()
+        self.toc = time.perf_counter()
+
+    @property
+    def elapsed_time(self):
+        """
+        The elapsed time between the start and the end of the block of code.
+
+        :return: The elapsed time in seconds.
+        """
+        return self.toc - self.tic
+
+    def __enter__(self):
+        self.tic = time.perf_counter()
+        self.logger.debug("Starting the block of code...")
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.toc = time.perf_counter()
+        self.logger.debug(f"The block of code takes {self.elapsed_time:.3f} [seg]")
+
+    def __call__(self, func):
+        """
+        Decorator to register the total time it takes to execute a function, and shows it with the
+        logger.
+
+        :param func: The function to decorate
+        :return: The decorated function
+        """
+
+        # noinspection PyMissingOrEmptyDocstring
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            tic = time.perf_counter()
+            result = func(*args, **kwargs)
+            toc = time.perf_counter()
+            self.logger.debug(f"The function '{func.__name__}' takes {toc - tic:.3f} [seg]")
+            return result
+
+        return wrapper
+
+
 def register_total_time_function(logger: logging.Logger):
     """
     Wrapper that records the total time it takes to execute a function, and shows it with the
@@ -213,7 +263,7 @@ def register_total_time_function(logger: logging.Logger):
             tic = time.perf_counter()
             result = func(*args, **kwargs)
             toc = time.perf_counter()
-            logger.debug(f"The function '{func.__name__}' takes {toc - tic:.4f} [seg]")
+            logger.debug(f"The function '{func.__name__}' takes {toc - tic:.3f} [seg]")
             return result
 
         return wrapper
@@ -242,7 +292,7 @@ def register_total_time_method(logger: logging.Logger):
             toc = time.perf_counter()
             logger.debug(
                 f"The method '{self.__class__.__name__}.{method.__name__}' takes"
-                f" {toc - tic:.4f} [seg]"
+                f" {toc - tic:.3f} [seg]"
             )
             return result
 
@@ -275,3 +325,52 @@ def register_init_method(logger: logging.Logger):
         return wrapper
 
     return decorator
+
+
+def __main():
+    from icecream import ic
+
+    _log = log_config.get_logger(__name__)
+
+    # Change to debug
+    log_config.set_level(logging.DEBUG)
+
+    ic("Testing class context manager")
+    with register_total_time(_log):
+        time.sleep(1)
+
+    ic("Testing class context manager part 2")
+    with register_total_time(_log) as timer:
+        time.sleep(1)
+
+    ic(timer.elapsed_time)
+
+    ic("Testing function decorator with 'register_total_time_function'")
+
+    @register_total_time_function(_log)
+    def test_function():
+        time.sleep(1)
+
+    test_function()
+
+    ic("Testing function decorator with 'register_total_time'")
+
+    @register_total_time(_log)
+    def test_function():
+        time.sleep(1)
+
+    test_function()
+
+    # Test method decorator
+    ic("Testing method decorator with 'register_total_time_method'")
+
+    class Test:
+        @register_total_time_method(_log)
+        def test_method(self):
+            time.sleep(1)
+
+    Test().test_method()
+
+
+if __name__ == "__main__":
+    __main()
