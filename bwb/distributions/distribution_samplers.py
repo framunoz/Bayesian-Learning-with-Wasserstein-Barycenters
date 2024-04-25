@@ -81,6 +81,11 @@ class DistributionSampler[DistributionT](metaclass=abc.ABCMeta):
         """
         filename: Path = Path(filename)
 
+        if filename.suffix not in [".pkl", ".gz"]:
+            msg = "The file must have the extension '.pkl' or '.gz'."
+            warnings.warn(msg, RuntimeWarning, 2)
+            _log.warning(msg)
+
         if is_gzip(filename):
             f = gzip.open(filename, "wb")
         else:
@@ -268,7 +273,12 @@ class UniformDiscreteSampler[DistributionT](DiscreteDistribSampler[DistributionT
 
         to_return += "("
         to_return += f"n_models={len(self.models_)}, "
-        to_return += f"samples={len(self.samples_history)}"
+        if self.save_samples:
+            to_return += f"samples={len(self.samples_history)}, "
+
+        if to_return[-2:] == ", ":  # Remove the last comma
+            to_return = to_return[:-2]
+
         to_return += ")"
 
         return to_return
