@@ -24,6 +24,52 @@ class DistributionP(t.Protocol):
         ...
 
 
+def plot_image(
+    image: PIL.Image.Image,
+    title: str = "Image",
+    **kwargs,
+) -> tuple[plt.Figure, plt.Axes]:
+    """
+    Function that plots an image.
+
+    :param image: The image to draw.
+    :type image: PIL.Image.Image
+    :param title: The title of the plot.
+    :type title: str
+    :param kwargs: Optional arguments to pass to the matplotlib.pyplot.imshow function. For further
+        information, please see the documentation of that function.
+    :return: The figure and the axes of the plot.
+    """
+    kwargs.setdefault("cmap", _CMAP_DEFAULT)
+
+    fig, ax = plt.subplots()
+    ax.imshow(image, **kwargs)
+    ax.set_title(title)
+    ax.axis("off")
+    plt.show()
+
+    return fig, ax
+
+
+def plot_draw(
+    draw: DistributionP,
+    title: str = "Draw",
+    **kwargs,
+) -> tuple[plt.Figure, plt.Axes]:
+    """
+    Function that plots a DistributionDraw instance.
+
+    :param draw: The DistributionDraw instance to draw.
+    :type draw: DistributionDraw
+    :param title: The title of the plot.
+    :type title: str
+    :param kwargs: Optional arguments to pass to the matplotlib.pyplot.imshow function. For further
+        information, please see the documentation of that function.
+    :return: The figure and the axes of the plot.
+    """
+    return plot_image(image=draw.image, title=title, **kwargs)
+
+
 def plot_list_of_images(
     list_of_images: t.Sequence[PIL.Image.Image],
     n_rows: int = 3, n_cols: int = 12, factor: float = 1.5,
@@ -125,7 +171,7 @@ def plot_histogram_from_points(
     xlabel: str = None,
     ylabel: str = None,
     histplot_kwargs: t.Optional[dict] = None,
-):
+) -> tuple[plt.Figure, plt.Axes]:
     """
     Function that plots a histogram from a list of points.
 
@@ -145,19 +191,20 @@ def plot_histogram_from_points(
     histplot_kwargs = dict() if histplot_kwargs is None else histplot_kwargs
     histplot_kwargs.setdefault("bins", 100)
     histplot_kwargs.setdefault("cbar", True)
+    histplot_kwargs.setdefault("binrange", ((0, shape[0]), (0, shape[1])))
 
-    xlabel = "Y-Axis" if xlabel is None else xlabel
-    ylabel = "X-Axis" if ylabel is None else ylabel
+    xlabel_ = "Y-Axis" if xlabel is None else xlabel
+    ylabel_ = "X-Axis" if ylabel is None else ylabel
 
     if rotate:
         data = [(point[1], shape[1] - 1 - point[0]) for point in data]
-        xlabel = "X-Axis" if xlabel is None else xlabel
-        ylabel = "Y-Axis" if ylabel is None else ylabel
+        xlabel_ = "X-Axis" if xlabel is None else xlabel
+        ylabel_ = "Y-Axis" if ylabel is None else ylabel
 
     df = pd.DataFrame(data)
-    histplot_return = sns.histplot(data=df, x=0, y=1, **histplot_kwargs)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
+    histplot_return = sns.histplot(data=df, x=0, y=1, **histplot_kwargs)  # type: plt.Axes
+    plt.xlabel(xlabel_)
+    plt.ylabel(ylabel_)
     plt.title(title)
 
-    return histplot_return
+    return histplot_return.figure, histplot_return
