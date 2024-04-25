@@ -1,5 +1,6 @@
 import abc
 import typing as t
+from itertools import product
 
 import numpy as np
 import torch
@@ -20,7 +21,7 @@ class Plotter[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], meta
     def __init__(
         self,
         sgdw: BaseSGDW[DistributionT, pos_wgt_t],
-        plot_every=100,
+        plot_every: t.Optional[int] = None,
         n_cols=12,
         n_rows=2,
         factor=1.5,
@@ -48,7 +49,10 @@ class Plotter[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], meta
         self.distr_samp_hist = False
 
     @abc.abstractmethod
-    def plot(self, init: t.Optional[int] = None) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
+    def plot(
+        self,
+        init: t.Optional[int] = None
+    ) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
         """
         Plot the distributions.
 
@@ -64,6 +68,9 @@ class Plotter[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], meta
 
         :return: None
         """
+        if self.plot_every is None:
+            return
+
         k = self.sgdw.iter_params.k
 
         if k % self.plot_every == self.plot_every - 1:
@@ -95,14 +102,14 @@ class PlotterComparison(Plotter[DistributionDraw, torch.Tensor]):
     def __init__(
         self,
         sgdw: BaseSGDW[DistributionDraw, torch.Tensor],
-        plot_every=12,
+        plot_every: t.Optional[int] = None,
         n_cols=12,
         n_rows=1,
         factor=1.5,
         cmap="binary"
     ):
         super().__init__(sgdw, plot_every, n_cols, n_rows, factor, cmap)
-        if n_rows * n_cols > plot_every:
+        if plot_every is not None and plot_every < n_rows * n_cols:
             msg = (f"'plot_every' should not be less than n_rows * n_cols."
                    f" Currently: {plot_every = } < {n_rows * n_cols = }")
             _log.error(msg)
@@ -112,6 +119,7 @@ class PlotterComparison(Plotter[DistributionDraw, torch.Tensor]):
 
     @t.final
     @t.override
+    @logging.register_total_time_method(_log)
     def plot(self, init: int = None) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
         create_distr = self.sgdw.create_distribution
         max_imgs = self.n_rows * self.n_cols
@@ -135,24 +143,25 @@ class PlotterComparison(Plotter[DistributionDraw, torch.Tensor]):
 
         fig.suptitle("SGDW")
 
-        for i in range(self.n_rows):
-            for j in range(self.n_cols):
-                k = init + j + i * self.n_cols
-                ax0, ax1 = ax[i * 2, j], ax[i * 2 + 1, j]
+        for i, j in product(range(self.n_rows), range(self.n_cols)):
+            k = init + j + i * self.n_cols
+            gamma_k = self.sgdw.schd.step_schedule(k)
 
-                # Label the y-axis
-                if j == 0:
-                    ax0.set_ylabel("Sample")
-                    ax1.set_ylabel("Step")
+            ax0, ax1 = ax[i * 2, j], ax[i * 2 + 1, j]
 
-                # Plot the sample
-                fig_sample: DistributionDraw = create_distr(self.hist.pos_wgt_samp[k][0])
-                ax0.imshow(fig_sample.image, cmap=self.cmap)
-                ax0.set_title(f"$k={k}$")
+            # Label the y-axis
+            if j == 0:
+                ax0.set_ylabel("Sample")
+                ax1.set_ylabel("Step")
 
-                # Plot the step
-                fig_step: DistributionDraw = create_distr(self.hist.pos_wgt[k])
-                ax1.imshow(fig_step.image, cmap=self.cmap)
+            # Plot the sample
+            fig_sample: DistributionDraw = create_distr(self.hist.pos_wgt_samp[k][0])
+            ax0.imshow(fig_sample.image, cmap=self.cmap)
+            ax0.set_title(f"$k={k}$\n" + f"$\\gamma_k={gamma_k * 100:.1f}\\%$", size="x-small")
+
+            # Plot the step
+            fig_step: DistributionDraw = create_distr(self.hist.pos_wgt[k])
+            ax1.imshow(fig_step.image, cmap=self.cmap)
 
         plt.tight_layout(pad=0.3)
 
