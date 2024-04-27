@@ -63,7 +63,7 @@ class DistributionSampler[DistributionT](metaclass=abc.ABCMeta):
         ...
 
     @abc.abstractmethod
-    def rvs(self, size: int = 1, seed: seed_t = None) -> t.Sequence[DistributionT]:
+    def sample(self, size: int = 1, seed: seed_t = None) -> t.Sequence[DistributionT]:
         """
         Samples as many distributions as the ``size`` parameter indicates.
 
@@ -208,7 +208,7 @@ class DiscreteDistribSampler[DistributionT](DistributionSampler[DistributionT]):
         return [self.get_model(i) for i in indices], indices
 
     @timeit_to_total_time
-    def rvs(self, size: int = 1, seed: seed_t = None) -> t.Sequence[DistributionT]:
+    def sample(self, size: int = 1, seed: seed_t = None) -> t.Sequence[DistributionT]:
         """Samples as many distributions as the ``size`` parameter indicates."""
         validation.check_is_fitted(self, ["models_", "probabilities_"])
         to_return, list_indices = self._rvs(size, seed)
@@ -499,7 +499,7 @@ class BaseGeneratorDistribSampler[DistributionT](
 
     @t.final
     @t.override
-    def rvs(self, size: int = 1, seed: seed_t = None) -> t.Sequence[DistributionT]:
+    def sample(self, size: int = 1, seed: seed_t = None) -> t.Sequence[DistributionT]:
         # Check if the distribution sampler is fitted
         if not self._fitted:
             validation.check_is_fitted(self, ["generator_", "transform_out_", "noise_sampler_"])
@@ -674,13 +674,13 @@ def __main():
         ic(e)
 
     try:
-        distr_sampler.rvs(10)
+        distr_sampler.sample(10)
     except Exception as e:
         ic(e)
 
     distr_sampler.fit(generator, transform_out, noise_sampler)
     distr_sampler.draw()
-    distr_sampler.rvs(10)
+    distr_sampler.sample(10)
     ic(distr_sampler)
 
     distr_sampler_ = copy.copy(distr_sampler)

@@ -252,7 +252,7 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
         :param S_k: The batch size for the current iteration.
         :return: A list of distributions drawn from the sampler.
         """
-        return self.distr_sampler.rvs(S_k)
+        return self.distr_sampler.sample(S_k)
 
     def _compute_wass_dist(
         self, pos_wgt_k: pos_wgt_t, pos_wgt_kp1: pos_wgt_t, gamma_k: float

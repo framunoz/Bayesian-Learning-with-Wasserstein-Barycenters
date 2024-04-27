@@ -857,7 +857,7 @@ def __main():
         except Exception as e:
             ic(e)
         try:
-            posterior.rvs(10)
+            posterior.sample(10)
         except Exception as e:
             ic(e)
         posterior.fit(_generator, _transform_out, _noise_sampler, data_)
@@ -865,7 +865,7 @@ def __main():
 
         # Test draw and rvs
         posterior.draw()
-        posterior.rvs(10)
+        posterior.sample(10)
         ic("sample test", posterior)
 
         # Test copy and deep copy
@@ -892,7 +892,7 @@ def __main():
         except Exception as e:
             ic(e)
         try:
-            posterior.rvs(10)
+            posterior.sample(10)
         except Exception as e:
             ic(e)
         posterior.fit(_generator, _transform_out, _noise_sampler, data_)
@@ -900,7 +900,7 @@ def __main():
 
         # Test draw and rvs
         posterior.draw()
-        posterior.rvs(10)
+        posterior.sample(10)
         ic("sample test", posterior)
 
         # Test copy and deep copy
@@ -925,7 +925,7 @@ def __main():
         except Exception as e:
             ic(e)
         try:
-            posterior.rvs(10)
+            posterior.sample(10)
         except Exception as e:
             ic(e)
         posterior.fit(_generator, _transform_out, _noise_sampler, data_)
@@ -933,7 +933,7 @@ def __main():
 
         # Test draw and rvs
         posterior.draw()
-        posterior.rvs(10)
+        posterior.sample(10)
         ic("sample test", posterior)
 
         # Test copy and deep copy
