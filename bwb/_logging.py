@@ -37,6 +37,7 @@ STREAM_HANDLER: logging.Handler = logging.StreamHandler()
 STREAM_HANDLER.setFormatter(FORMATTER)
 
 
+# noinspection DuplicatedCode
 class _SingletonMeta(type):
     """Metaclass to implements Singleton Pattern. Obtained from
     https://refactoring.guru/design-patterns/singleton/python/example#example-1"""
@@ -184,12 +185,14 @@ log_config = LoggerConfiguration()
 
 
 # Alias of the methods in the instance of LoggerConfiguration
+# noinspection PyMissingOrEmptyDocstring
 def get_logger(
     name: str, level: int = log_config.LEVEL, handlers: list[logging.Handler] = None
 ) -> logging.Logger:
     return log_config.get_logger(name, level, handlers)
 
 
+# noinspection PyMissingOrEmptyDocstring
 def set_level(level: int, name: str = None):
     log_config.set_level(level, name)
 
@@ -204,8 +207,9 @@ class register_total_time:
     logger. It can be used as a context manager or as a decorator.
     """
 
-    def __init__(self, logger: logging.Logger):
+    def __init__(self, logger: logging.Logger, level: int = logging.DEBUG):
         self.logger = logger
+        self.level = level
         self.tic = time.perf_counter()
         self.toc = time.perf_counter()
 
@@ -220,12 +224,12 @@ class register_total_time:
 
     def __enter__(self):
         self.tic = time.perf_counter()
-        self.logger.debug("Starting the block of code...")
+        self.logger.log(self.level, "Starting the block of code...")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.toc = time.perf_counter()
-        self.logger.debug(f"The block of code takes {self.elapsed_time:.3f} [seg]")
+        self.logger.log(self.level, f"The block of code takes {self.elapsed_time:.3f} [seg]")
 
     def __call__(self, func):
         """
@@ -242,28 +246,34 @@ class register_total_time:
             tic = time.perf_counter()
             result = func(*args, **kwargs)
             toc = time.perf_counter()
-            self.logger.debug(f"The function '{func.__name__}' takes {toc - tic:.3f} [seg]")
+            self.logger.log(
+                self.level,
+                f"The function '{func.__name__}' takes {toc - tic:.3f} [seg]"
+            )
             return result
 
         return wrapper
 
 
-def register_total_time_function(logger: logging.Logger):
+def register_total_time_function(logger: logging.Logger, level: int = logging.DEBUG):
     """
     Wrapper that records the total time it takes to execute a function, and shows it with the
     logger.
 
     :param logger: A `Logger` instance
+    :param level: The level of the logger
     :return: The decorator
     """
 
+    # noinspection PyMissingOrEmptyDocstring
     def decorator(func):
+        # noinspection PyMissingOrEmptyDocstring
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             tic = time.perf_counter()
             result = func(*args, **kwargs)
             toc = time.perf_counter()
-            logger.debug(f"The function '{func.__name__}' takes {toc - tic:.3f} [seg]")
+            logger.log(level, f"The function '{func.__name__}' takes {toc - tic:.3f} [seg]")
             return result
 
         return wrapper
@@ -271,26 +281,28 @@ def register_total_time_function(logger: logging.Logger):
     return decorator
 
 
-def register_total_time_method(logger: logging.Logger):
+def register_total_time_method(logger: logging.Logger, level: int = logging.DEBUG):
     """
     Wrapper that records the total time it takes to execute a method, and shows it with the
     logger.
 
     :param logger: A `Logger` instance
+    :param level: The level of the logger
     :return: The decorator
     """
 
+    # noinspection PyMissingOrEmptyDocstring
     def decorator(method):
+        # noinspection PyMissingOrEmptyDocstring
         @functools.wraps(method)
         def wrapper(*args, **kwargs):
             self: object = args[0]
-            logger.debug(
-                f"Using the method '{self.__class__.__name__}.{method.__name__}'..."
-            )
+            logger.log(level, f"Using the method '{self.__class__.__name__}.{method.__name__}'...")
             tic = time.perf_counter()
             result = method(*args, **kwargs)
             toc = time.perf_counter()
-            logger.debug(
+            logger.log(
+                level,
                 f"The method '{self.__class__.__name__}.{method.__name__}' takes"
                 f" {toc - tic:.3f} [seg]"
             )
@@ -301,21 +313,25 @@ def register_total_time_method(logger: logging.Logger):
     return decorator
 
 
-def register_init_method(logger: logging.Logger):
+def register_init_method(logger: logging.Logger, level: int = logging.DEBUG):
     """
     Logs the use of a method, indicating the name of the method and the name of the class.
 
     :param logger: A `Logger` instance
+    :param level: The level of the logger
     :return: The decorator
     """
 
+    # noinspection PyMissingOrEmptyDocstring
     def decorator(method):
+        # noinspection PyMissingOrEmptyDocstring
         @functools.wraps(method)
         def wrapper(*args, **kwargs):
             self: object = args[0]  # We are in a method of a class
             class_name = self.__class__.__name__
             method_name = method.__name__
-            logger.debug(
+            logger.log(
+                level,
                 f"Using the method '{method_name}' in the class '{class_name}'."
             )
             # Compute the result
@@ -365,7 +381,7 @@ def __main():
     ic("Testing method decorator with 'register_total_time_method'")
 
     class Test:
-        @register_total_time_method(_log)
+        @register_total_time_method(_log, logging.WARNING)
         def test_method(self):
             time.sleep(1)
 
