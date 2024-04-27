@@ -162,3 +162,5 @@ fabric.properties
 
 # Ignore pickles file
 */pickles/
+*.pkl
+*.pkl.gz
