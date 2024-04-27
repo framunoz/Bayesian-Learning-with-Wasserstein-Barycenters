@@ -11,11 +11,13 @@ import torch
 from torch import linalg as LA
 
 import bwb._logging as logging
-import bwb.bregman
 import bwb.distributions as dist
-import bwb.transports as tpt
-from bwb import utils
-from bwb.sgdw.utils import DetentionParameters, History, IterationParameters, Report, ReportOptions, Schedule
+import bwb.distributions.utils
+import bwb.pot.bregman
+import bwb.pot.transports as tpt
+from bwb.sgdw.utils import (DetentionParameters, History, IterationParameters, Report,
+                            ReportOptions,
+                            Schedule)
 from wgan_gp.wgan_gp_vae.utils import ProjectorOnManifold
 
 __all__ = [
@@ -62,11 +64,11 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
     This class provides a base implementation for Stochastic Gradient Descent in Wasserstein Space.
     It defines the common attributes and methods used by the derived classes.
 
-    :param step_scheduler: A callable function that takes an integer argument (k) and returns the learning rate
-        (:math:`\gamma_k`) for iteration k.
+    :param step_scheduler: A callable function that takes an integer argument (k) and returns the
+        learning rate (:math:`\gamma_k`) for iteration k.
     :type step_scheduler: callable
-    :param batch_size: A callable function that takes an integer argument (k) and returns the batch size (S_k) for
-        iteration k. Alternatively, it can be a constant integer value.
+    :param batch_size: A callable function that takes an integer argument (k) and returns the batch
+        size (S_k) for iteration k. Alternatively, it can be a constant integer value.
     :type batch_size: callable or int
     :param tol: The tolerance value for convergence. Defaults to 1e-8.
     :type tol: float
@@ -77,8 +79,10 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
     :param report_every: The frequency at which to report the metrics. Defaults to 10.
     :type report_every: int
 
-    :raises TypeError: If learning_rate is not a callable or batch_size is not a callable or an integer.
-    :raises ValueError: If learning_rate does not return a float or batch_size does not return an integer.
+    :raises TypeError: If learning_rate is not a callable or batch_size is not a callable or an
+        integer.
+    :raises ValueError: If learning_rate does not return a float or batch_size does not return an
+        integer.
     """
 
     def __init__(
@@ -113,10 +117,11 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
         # Values for dtype and device
         mu = self.distr_sampler.draw()
         self.dtype = mu.dtype
-        """The data type for the algorithm. Defaults to the data type of the first distribution drawn from the 
-        sampler."""
+        """The data type for the algorithm. Defaults to the data type of the first distribution 
+        drawn from the sampler."""
         self.device = mu.device
-        """The device for the algorithm. Defaults to the device of the first distribution drawn from the sampler."""
+        """The device for the algorithm. Defaults to the device of the first distribution drawn 
+        from the sampler."""
         self.val = torch.tensor(1, dtype=self.dtype, device=self.device)
         """A tensor with value 1, used to pass to the device."""
 
@@ -163,11 +168,13 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
     @abc.abstractmethod
     def first_sample(self) -> tuple[t.Sequence[DistributionT], pos_wgt_t]:
         """
-        Draw the first sample from the distribution sampler. This corresponds to the first step of the algorithm.
+        Draw the first sample from the distribution sampler. This corresponds to the first step
+        of the algorithm.
 
         This method should draw the first sample from the distribution sampler and return it.
 
-        :return: The first sample from the distribution sampler and the position and weight that come from the sample.
+        :return: The first sample from the distribution sampler and the position and weight that
+            come from the sample.
         """
         pass
 
@@ -195,12 +202,15 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
         r"""
         Set the step and batch size schedules for the algorithm.
 
-        :param step_schedule: A callable function that takes an integer argument (k) and returns the step
-            :math:`\gamma_k` for iteration k.
-        :param batch_size: A callable function that takes an integer argument (k) and returns the batch size (S_k) for
-            iteration k. Alternatively, it can be a constant integer value.
-        :raises TypeError: If learning_rate is not a callable or batch_size is not a callable or an integer.
-        :raises ValueError: If learning_rate does not return a float or batch_size does not return an integer.
+        :param step_schedule: A callable function that takes an integer argument (:math:`k`) and
+            returns the step :math:`\gamma_k` for iteration :math:`k`.
+        :param batch_size: A callable function that takes an integer argument (:math:`k`) and
+            returns the batch size (:math:`S_k`) for iteration :math:`k`. Alternatively, it can be
+            a constant integer value.
+        :raises TypeError: If learning_rate is not a callable or batch_size is not a callable or an
+            integer.
+        :raises ValueError: If learning_rate does not return a float or batch_size does not return
+            an integer.
         :return: The object itself.
         """
         self.schd.step_schedule = step_schedule
@@ -221,8 +231,10 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
         :param max_time: The maximum time allowed for the algorithm to run. Defaults to infinity.
         :type max_time: float
         :return: The object itself.
-        :raises TypeError: If tol is not a real number, max_iter is not an integer or max_time is not a real number.
-        :raises ValueError: If tol is not positive, max_iter is not positive or max_time is not positive.
+        :raises TypeError: If tol is not a real number, max_iter is not an integer or max_time is
+            not a real number.
+        :raises ValueError: If tol is not positive, max_iter is not positive or max_time is not
+            positive.
         """
         self.det_params.tol = tol
         self.det_params.max_iter = max_iter
@@ -248,7 +260,8 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
         """
         Compute the Wasserstein distance between two positions and weights.
 
-        This method should compute the Wasserstein distance between two positions and weights and return it.
+        This method should compute the Wasserstein distance between two positions and weights and
+        return it.
 
         :param pos_wgt_k: The position and weight that come from the current sample.
         :param pos_wgt_kp1: The position and weight that come from the next sample.
@@ -272,8 +285,8 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
 
     def create_barycenter(self, pos_wgt: pos_wgt_t) -> DistributionT:
         """
-        Create the barycenter from the position and weight. This method is called at the end of the algorithm. To use
-        template pattern
+        Create the barycenter from the position and weight. This method is called at the end of
+        the algorithm. To use template pattern
         """
         return self.create_distribution(pos_wgt)
 
@@ -323,11 +336,13 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
         """
         Run the algorithm.
 
-        This method runs the algorithm and returns the final position weights and optional history data.
+        This method runs the algorithm and returns the final position weights and optional
+        history data.
 
         :param pos_wgt_hist: Whether to include the position weights in the history.
         :param distr_hist: Whether to include the distributions in the history.
-        :param pos_wgt_samp_hist: Whether to include the position weights of the samples in the history.
+        :param pos_wgt_samp_hist: Whether to include the position weights of the samples in the
+            history.
         :param distr_samp_hist: Whether to include the distributions of the samples in the history.
         :param include_dict: The options to include in the report.
         :return: A tuple containing the final position weights and optional history data.
@@ -345,7 +360,8 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
 
         _, pos_wgt_k = self.init_algorithm()
 
-        # The logic of the detention criteria and update are in the iterable class `IterationParameters`
+        # The logic of the detention criteria and update are in the iterable class
+        #  `IterationParameters`
         for k in self.iter_params:
             # Run a step of the algorithm
             pos_wgt_k = self.step_algorithm(k, pos_wgt_k)
@@ -409,7 +425,7 @@ class DiscreteDistributionSGDW(BaseSGDW[dist.DiscreteDistribution, discrete_pos_
         self,
     ) -> tuple[t.Sequence[dist.DiscreteDistribution], discrete_pos_wgt]:
         mu_0: dist.DiscreteDistribution = self.distr_sampler.draw()
-        X_k, m = utils.partition(
+        X_k, m = bwb.distributions.utils.partition(
             X=mu_0.enumerate_nz_support_(), mu=mu_0.nz_probs, alpha=self.alpha
         )
         X_k, m = X_k.to(self.val), m.to(self.val)
@@ -451,6 +467,7 @@ class DiscreteDistributionSGDW(BaseSGDW[dist.DiscreteDistribution, discrete_pos_
         return w_dist
 
 
+# IDEA: Divide the class for the projected version
 # MARK: SGDW with distributions based in draws
 class DistributionDrawSGDW(
     BaseSGDW[dist.DistributionDraw, torch.Tensor], metaclass=abc.ABCMeta
@@ -501,13 +518,12 @@ class DistributionDrawSGDW(
         mu_0: dist.DistributionDraw = self.distr_sampler.draw()
         return [mu_0], mu_0.grayscale_weights
 
-    @t.final
     def set_geodesic_params(
         self,
         reg=3e-3,
         method="sinkhorn",
-        num_iter_max=1_000,
-        stop_thr=1e-8,
+        num_iter_max=10_000,
+        stop_thr=1e-4,
         verbose=False,
         warn=False,
         **kwargs,
@@ -517,7 +533,8 @@ class DistributionDrawSGDW(
 
         :param float reg: Regularization term for Sinkhorn algorithm. Default is 3e-3.
         :param str method: Method to use for geodesic computation. Default is "sinkhorn".
-        :param int num_iter_max: Maximum number of iterations for Sinkhorn algorithm. Default is 1000.
+        :param int num_iter_max: Maximum number of iterations for Sinkhorn algorithm.
+            Default is 1000.
         :param float stop_thr: Stopping threshold for Sinkhorn algorithm. Default is 1e-8.
         :param bool verbose: Whether to print verbose output during computation. Default is False.
         :param bool warn: Whether to display warning messages. Default is False.
@@ -555,12 +572,10 @@ class DistributionDrawSGDW(
     @t.override
     def update_pos_wgt(self, pos_wgt_k, lst_mu_k, gamma_k) -> torch.Tensor:
         # TODO: REFACTOR THIS!
-        gs_weights_k = pos_wgt_k
-        gs_weights_lst_mu_k = [mu_k.grayscale_weights for mu_k in lst_mu_k]
         S_k = len(lst_mu_k)
-        lst_gamma_k = [1 - gamma_k] + [gamma_k / S_k] * S_k
         gs_weights_kp1 = self._compute_geodesic(
-            [gs_weights_k] + gs_weights_lst_mu_k, lst_gamma_k
+            [pos_wgt_k] + [mu_k.grayscale_weights for mu_k in lst_mu_k],
+            [1 - gamma_k] + [gamma_k / S_k] * S_k
         )
         if (
             self.projector is not None
@@ -583,7 +598,7 @@ class ConvDistributionDrawSGDW(DistributionDrawSGDW):
     @t.final
     @t.override
     def _compute_geodesic(self, gs_weights_lst_k, lst_gamma_k) -> torch.Tensor:
-        return bwb.bregman.convolutional_barycenter2d(
+        return bwb.pot.bregman.convolutional_barycenter2d(
             A=torch.stack(gs_weights_lst_k),
             weights=torch.as_tensor(lst_gamma_k, dtype=self.dtype, device=self.device),
             **self.conv_bar_kwargs,
@@ -598,6 +613,28 @@ class DebiesedDistributionDrawSGDW(DistributionDrawSGDW):
             A=torch.stack(gs_weights_lst_k),
             weights=torch.as_tensor(lst_gamma_k, dtype=self.dtype, device=self.device),
             **self.conv_bar_kwargs,
+        )
+
+    @t.final
+    @t.override
+    def set_geodesic_params(
+        self,
+        reg=1e-2,
+        method="sinkhorn",
+        num_iter_max=10_000,
+        stop_thr=1e-3,
+        verbose=False,
+        warn=False,
+        **kwargs,
+    ):
+        return super().set_geodesic_params(
+            reg=reg,
+            method=method,
+            num_iter_max=num_iter_max,
+            stop_thr=stop_thr,
+            verbose=verbose,
+            warn=warn,
+            **kwargs,
         )
 
 
@@ -641,7 +678,7 @@ def compute_bwb_discrete_distribution(
     # Compute locations through the partition
     _log.info("Computing initial weights")
     tic = time.time()
-    X_k, m = utils.partition(
+    X_k, m = bwb.distributions.utils.partition(
         X=mu_0.enumerate_nz_support_(), mu=mu_0.nz_probs, alpha=alpha
     )
     X_k, m = X_k.to(dtype=dtype, device=device), m.to(dtype=dtype, device=device)
@@ -794,7 +831,7 @@ def compute_bwb_distribution_draw(
         # Compute the distribution of mu_{k+1}
         gamma_k = learning_rate(k)
 
-        gs_weights_kp1, _ = bwb.bregman.convolutional_barycenter2d(
+        gs_weights_kp1, _ = bwb.pot.bregman.convolutional_barycenter2d(
             A=[gs_weights_k, m_k.grayscale_weights],
             weights=[1 - gamma_k, gamma_k],
             reg=reg,
@@ -890,7 +927,7 @@ def compute_bwb_distribution_draw_projected(
         gamma_k = learning_rate(k)
         _log.debug(f"{gamma_k = :.6f}")
 
-        gs_weights_kp1, _ = bwb.bregman.convolutional_barycenter2d(
+        gs_weights_kp1, _ = bwb.pot.bregman.convolutional_barycenter2d(
             A=[gs_weights_k, m_k.grayscale_weights],
             weights=[1 - gamma_k, gamma_k],
             reg=reg,

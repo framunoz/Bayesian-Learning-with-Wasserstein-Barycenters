@@ -1,41 +1,65 @@
+"""
+This module contains utility functions and classes for the algorithm.
+"""
 import numbers as num
 import time
 import typing as t
+import warnings
 from copy import deepcopy
 from datetime import timedelta
 from typing import Iterator
 
+import bwb._logging as logging
 
-def gamma(*, a: float = 1, b: float = 0, c: float = 1):
+_log = logging.get_logger(__name__)
+
+
+def step_scheduler(*, a: float = 1, b: float = 0, c: float = 1) -> t.Callable[[int], float]:
+    r"""
+    This function returns a step scheduler with parameters :math:`a`, :math:`b`, and :math:`c`.
+
+    The formula for the step scheduler is given by:
+    .. math::
+        \gamma_k = \frac{a}{(b^{1/c} + k)^c}
+
+    :param a: The scale parameter of the gamma distribution. Default is 1.
+    :param b: The location parameter of the gamma distribution. Default is 0.
+    :param c: The shape parameter of the gamma distribution. Default is 1.
+    :return: A step scheduler that takes a single parameter :math:`k` and returns the value
+        of the step scheduler at :math:`k`.
     """
-    This function returns a gamma function with parameters a, b, and c.
 
-    Parameters:
-        a (float): The shape parameter of the gamma distribution. Default is 1.
-        b (float): The scale parameter of the gamma distribution. Default is 0.
-        c (float): The location parameter of the gamma distribution. Default is 1.
+    def _step_scheduler(k):
+        r"""
+        Compute the value of the step scheduler for a given input.
 
-    Returns:
-        function: A gamma function that takes a single parameter k and returns the value of the gamma function at k.
-    """
+        The formula for the step scheduler is given by:
+        .. math::
+            \gamma_k = \frac{a}{(b^{1/c} + k)^c}
 
-    def _gamma(k):
+        :param k: The input value.
+        :return: The value of the step scheduler for the given input.
+        """
         return a / (b ** (1 / c) + k) ** c
 
-    return _gamma
+    return _step_scheduler
 
 
 class Gamma:
-    """
-    This class represents a gamma function.
+    r"""
+    This class contains the gamma function for the step scheduler.
 
-    Parameters:
-    - a (float): The parameter 'a' of the gamma function.
-    - b (float): The parameter 'b' of the gamma function.
-    - c (float): The parameter 'c' of the gamma function.
+    The formula for the step scheduler is given by:
+    .. math::
+        \gamma_k = \frac{a}{(b^{1/c} + k)^c}
     """
 
     def __init__(self, a=1, b=0, c=1):
+        # Deprecation warning
+        msg = "This class is deprecated. Use the gamma function instead."
+        _log.warning(msg)
+        warnings.warn(msg, DeprecationWarning, stacklevel=2)
+
         self.a = a
         self.b = b
         self.c = c
@@ -101,7 +125,9 @@ class Schedule:
         if isinstance(batch_size, int):
             aux: int = batch_size
 
+            # noinspection PyUnusedLocal
             def batch_size(n: int):
+                """Return the batch size."""
                 return aux
 
         # Check if batch_size is callable that accepts an integer and returns an integer
@@ -178,7 +204,8 @@ class DetentionParameters:
             time_fmt = str(timedelta(seconds=max_time))[:-4]
         max_iter_fmt = f"{self.max_iter:_}" if self.max_iter != float("inf") else "∞"
 
-        return f"DetentionParameters(tol={self.tol:.2e}, max_iter={max_iter_fmt}, max_time={time_fmt})"
+        return (f"DetentionParameters(tol={self.tol:.2e}, "
+                f"max_iter={max_iter_fmt}, max_time={time_fmt})")
 
 
 class IterationParameters(Iterator[int]):
@@ -204,6 +231,11 @@ class IterationParameters(Iterator[int]):
 
     @property
     def total_time(self) -> float:
+        """
+        The total time of the algorithm.
+
+        :return: The total time of the algorithm.
+        """
         return self.toc - self.tic
 
     def init_params(self):
@@ -230,7 +262,8 @@ class IterationParameters(Iterator[int]):
         """
         Start the iteration.
 
-        This method starts the iteration and sets the start time of the iteration to the current time.
+        This method starts the iteration and sets the start time of the iteration to the current
+        time.
         """
         self.tic_ = time.time()
 
@@ -252,6 +285,12 @@ class IterationParameters(Iterator[int]):
         self.diff_t = self.toc - self.tic_
 
     def update_wass_dist(self, wass_dist):
+        """
+        Update the Wasserstein distance.
+
+        :param wass_dist: The Wasserstein distance.
+        :return: The Wasserstein distance.
+        """
         self.w_dist = wass_dist
         return wass_dist
 
@@ -270,7 +309,8 @@ class IterationParameters(Iterator[int]):
     def __repr__(self) -> str:
         w_dist_fmt = f"{self.w_dist:.6f}" if self.w_dist != float("inf") else "∞"
         time_fmt = str(timedelta(seconds=self.total_time))[:-4]
-        return f"IterationParameters(k={self.k:_}, w_dist={w_dist_fmt}, t={time_fmt}, Δt={self.diff_t * 1000:.2f} [ms])"
+        return (f"IterationParameters(k={self.k:_}, w_dist={w_dist_fmt}, "
+                f"t={time_fmt}, Δt={self.diff_t * 1000:.2f} [ms])")
 
     def __iter__(self):
         self.init_params()
@@ -292,6 +332,9 @@ class IterationParameters(Iterator[int]):
 
 
 class HistoryOptions(t.TypedDict, total=False):
+    """
+    This class contains the history options for the algorithm.
+    """
     pos_wgt: bool
     distr: bool
     pos_wgt_samp: bool
@@ -307,10 +350,10 @@ class History[DistributionT, pos_wgt_t]:
     """
 
     HISTORY_OPTIONS: HistoryOptions = {
-        "pos_wgt": False,
-        "distr": False,
+        "pos_wgt":      False,
+        "distr":        False,
         "pos_wgt_samp": False,
-        "distr_samp": False,
+        "distr_samp":   False,
     }
 
     def __init__(
@@ -341,7 +384,13 @@ class History[DistributionT, pos_wgt_t]:
         self.pos_wgt_samp: list[list[pos_wgt_t]] = []
         self.distr_samp: list[list[DistributionT]] = []
 
-    def add_key_value(self, key: HistoryOptionsLiteral, value: bool):
+    def add_key_value(self, key: HistoryOptionsLiteral, value: bool) -> None:
+        """
+        Add a key-value pair to the history options.
+
+        :param key: The key to add.
+        :param value: The value to add.
+        """
         if not isinstance(value, bool):
             raise TypeError(f"Value must be a boolean, not {type(value)}")
         if key not in self.HISTORY_OPTIONS:
@@ -356,7 +405,7 @@ class History[DistributionT, pos_wgt_t]:
         return self._create_distribution
 
     @create_distr.setter
-    def create_distr(self, create_distribution):
+    def create_distr(self, create_distribution) -> None:
         if not callable(create_distribution):
             raise TypeError("create_distribution must be a callable")
         self._create_distribution: t.Callable[[pos_wgt_t], DistributionT] = (
@@ -371,7 +420,7 @@ class History[DistributionT, pos_wgt_t]:
         return self._get_pos_wgt_from_dist
 
     @get_pos_wgt_from_dist.setter
-    def get_pos_wgt_from_dist(self, get_pos_wgt_from_dist):
+    def get_pos_wgt_from_dist(self, get_pos_wgt_from_dist) -> None:
         if not callable(get_pos_wgt_from_dist):
             raise TypeError("get_pos_wgt_from_dist must be a callable")
         self._get_pos_wgt_from_dist: t.Callable[[DistributionT], pos_wgt_t] = (
@@ -387,6 +436,18 @@ class History[DistributionT, pos_wgt_t]:
         create_distribution: t.Callable[[pos_wgt_t], DistributionT] = None,
         get_pos_wgt_from_dist: t.Callable[[DistributionT], pos_wgt_t] = None,
     ):
+        """
+        Set the parameters of the history.
+
+        :param pos_wgt: To add the position and weight in the history.
+        :param distr: To add the distribution in the history.
+        :param pos_wgt_samp: To add the position and weight samplings in the history.
+        :param distr_samp: To add the distribution samplings in the history.
+        :param create_distribution: A function to create a distribution from the position and
+            weight.
+        :param get_pos_wgt_from_dist: A function to get the position and weight from the
+            distribution.
+        """
         self.options["pos_wgt"] = (
             pos_wgt if pos_wgt is not None else self.options["pos_wgt"]
         )
@@ -488,18 +549,27 @@ class History[DistributionT, pos_wgt_t]:
         self.update_distr_samp(lst_mu_k)
 
     def has_pos_wgt(self) -> bool:
+        """Check if the history has the position and weight."""
         return self.options["pos_wgt"]
 
     def has_distr(self) -> bool:
+        """Check if the history has the distribution."""
         return self.options["distr"]
 
     def has_pos_wgt_samp(self) -> bool:
+        """Check if the history has the position and weight samplings."""
         return self.options["pos_wgt_samp"]
 
     def has_distr_samp(self) -> bool:
+        """Check if the history has the distribution samplings."""
         return self.options["distr_samp"]
 
-    def has_histories(self):
+    def has_histories(self) -> bool:
+        """
+        Check if the history has any of the histories.
+
+        :return: True if the history has any of the histories, False otherwise.
+        """
         return any(
             [
                 self.has_pos_wgt(),
@@ -542,6 +612,9 @@ class History[DistributionT, pos_wgt_t]:
 
 
 class ReportOptions(t.TypedDict, total=False):
+    """
+    This class contains the report options for the algorithm.
+    """
     iter: bool
     w_dist: bool
     step_schd: bool
@@ -561,11 +634,11 @@ class Report:
     """
 
     INCLUDE_OPTIONS: ReportOptions = {
-        "iter": True,
-        "w_dist": False,
-        "step_schd": True,
-        "total_time": True,
-        "dt": False,
+        "iter":        True,
+        "w_dist":      False,
+        "step_schd":   True,
+        "total_time":  True,
+        "dt":          False,
         "dt_per_iter": True,
     }
 
@@ -589,6 +662,13 @@ class Report:
             self.add_key_value(key, value)
 
     def add_key_value(self, key: ReportOptionsLiteral, value: bool):
+        """
+        Add a key-value pair to the report options.
+
+        :param key: The key to add.
+        :param value: The value to add.
+        :return: None
+        """
         if not isinstance(value, bool):
             raise TypeError(f"Value must be a boolean, not {type(value)}")
         if key not in self.include:
@@ -600,6 +680,12 @@ class Report:
         include_dict: ReportOptions = None,
         len_bar: int = None,
     ):
+        """
+        Set the parameters of the report.
+
+        :param include_dict: The dictionary with the keys and values to include in the report.
+        :param len_bar: The length of the bar in the report.
+        """
         include_dict = include_dict or {}
         for key, value in include_dict.items():
             self.add_key_value(key, value)
@@ -632,14 +718,20 @@ class Report:
             report += f"t = {time_fmt}, "
 
         if self.include["dt"]:
-            report += f"Δt = {(self.iter_params.diff_t) * 1000:.2f} [ms], "
+            report += f"Δt = {self.iter_params.diff_t * 1000:.2f} [ms], "
 
         if self.include["dt_per_iter"]:
-            report += f"Δt per iter. = {(self.iter_params.total_time) * 1000 / (self.iter_params.k + 1):.2f} [ms/iter], "
+            dt_per_iter = self.iter_params.total_time * 1000 / (self.iter_params.k + 1)
+            report += f"Δt per iter. = {dt_per_iter:.2f} [ms/iter], "
 
         report = report[:-2] + " " + bar
 
         return report
 
     def is_report_iter(self) -> bool:
+        """
+        Return True if the report is ready to be printed.
+
+        :return: True if the report is ready to be printed, False otherwise.
+        """
         return self.iter_params.k % self.report_every == 0

@@ -9,7 +9,7 @@ from torchvision.datasets import VisionDataset
 
 from bwb.config import conf
 from bwb.distributions.discrete_distribution import DistributionDraw
-from bwb.utils import array_like_t
+from bwb.utils.protocols import array_like_t
 
 __all__ = [
     "DiscreteModelsSetP",
@@ -110,3 +110,6 @@ class ModelDataset(BaseDiscreteModelsSet[DistributionDraw]):
             device=self.device,
             dtype=self.dtype
         )
+
+    def __repr__(self) -> str:
+        return f"ModelDataset(device={self.device}, dtype={self.dtype}, dataset={self.dataset})"

@@ -14,10 +14,11 @@ import torch
 
 import bwb._logging as logging
 import bwb.distributions as dist
-import bwb.validation as validation
+import bwb.utils.validation as validation
 from bwb.config import config
 from bwb.distributions.models import DiscreteModelsSetP
-from bwb.utils import is_gzip, path_t, seed_t, set_generator, timeit_to_total_time
+from bwb.utils.protocols import path_t, seed_t
+from bwb.utils.utils import set_generator, timeit_to_total_time
 
 _log = logging.get_logger(__name__)
 
@@ -86,7 +87,7 @@ class DistributionSampler[DistributionT](metaclass=abc.ABCMeta):
             warnings.warn(msg, RuntimeWarning, 2)
             _log.warning(msg)
 
-        if is_gzip(filename):
+        if filename.suffix == ".gz":
             f = gzip.open(filename, "wb")
         else:
             f = open(filename, "wb")
@@ -104,7 +105,7 @@ class DistributionSampler[DistributionT](metaclass=abc.ABCMeta):
         """
         filename: Path = Path(filename)
 
-        if is_gzip(filename):
+        if filename.suffix == ".gz":
             f = gzip.open(filename, "rb")
         else:
             f = open(filename, "rb")
@@ -527,12 +528,18 @@ class BaseGeneratorDistribSampler[DistributionT](
         gen = set_generator(seed=seed, device=self.device)
         try:
             # noinspection PyArgumentList
-            noise = self.noise_sampler_(size, generator=gen)
+            noise = self.noise_sampler_(size, seed=seed)
         except KeyError as e:
             noise = self.noise_sampler_(size)
             msg = (f"Failed to generate noise with seed. "
                    f"The noise will be generated without the seed. {e}")
             _log.warning(msg)
+            warnings.warn(msg, RuntimeWarning, stacklevel=2)
+        except Exception as e:
+            noise = self.noise_sampler_(size)
+            msg = (f"Failed to generate noise with seed. "
+                   f"The noise will be generated without the seed. {e}")
+            _log.error(msg)
             warnings.warn(msg, RuntimeWarning, stacklevel=2)
         return noise
 

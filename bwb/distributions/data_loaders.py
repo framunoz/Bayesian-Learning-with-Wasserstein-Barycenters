@@ -11,7 +11,7 @@ import torchvision.transforms as T
 import bwb._logging as logging
 import bwb.distributions as dist
 from bwb.config import config
-from bwb.utils import array_like_t
+from bwb.utils.protocols import array_like_t
 
 __all__ = [
     "BaseDistributionDataLoader",
@@ -22,7 +22,9 @@ __all__ = [
 _log = logging.get_logger(__name__)
 
 
-class BaseDistributionDataLoader[DistributionT](t.MutableMapping[int, DistributionT], metaclass=abc.ABCMeta):
+class BaseDistributionDataLoader[DistributionT](
+    t.MutableMapping[int, DistributionT], metaclass=abc.ABCMeta
+):
     """
     Base class for DataLoaders. It is a :py:class:`MutableMapping` that creates instances of
     distributions in a 'lazy' way, saving computation time. It ends up representing several
