@@ -47,7 +47,7 @@ class Config(metaclass=_SingletonMeta):
     whole library.
     """
     # The dtype selected by default
-    dtype = torch.float64
+    dtype = torch.float32
 
     # Use cuda if is possible
     if torch.cuda.is_available():
