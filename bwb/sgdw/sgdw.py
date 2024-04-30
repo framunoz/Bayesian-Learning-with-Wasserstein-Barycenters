@@ -579,6 +579,8 @@ class DistributionDrawSGDW(
         )
         if (
             self.projector is not None
+            and self.proj_every is not None
+            and self.proj_every > 0
             and self.iter_params.k % self.proj_every == self.proj_every - 1
         ):
             gs_weights_kp1 = self.projector(gs_weights_kp1).to(self.val)
