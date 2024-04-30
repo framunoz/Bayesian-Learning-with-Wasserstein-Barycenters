@@ -16,6 +16,9 @@ import functools
 import logging
 import threading
 import time
+import warnings
+from datetime import timedelta
+from typing import Type
 
 # The levels of the severity as in the package 'logging'
 CRITICAL = logging.CRITICAL
@@ -91,8 +94,9 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
 
         :param name: The name of the logger
         :param handlers: A list of handlers to attach to the logger.
-        :param level: The level of the logger
-        :return: The logger with the associated name.
+        :param level: The level of severity of the logger. Default is the general level of the
+            loggers in the library.
+        :return: The logger instance
         """
         if name in self.loggers:
             logger = self.loggers[name]
@@ -179,6 +183,50 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         else:
             handler.setFormatter(FORMATTER)
 
+    @staticmethod
+    def raise_warning(
+        msg: str,
+        logger: logging.Logger,
+        warning_category: Type[Warning] = None,
+        stacklevel: int = 1,
+        level: int = WARNING,
+        **kwargs
+    ) -> None:
+        """
+        Raise a warning with the logger and raise a warning with the warning category.
+
+        :param logger: The logger instance.
+        :param warning_category: The warning category to raise.
+        :param msg: The message of the warning.
+        :param level: The level of the logger. Default is WARNING.
+        :param stacklevel: The stack level of the warning. Default is 1.
+        :param kwargs: Other arguments to pass to the warning.
+        :return: None
+        """
+        logger.log(level, msg)
+        warnings.warn(msg, warning_category, stacklevel=stacklevel, **kwargs)
+
+    @staticmethod
+    def raise_error(
+        msg: str,
+        logger: logging.Logger,
+        error_category: Type[Exception],
+        level: int = ERROR,
+        **kwargs
+    ) -> None:
+        """
+        Raise an error with the logger and raise an error with the error category.
+
+        :param logger: The logger instance.
+        :param error_category: The error category to raise.
+        :param msg: The message of the error.
+        :param level: The level of the logger. Default is ERROR.
+        :param kwargs: Other arguments to pass to the error.
+        :return: None
+        """
+        logger.log(level, msg)
+        raise error_category(msg, **kwargs)
+
 
 # Create the (single) instance of LoggerConfiguration
 log_config = LoggerConfiguration()
@@ -197,8 +245,52 @@ def set_level(level: int, name: str = None):
     log_config.set_level(level, name)
 
 
+# noinspection PyMissingOrEmptyDocstring
+def raise_warning(
+    msg: str,
+    logger: logging.Logger,
+    warning_category: Type[Warning] = None,
+    stacklevel: int = 1,
+    level: int = WARNING,
+    **kwargs
+) -> None:
+    log_config.raise_warning(msg, logger, warning_category, stacklevel, level, **kwargs)
+
+
+# noinspection PyMissingOrEmptyDocstring
+def raise_error(
+    msg: str,
+    logger: logging.Logger,
+    error_category: Type[Exception],
+    level: int = ERROR,
+    **kwargs
+) -> None:
+    log_config.raise_error(msg, logger, error_category, level, **kwargs)
+
+
 get_logger.__doc__ = LoggerConfiguration.get_logger.__doc__
 set_level.__doc__ = LoggerConfiguration.set_level.__doc__
+raise_warning.__doc__ = LoggerConfiguration.raise_warning.__doc__
+raise_error.__doc__ = LoggerConfiguration.raise_error.__doc__
+
+
+def _time_fmt(seconds: float) -> str:
+    """
+    Format the time in seconds to a string.
+
+    :param seconds: The time in seconds.
+    :return: The formatted time in a string.
+    """
+    dt = timedelta(seconds=seconds)
+    dt_fmt = str(dt)
+    if dt.days > 0:  # Return in the format 'days, hours:min'
+        return dt_fmt[:-10]
+    if dt.seconds > 3600:  # Return in the format 'hours:min:sec'
+        return dt_fmt[:-7]
+    if dt.seconds > 60:  # Return in the format 'hours:min:sec.microsec (rounded)'
+        return dt_fmt[:-4]
+    # Return in the format 'hours:min:sec.microsec'
+    return dt_fmt
 
 
 class register_total_time:
@@ -229,7 +321,8 @@ class register_total_time:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.toc = time.perf_counter()
-        self.logger.log(self.level, f"The block of code takes {self.elapsed_time:.3f} [seg]")
+        dt_fmt = _time_fmt(self.elapsed_time)
+        self.logger.log(self.level, f"The block of code takes {dt_fmt}")
 
     def __call__(self, func):
         """
@@ -246,9 +339,10 @@ class register_total_time:
             tic = time.perf_counter()
             result = func(*args, **kwargs)
             toc = time.perf_counter()
+            dt_fmt = _time_fmt(toc - tic)
             self.logger.log(
                 self.level,
-                f"The function '{func.__name__}' takes {toc - tic:.3f} [seg]"
+                f"The function '{func.__name__}' takes {dt_fmt}"
             )
             return result
 
@@ -273,7 +367,8 @@ def register_total_time_function(logger: logging.Logger, level: int = logging.DE
             tic = time.perf_counter()
             result = func(*args, **kwargs)
             toc = time.perf_counter()
-            logger.log(level, f"The function '{func.__name__}' takes {toc - tic:.3f} [seg]")
+            dt_fmt = _time_fmt(toc - tic)
+            logger.log(level, f"The function '{func.__name__}' takes {dt_fmt}")
             return result
 
         return wrapper
@@ -301,10 +396,10 @@ def register_total_time_method(logger: logging.Logger, level: int = logging.DEBU
             tic = time.perf_counter()
             result = method(*args, **kwargs)
             toc = time.perf_counter()
+            dt_fmt = _time_fmt(toc - tic)
             logger.log(
                 level,
-                f"The method '{self.__class__.__name__}.{method.__name__}' takes"
-                f" {toc - tic:.3f} [seg]"
+                f"The method '{self.__class__.__name__}.{method.__name__}' takes {dt_fmt}"
             )
             return result
 
