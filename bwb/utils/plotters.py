@@ -3,6 +3,7 @@ Module that contains functions to plot images and histograms.
 """
 import typing as t
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -30,6 +31,60 @@ class DistributionP(t.Protocol):
     @property
     def image(self) -> PIL.Image.Image:
         ...
+
+
+def save_fig(
+    fig: plt.Figure,
+    name: str,
+    path: Path | str,
+    formats: t.Sequence[str] = ("pdf", "png"),
+    dpi: int = 300,
+    **kwargs,
+) -> None:
+    """
+    Function that saves a figure.
+
+    :param fig: The figure to save.
+    :type fig: plt.Figure
+    :param name: The name of the file.
+    :type name: str
+    :param path: The path of the file.
+    :type path: Path | str
+    :param formats: The formats of the image.
+    :type formats: list[str]
+    :param dpi: The resolution of the image.
+    :type dpi: int
+    :param kwargs: Optional arguments to pass to the matplotlib.pyplot.savefig function. For further
+        information, please see the documentation of that function.
+    """
+    path_to_save = Path(path) / name
+    for fmt in formats:
+        path_to_save_with_format = path_to_save.with_suffix(f".{fmt}")
+        fig.savefig(path_to_save_with_format, dpi=dpi, **kwargs)
+
+
+def save_fig_with_path(
+    path: Path | str,
+    formats: t.Sequence[str] = ("pdf", "png"),
+    **kwargs,
+):
+    """
+    Function that returns a function that saves a figure with a given path.
+
+    :param path: The path of the file.
+    :type path: Path | str
+    :param formats: The formats of the image. Default is ("pdf", "png").
+    :type formats: Sequence[str]
+    :return: The function that saves the figure.
+    """
+
+    def _save_fig(fig: plt.Figure, name: str, **_kwargs) -> None:
+        # Update the kwargs
+        _kwargs.update(kwargs)
+        return save_fig(fig, name, path, formats, **_kwargs)
+
+    _save_fig.__doc__ = save_fig.__doc__
+    return _save_fig
 
 
 def plot_image(
