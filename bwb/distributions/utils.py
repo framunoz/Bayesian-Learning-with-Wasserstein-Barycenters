@@ -101,7 +101,10 @@ def partition(X: torch.Tensor, mu: torch.Tensor, alpha: float):
     alpha = torch.tensor(alpha)
 
     if alpha <= 0:
-        raise ValueError("The alpha parameter must be greater than 0")
+        logging.raise_error(
+            "The alpha parameter must be greater than 0",
+            _log, ValueError
+        )
 
     if _log.level <= logging.INFO:
         n_times = torch.ceil(alpha * mu / torch.min(mu)).type(torch.int).to(mu.device)

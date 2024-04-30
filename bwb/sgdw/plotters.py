@@ -110,10 +110,11 @@ class PlotterComparison(Plotter[DistributionDraw, torch.Tensor]):
     ):
         super().__init__(sgdw, plot_every, n_cols, n_rows, factor, cmap)
         if plot_every is not None and plot_every < n_rows * n_cols:
-            msg = (f"'plot_every' should not be less than n_rows * n_cols."
-                   f" Currently: {plot_every = } < {n_rows * n_cols = }")
-            _log.error(msg)
-            raise ValueError(msg)
+            logging.raise_error(
+                "'plot_every' should not be less than n_rows * n_cols."
+                f" Currently: {plot_every = } < {n_rows * n_cols = }",
+                _log, ValueError
+            )
         self.pos_wgt_hist = True
         self.pos_wgt_samp_hist = True
 
@@ -126,13 +127,15 @@ class PlotterComparison(Plotter[DistributionDraw, torch.Tensor]):
         max_k = self.sgdw.iter_params.k
         init = max_k - max_imgs + 1 if init is None else init
         if init < 0:
-            msg = f"init should be greater than 0. Currently: {init = }"
-            _log.error(msg)
-            raise ValueError(msg)
+            logging.raise_error(
+                f"init should be greater than 0. Currently: {init = }",
+                _log, ValueError
+            )
         if init > max_k - max_imgs + 1:
-            msg = f"init should be less than {max_k - max_imgs + 1}. Currently: {init = }"
-            _log.error(msg)
-            raise ValueError(msg)
+            logging.raise_error(
+                f"init should be less than {max_k - max_imgs + 1}. Currently: {init = }",
+                _log, ValueError
+            )
 
         row, col = self.n_rows * 2, self.n_cols
 

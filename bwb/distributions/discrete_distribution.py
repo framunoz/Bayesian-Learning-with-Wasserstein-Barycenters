@@ -237,9 +237,10 @@ class DistributionDraw(DiscreteDistribution):
         :param device: The device of the distribution.
         :return: an instance of :py:class:`DistributionDraw`
         """
-        msg = "This method is deprecated, use the constructor instead."
-        warnings.warn(msg, DeprecationWarning, stacklevel=2)
-        _log.warning(msg)
+        warnings.warn(
+            "This method is deprecated, use the constructor instead.",
+            DeprecationWarning, stacklevel=2
+        )
         return cls(weights, shape, device=device, dtype=dtype)
 
     @classmethod
