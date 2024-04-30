@@ -7,7 +7,6 @@ import copy
 import gzip
 import pickle
 import typing as t
-import warnings
 from pathlib import Path
 
 import torch
@@ -83,9 +82,10 @@ class DistributionSampler[DistributionT](metaclass=abc.ABCMeta):
         filename: Path = Path(filename)
 
         if filename.suffix not in [".pkl", ".gz"]:
-            msg = "The file must have the extension '.pkl' or '.gz'."
-            warnings.warn(msg, RuntimeWarning, 2)
-            _log.warning(msg)
+            logging.raise_warning(
+                "The file must have the extension '.pkl' or '.gz'.",
+                _log, RuntimeWarning, stacklevel=2
+            )
 
         if filename.suffix == ".gz":
             f = gzip.open(filename, "wb")
@@ -158,8 +158,11 @@ class DiscreteDistribSampler[DistributionT](DistributionSampler[DistributionT]):
         )
 
         self.models_: DiscreteModelsSetP[DistributionT] = models  # The set of models
+        self.device: torch.device = models.get(0).device  # The device of the models
+        self.dtype: torch.dtype = models.get(0).dtype  # The dtype of the models
+
         self.models_index_: torch.Tensor = torch.arange(
-            len(models), device=config.device
+            len(models), device=self.device
         )  # The index of the models
 
         # The probabilities need to be set!
@@ -174,7 +177,7 @@ class DiscreteDistribSampler[DistributionT](DistributionSampler[DistributionT]):
 
     def _draw(self, seed: seed_t = None) -> tuple[DistributionT, int]:
         """To use template pattern on the draw method."""
-        rng: torch.Generator = set_generator(seed=seed, device=config.device)
+        rng: torch.Generator = set_generator(seed=seed, device=self.device)
 
         i = torch.multinomial(
             input=self.probabilities_, num_samples=1, generator=rng
@@ -199,7 +202,7 @@ class DiscreteDistribSampler[DistributionT](DistributionSampler[DistributionT]):
         seed: seed_t = None
     ) -> tuple[t.Sequence[DistributionT], list[int]]:
         """Samples as many distributions as the ``size`` parameter indicates."""
-        rng: torch.Generator = set_generator(seed=seed, device=config.device)
+        rng: torch.Generator = set_generator(seed=seed, device=self.device)
 
         indices = torch.multinomial(
             input=self.probabilities_, num_samples=size, replacement=True, generator=rng
@@ -255,8 +258,8 @@ class UniformDiscreteSampler[DistributionT](DiscreteDistribSampler[DistributionT
         super().fit(models)
         self.probabilities_: torch.Tensor = torch.ones(
             len(models),
-            device=config.device,
-            dtype=config.dtype,
+            device=self.device,
+            dtype=self.dtype,
         ) / len(models)
 
         self.support_ = self.models_index_
@@ -304,17 +307,65 @@ class BaseGeneratorDistribSampler[DistributionT](
     """
 
     SAVE_SAMPLES: bool = False
+    SAVE_HALF_PRECISION: bool = True
     noise_sampler_: t.Callable[[int, torch.Generator], torch.Tensor]
     generator_: GeneratorP
     transform_out_: t.Callable[[torch.Tensor], torch.Tensor]
-    device: torch.device
     dtype: torch.dtype
+    device: torch.device
 
-    def __init__(self, save_samples: t.Optional[bool] = None) -> None:
+    def __init__(self, save_samples: t.Optional[bool] = None, use_half: bool = False) -> None:
         super().__init__()
         self.save_samples: bool = save_samples or self.SAVE_SAMPLES
+        self.use_half: bool = use_half
         self.samples_history: list[torch.Tensor] = []
         self._fitted: bool = False
+
+    def _set_half_dtype[T](self, value: T, force: bool = False) -> T:
+        """
+        Set the half precision dtype to the tensor, if the attribute ``use_half`` is True.
+
+        :param value: The value to set the half precision dtype.
+        :param force: If True, the half precision dtype will be set regardless of the attribute
+            ``use_half``. Default is False.
+        :return: The value with the half precision dtype.
+        """
+        if not self.use_half and not force:
+            return value
+
+        if isinstance(value, torch.Tensor):
+            return value.half()
+
+        if not isinstance(value, list):
+            logging.raise_error(
+                "The value must be a tensor or a list of tensors.",
+                _log, TypeError
+            )
+
+        return [self._set_half_dtype(v, force) for v in value]
+
+    def _set_normal_dtype[T](self, value: T, force: bool = False) -> T:
+        """
+        Set the normal precision dtype to the tensor, if the attribute ``use_half`` is True.
+
+        :param value: The value to set the normal precision dtype.
+        :param force: If True, the normal precision dtype will be set regardless of the attribute
+            ``use_half``. Default is False.
+        :return: The value with the normal precision dtype.
+        """
+        if not self.use_half and not force:
+            return value
+
+        if isinstance(value, torch.Tensor):
+            return value.to(dtype=self.dtype)
+
+        if not isinstance(value, list):
+            logging.raise_error(
+                "The value must be a tensor or a list of tensors.",
+                _log, TypeError
+            )
+
+        return [self._set_normal_dtype(v, force) for v in value]
 
     @classmethod
     def set_save_samples(cls, save_samples: bool) -> None:
@@ -391,8 +442,8 @@ class BaseGeneratorDistribSampler[DistributionT](
         except Exception as _:
             raise ValueError("The noise sampler must accept an integer.")
         self.noise_sampler_: t.Callable[[int], torch.Tensor] = noise_sampler
-        self.device = noise.device
-        self.dtype = noise.dtype
+        self.device: torch.device = noise.device
+        self.dtype: torch.dtype = noise.dtype
 
         # Validation of the generator
         try:
@@ -406,7 +457,8 @@ class BaseGeneratorDistribSampler[DistributionT](
                 raise ValueError(
                     "The generator must return a tensor with the same device as the noise."
                 )
-        except Exception as _:
+        except Exception as e:
+            _log.error(e)
             raise ValueError(
                 "The generator must be able to generate a sample from the noise."
             )
@@ -426,14 +478,16 @@ class BaseGeneratorDistribSampler[DistributionT](
                 raise ValueError(
                     "The transform_out must return a tensor with the same device as the noise."
                 )
-        except Exception as _:
+        except Exception as e:
+            _log.error(e)
             raise ValueError(
                 "The transform_out must be able to transform the output of the generator."
             )
         # Validation that the output of the transform_out can be a distribution
         try:
             _ = self.create_distribution(output)
-        except Exception as _:
+        except Exception as e:
+            _log.error(e)
             raise ValueError(
                 "The transform_out must return a tensor that can be transformed into a "
                 "distribution."
@@ -479,9 +533,13 @@ class BaseGeneratorDistribSampler[DistributionT](
         :return: The transformed noise tensor.
         :rtype: DistributionT
         """
+        noise = self._set_normal_dtype(noise)  # Set the normal precision dtype
+
         with torch.no_grad():
             gen_output = self.generator_(noise)
+
         output = self.transform_out_(gen_output)
+
         return self.create_distribution(output)
 
     @t.final
@@ -493,6 +551,7 @@ class BaseGeneratorDistribSampler[DistributionT](
 
         to_return, noise = self._draw(seed)
         if self.save_samples:
+            noise = self._set_half_dtype(noise)  # Set the half precision dtype
             self.samples_history.append(noise)
 
         return to_return
@@ -506,6 +565,7 @@ class BaseGeneratorDistribSampler[DistributionT](
 
         to_return, noises = self._rvs(size, seed)
         if self.save_samples:
+            noises = self._set_half_dtype(noises)  # Set the half precision dtype
             self.samples_history.extend(noises)
 
         return to_return
@@ -531,16 +591,18 @@ class BaseGeneratorDistribSampler[DistributionT](
             noise = self.noise_sampler_(size, seed=seed)
         except KeyError as e:
             noise = self.noise_sampler_(size)
-            msg = (f"Failed to generate noise with seed. "
-                   f"The noise will be generated without the seed. {e}")
-            _log.warning(msg)
-            warnings.warn(msg, RuntimeWarning, stacklevel=2)
+            logging.raise_warning(
+                "Failed to generate noise with seed. The noise will be generated without the "
+                f"seed. {e}",
+                _log, RuntimeWarning, stacklevel=2
+            )
         except Exception as e:
             noise = self.noise_sampler_(size)
-            msg = (f"Failed to generate noise with seed. "
-                   f"The noise will be generated without the seed. {e}")
-            _log.error(msg)
-            warnings.warn(msg, RuntimeWarning, stacklevel=2)
+            logging.raise_warning(
+                "Failed to generate noise with seed. The noise will be generated without the "
+                f"seed. {e}",
+                _log, RuntimeWarning, stacklevel=2
+            )
         return noise
 
     def __copy__(self) -> t.Self:
@@ -575,18 +637,68 @@ class BaseGeneratorDistribSampler[DistributionT](
         return new
 
     def __getstate__(self):
-        msg = ("The generator_, transform_out_ and noise_sampler_ attributes will not be saved. "
-               "Use fit method to fit these attributes.")
-        _log.warning(msg)
-        warnings.warn(msg, RuntimeWarning, stacklevel=2)
+        logging.raise_warning(
+            "The generator_, transform_out_ and noise_sampler_ attributes will not be saved. "
+            "Use fit method to fit these attributes.",
+            _log, RuntimeWarning, stacklevel=2
+        )
 
         # Remove the generator, transform_out and noise_sampler attributes
-        state = copy.deepcopy(self.__dict__)
+        state = copy.copy(self.__dict__)
         state.pop("generator_", None)
         state.pop("transform_out_", None)
         state.pop("noise_sampler_", None)
 
+        if self.SAVE_HALF_PRECISION and not self.use_half:
+            logging.raise_warning(
+                "The samples will be saved in half precision. To disable this behavior, set the "
+                "attribute SAVE_HALF_PRECISION to False.",
+                _log, RuntimeWarning, stacklevel=2
+            )
+            state = self._getstate_half_(state)
+
         return state
+
+    def _getstate_half_(self, state):
+        """
+        To use template pattern on the __getstate__ method.
+
+        :param state: The state to return.
+        :return: The state.
+        """
+        state["samples_history"] = self._set_half_dtype(self.samples_history, force=True)
+        return state
+
+    @classmethod
+    @t.override
+    def load(cls, filename: path_t) -> t.Self:
+        new = super().load(filename)
+        new._fitted = False
+
+        if cls.SAVE_HALF_PRECISION and not new.use_half:
+            if not (hasattr(new, "device") and hasattr(new, "dtype")):
+                logging.raise_warning(
+                    "The device and dtype were not saved. The samples will be loaded with the "
+                    "default device and dtype.",
+                    _log, RuntimeWarning, stacklevel=2
+                )
+                cls._load_half_(new, config.device, config.dtype)
+            else:
+                cls._load_half_(new, new.device, new.dtype)
+
+        return new
+
+    @classmethod
+    def _load_half_(cls, new: t.Self, device: torch.device, dtype: torch.dtype) -> None:
+        """
+        To use template pattern on the load method.
+
+        :param new: The new instance.
+        :param device: The device to load the samples.
+        :param dtype: The dtype to load the samples.
+        :return: The new instance.
+        """
+        new.samples_history = new._set_normal_dtype(new.samples_history, force=True)
 
 
 # noinspection PyAttributeOutsideInit
@@ -627,10 +739,9 @@ class PosteriorPiN(DistributionSampler, metaclass=abc.ABCMeta):
         super().__init__()
 
         # Raise a warning of deprecation
-        warnings.warn(
+        logging.raise_warning(
             "PosteriorPiN is deprecated. Use DistributionSampler instead.",
-            DeprecationWarning,
-            stacklevel=2,
+            _log, DeprecationWarning, stacklevel=2
         )
 
 
@@ -639,15 +750,16 @@ class DiscretePosteriorPiN(DiscreteDistribSampler):
         super().__init__(*args, **kwargs)
 
         # Raise a warning of deprecation
-        warnings.warn(
-            "DiscretePosteriorPiN is deprecated. Use DiscreteDistributionSampler instead.",
-            DeprecationWarning,
-            stacklevel=2,
+        logging.raise_warning(
+            "DiscretePosteriorPiN is deprecated. Use DiscreteDistribSampler instead.",
+            _log, DeprecationWarning, stacklevel=2
         )
 
 
 def __main():
     from icecream import ic
+    from pathlib import Path
+
     input_size = 128
     output_size = (32, 32)
 
@@ -688,6 +800,30 @@ def __main():
 
     distr_sampler_ = copy.deepcopy(distr_sampler)
     ic(distr_sampler_)
+
+    # Save and load test
+    filename = Path("test_half.pkl")
+    distr_sampler.sample(1_000)
+    distr_sampler.save(filename)
+    distr_sampler_ = GeneratorDistribSampler.load(filename)
+    ic(distr_sampler_)
+    ic(filename.stat().st_size)
+    # Delete file
+    filename.unlink()
+
+    # Save and load test with half precision
+    GeneratorDistribSampler.SAVE_HALF_PRECISION = False
+    filename = Path("test.pkl")
+    ic(distr_sampler.samples_history[0].dtype)
+    ic(distr_sampler.SAVE_HALF_PRECISION)
+    distr_sampler.save(filename)
+    distr_sampler_ = GeneratorDistribSampler.load(filename)
+    ic(distr_sampler_.samples_history[0].dtype)
+    ic(distr_sampler_.SAVE_HALF_PRECISION)
+    ic(distr_sampler_)
+    ic(filename.stat().st_size)
+    # Delete file
+    filename.unlink()
 
 
 if __name__ == '__main__':

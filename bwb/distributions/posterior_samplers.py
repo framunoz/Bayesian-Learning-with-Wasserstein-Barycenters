@@ -178,9 +178,10 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
         save_samples: bool = True,
         log_likelihood_fn=log_likelihood_latent,
         log_prior_fn=log_prior,
+        use_half: bool = False,
         **kwargs,
     ) -> None:
-        super().__init__(save_samples=save_samples)
+        super().__init__(save_samples=save_samples, use_half=use_half)
         # The log-likelihood and log-prior functions
         self.log_likelihood_fn = log_likelihood_fn
         self.log_prior_fn = log_prior_fn
@@ -207,6 +208,7 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
 
         # The autocorrelation time
         self._mean_autocorr_time = None  # not set yet
+        self._autocorr_time = None  # not set yet
 
     def _create_empty_chains(self, n_walkers: int = None) -> list[list[torch.Tensor]]:
         """
@@ -331,6 +333,7 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
             chain, self.log = hamiltorch.sample(**hamiltorch_kwargs)
         else:
             chain = hamiltorch.sample(**hamiltorch_kwargs)
+        chain = self._set_half_dtype(chain)
 
         self.chains[0].extend(chain)
         self.n_steps += len(chain)
@@ -352,6 +355,7 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
         to_return = torch.stack(self.chains[0][discard::thin]).unsqueeze(1)
         if flat:
             to_return = to_return.reshape(-1, to_return.shape[-1])
+        to_return = self._set_normal_dtype(to_return)
         return to_return
 
     @property
@@ -362,11 +366,27 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
         :return: The autocorrelation time of the chain.
         """
         if self._mean_autocorr_time is None:
-            msg = "The autocorrelation time is not set yet."
-            _log.warning(msg)
-            warnings.warn(msg)
-            return torch.tensor(0.0)
+            logging.raise_warning(
+                "The autocorrelation time is not set yet.",
+                _log, RuntimeWarning, stacklevel=2
+            )
+            return torch.tensor(0.0, dtype=self.dtype, device=self.device)
         return self._mean_autocorr_time
+
+    @property
+    def autocorr_time(self) -> torch.Tensor:
+        """
+        Get the autocorrelation time of the chain.
+
+        :return: The autocorrelation time of the chain.
+        """
+        if self._autocorr_time is None:
+            logging.raise_warning(
+                "The autocorrelation time is not set yet.",
+                _log, RuntimeWarning, stacklevel=2
+            )
+            return torch.tensor(0.0, dtype=self.dtype, device=self.device)
+        return self._autocorr_time
 
     def get_autocorr_time(self, thin=1, discard=0, **kwargs) -> torch.Tensor:
         """
@@ -386,6 +406,7 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
         """
         chain = self.get_chain(thin=thin, discard=discard)
         autocorr_time = thin * integrated_time(chain, **kwargs)
+        self._autocorr_time = autocorr_time
         self._mean_autocorr_time = torch.mean(autocorr_time)
         return autocorr_time
 
@@ -405,6 +426,8 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
         to_extend = self.get_chain(flat=True, thin=thin, discard=discard)
         to_extend = [sample for sample in to_extend]
         to_extend = random.sample(to_extend, len(to_extend))
+        to_extend = self._set_half_dtype(to_extend)
+
         self.samples_cache.extend(to_extend)
         return self
 
@@ -415,7 +438,10 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
             self.run(n_steps=50)
             self.shuffle_samples_cache()
 
-        z_sampled = self.samples_cache.pop(0).reshape(1, -1, 1, 1)
+        sample = self.samples_cache.pop(0)
+        sample = self._set_normal_dtype(sample)
+
+        z_sampled = sample.reshape(1, -1, 1, 1)
         distribution: dist.DistributionDraw = self.transform_noise(z_sampled)
         return distribution, z_sampled
 
@@ -431,12 +457,10 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
             self.shuffle_samples_cache()
 
         samples, self.samples_cache = self.samples_cache[:size], self.samples_cache[size:]
+        samples = self._set_normal_dtype(samples)
         samples = [sample.reshape(1, -1, 1, 1) for sample in samples]
 
-        samples_: list[dist.DistributionDraw] = []
-        for z_ in samples:
-            distribution: dist.DistributionDraw = self.transform_noise(z_)
-            samples_.append(distribution)
+        samples_: list[dist.DistributionDraw] = [self.transform_noise(z_) for z_ in samples]
 
         return samples_, samples
 
@@ -478,6 +502,7 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
             step_size=hamiltorch_kwargs.pop("step_size"),
             sampler=hamiltorch_kwargs.pop("sampler"),
             save_samples=self.save_samples,
+            use_half=self.use_half,
             **hamiltorch_kwargs
         ).fit(
             generator=generator, transform_out=transform_out, noise_sampler=noise_sampler, data=data
@@ -513,6 +538,7 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
             step_size=hamiltorch_kwargs.pop("step_size"),
             sampler=hamiltorch_kwargs.pop("sampler"),
             save_samples=self.save_samples,
+            use_half=self.use_half,
             **hamiltorch_kwargs
         ).fit(
             generator=generator, transform_out=transform_out, noise_sampler=noise_sampler, data=data
@@ -525,6 +551,20 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[dist.Distributi
         new.__dict__ = copy.deepcopy(self.__dict__, memo)
 
         return new
+
+    @t.override
+    def _getstate_half_(self, state):
+        state = super()._getstate_half_(state)
+        state["chains"] = self._set_half_dtype(self.chains)
+        state["samples_cache"] = self._set_half_dtype(self.samples_cache)
+        return state
+
+    @classmethod
+    @t.override
+    def _load_half_(cls, new: t.Self, device: torch.device, dtype: torch.dtype) -> None:
+        super()._load_half_(new, device, dtype)
+        new.chains = new._set_normal_dtype(new.chains)
+        new.samples_cache = new._set_normal_dtype(new.samples_cache)
 
 
 class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
@@ -541,6 +581,7 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
         log_likelihood_fn=log_likelihood_latent,
         log_prior_fn=log_prior,
         save_samples: bool = True,
+        use_half: bool = False,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -552,6 +593,7 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
             save_samples=save_samples,
             log_likelihood_fn=log_likelihood_fn,
             log_prior_fn=log_prior_fn,
+            use_half=use_half,
             **kwargs
         )
         self.n_workers = n_workers
@@ -597,6 +639,8 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
             if debug == 2:
                 params, log = params
                 log_list.append(log)
+            params = self._set_half_dtype(params)
+
             self.chains[i].extend(params)
             self.n_steps += len(params)
 
@@ -609,8 +653,11 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
         samples_per_chain = [torch.stack(chain) for chain in self.chains]
         to_return = torch.stack(samples_per_chain, dim=1)
         to_return = to_return[discard::thin]
+
         if flat:
             to_return = to_return.flatten(0, 1)
+        to_return = self._set_normal_dtype(to_return)
+
         return to_return
 
     @t.override
@@ -648,6 +695,7 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
             sampler=hamiltorch_kwargs.pop("sampler"),
             parallel=self.parallel,
             save_samples=self.save_samples,
+            use_half=self.use_half,
             **hamiltorch_kwargs
         ).fit(
             generator=generator, transform_out=transform_out, noise_sampler=noise_sampler, data=data
@@ -686,6 +734,7 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
             sampler=hamiltorch_kwargs.pop("sampler"),
             parallel=self.parallel,
             save_samples=self.save_samples,
+            use_half=self.use_half,
             **hamiltorch_kwargs
         ).fit(
             generator=generator, transform_out=transform_out, noise_sampler=noise_sampler, data=data
@@ -714,6 +763,7 @@ class NUTSPosteriorSampler(LatentMCMCPosteriorSampler):
         log_likelihood_fn=log_likelihood_latent,
         log_prior_fn=log_prior,
         save_samples: bool = True,
+        use_half: bool = False,
         **kwargs,
     ):
         super().__init__(
@@ -729,6 +779,7 @@ class NUTSPosteriorSampler(LatentMCMCPosteriorSampler):
             save_samples=save_samples,
             log_likelihood_fn=log_likelihood_fn,
             log_prior_fn=log_prior_fn,
+            use_half=use_half,
             **kwargs
         )
 
@@ -753,6 +804,7 @@ class NUTSPosteriorSampler(LatentMCMCPosteriorSampler):
             desired_accept_rate=hamiltorch_kwargs.pop("desired_accept_rate"),
             parallel=self.parallel,
             save_samples=self.save_samples,
+            use_half=self.use_half,
             **hamiltorch_kwargs
         ).fit(
             generator=generator, transform_out=transform_out, noise_sampler=noise_sampler, data=data
@@ -792,6 +844,7 @@ class NUTSPosteriorSampler(LatentMCMCPosteriorSampler):
             desired_accept_rate=hamiltorch_kwargs.pop("desired_accept_rate"),
             parallel=self.parallel,
             save_samples=self.save_samples,
+            use_half=self.use_half,
             **hamiltorch_kwargs
         ).fit(
             generator=generator, transform_out=transform_out, noise_sampler=noise_sampler, data=data
@@ -813,8 +866,7 @@ class ExplicitPosteriorPiN(ExplicitPosteriorSampler):
         # Raise a warning of deprecation
         warnings.warn(
             "ExplicitPosteriorPiN is deprecated. Use ExplicitPosteriorSampler instead.",
-            DeprecationWarning,
-            stacklevel=2,
+            DeprecationWarning, stacklevel=2,
         )
 
 
@@ -822,6 +874,7 @@ class ExplicitPosteriorPiN(ExplicitPosteriorSampler):
 def __main():
     from icecream import ic
     from pathlib import Path
+    logging.set_level(logging.DEBUG)
 
     def _noise_sampler(size):
         """Dummy noise_sampler."""
@@ -835,9 +888,9 @@ def __main():
         """Dummy transform_out."""
         return x
 
-    BASE_LATENT_MCMC_POSTERIOR_SAMPLER = True
+    BASE_LATENT_MCMC_POSTERIOR_SAMPLER = False
     LATENT_MCMC_POSTERIOR_SAMPLER = False
-    NUTS_POSTERIOR_SAMPLER = False
+    NUTS_POSTERIOR_SAMPLER = True
 
     input_size = 128
     output_size = (32, 32)
@@ -913,7 +966,7 @@ def __main():
     if NUTS_POSTERIOR_SAMPLER:
         ic()
         # Test representation
-        posterior = NUTSPosteriorSampler()
+        posterior = NUTSPosteriorSampler(use_half=True)
         ic(posterior)
         ic(NUTSPosteriorSampler(parallel=True))
         ic(NUTSPosteriorSampler(n_walkers=2))
@@ -944,20 +997,37 @@ def __main():
         ic("deep copy test", posterior_)
         ic(posterior_._hamiltorch_kwargs)
 
+        with logging.register_total_time(_log) as timer:
+            posterior.sample(50)
+
         # Save test
-        SAVE_PATH = Path("posterior_sampler.pkl")
-        ic(posterior.noise_sampler_)
-        posterior.save(SAVE_PATH)
-        posterior_ = NUTSPosteriorSampler.load(SAVE_PATH)
-        ic("save test", posterior_)
-        SAVE_PATH.unlink()
+        with logging.register_total_time(_log) as timer:
+            SAVE_PATH = Path("posterior_sampler.pkl")
+            ic(posterior.noise_sampler_)
+            posterior.save(SAVE_PATH)
+            posterior_ = NUTSPosteriorSampler.load(SAVE_PATH)
+            ic("save test", posterior_)
+            ic(SAVE_PATH.stat().st_size)
+            SAVE_PATH.unlink()
 
         # Save test with gzip
-        SAVE_PATH = Path("posterior_sampler.pkl.gz")
-        posterior.save(SAVE_PATH)
-        posterior_ = NUTSPosteriorSampler.load(SAVE_PATH)
-        ic("save test with gzip", posterior_)
-        SAVE_PATH.unlink()
+        with logging.register_total_time(_log) as timer:
+            SAVE_PATH = Path("posterior_sampler.pkl.gz")
+            posterior.save(SAVE_PATH)
+            posterior_ = NUTSPosteriorSampler.load(SAVE_PATH)
+            ic("save test with gzip", posterior_)
+            ic(SAVE_PATH.stat().st_size)
+            SAVE_PATH.unlink()
+
+        # Save test with gzip and without half precision
+        NUTSPosteriorSampler.SAVE_HALF_PRECISION = False
+        with logging.register_total_time(_log) as timer:
+            SAVE_PATH = Path("posterior_sampler.pkl.gz")
+            posterior.save(SAVE_PATH)
+            posterior_ = NUTSPosteriorSampler.load(SAVE_PATH)
+            ic("save test with gzip and without half precision", posterior_)
+            ic(SAVE_PATH.stat().st_size)
+            SAVE_PATH.unlink()
 
 
 if __name__ == '__main__':
