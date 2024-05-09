@@ -1,3 +1,5 @@
+from math import prod
+
 import torch
 
 import bwb._logging as logging
@@ -24,16 +26,23 @@ def __grayscale(
     return to_return
 
 
+# noinspection PyUnreachableCode
 _grayscale = torch.jit.script(
     __grayscale,
     example_inputs=[(
-        torch.rand((28, 28), dtype=torch.float32, device=config.device),  # to_return
-        torch.rand((784,), dtype=torch.float32, device=config.device),  # weights
-        torch.randint(0, 28, size=(784, 2), dtype=torch.int32, device=config.device),  # support
+        torch.rand((28, 28),
+                   dtype=torch.float32, device=config.device),  # to_return
+        torch.rand((784,),
+                   dtype=torch.float32, device=config.device),  # weights
+        torch.randint(0, 28, size=(784, 2),
+                      dtype=torch.int32, device=config.device),  # support
     ), (
-        torch.rand((28, 28), dtype=torch.float64, device=config.device),  # to_return
-        torch.rand((784,), dtype=torch.float64, device=config.device),  # weights
-        torch.randint(0, 28, size=(784, 2), dtype=torch.int32, device=config.device),  # support
+        torch.rand((28, 28),
+                   dtype=torch.float64, device=config.device),  # to_return
+        torch.rand((784,),
+                   dtype=torch.float64, device=config.device),  # weights
+        torch.randint(0, 28, size=(784, 2),
+                      dtype=torch.int32, device=config.device),  # support
     )]
 )
 
@@ -42,8 +51,6 @@ def grayscale_parser(
     shape: tuple[int, ...],
     weights: torch.Tensor,
     support: torch.Tensor,
-    device=None,
-    dtype=None
 ) -> torch.Tensor:
     """
     Function that parses the weights and support into a grayscale image.
@@ -51,10 +58,13 @@ def grayscale_parser(
     :param shape: The shape of the image.
     :param weights: The weights of the distribution.
     :param support: The support of the distribution.
-    :param device: The device to use.
-    :param dtype: The dtype to use.
     :return: A grayscale image.
     """
+    if prod(shape) != support.shape[0]:
+        logging.raise_error(
+            "The shape of the image must be equal to the number of samples",
+            _log, ValueError
+        )
     device = weights.device
     dtype = weights.dtype
     support = torch.round(support).to(dtype=torch.int32, device=device)
@@ -64,8 +74,7 @@ def grayscale_parser(
     return to_return.type(torch.uint8)
 
 
-@torch.jit.script
-def _partition(
+def __partition(
     X: torch.Tensor,
     mu: torch.Tensor,
     alpha,
@@ -89,6 +98,21 @@ def _partition(
     return X_, mu_
 
 
+# noinspection PyUnreachableCode
+_partition = torch.jit.script(
+    __partition,
+    example_inputs=[(
+        torch.rand((784, 2), dtype=torch.float32, device=config.device),  # X
+        torch.rand((784,), dtype=torch.float32, device=config.device),  # mu
+        0.5,  # alpha
+    ), (
+        torch.rand((784, 2), dtype=torch.float64, device=config.device),  # X
+        torch.rand((784,), dtype=torch.float64, device=config.device),  # mu
+        0.5,  # alpha
+    )]
+)
+
+
 def partition(X: torch.Tensor, mu: torch.Tensor, alpha: float):
     """
     Function that partitions the samples in X according to the weights in mu.
@@ -107,7 +131,9 @@ def partition(X: torch.Tensor, mu: torch.Tensor, alpha: float):
         )
 
     if _log.level <= logging.INFO:
-        n_times = torch.ceil(alpha * mu / torch.min(mu)).type(torch.int).to(mu.device)
+        n_times = torch.ceil(
+            alpha * mu / torch.min(mu)
+        ).to(torch.int).to(mu.device)
         _log.debug(f"Number of times to repeat each sample: {n_times}")
         n_rows = int(torch.sum(n_times))
         _log.info(f"Number of rows in the new X: {n_rows}")
@@ -116,32 +142,3 @@ def partition(X: torch.Tensor, mu: torch.Tensor, alpha: float):
     mu = mu / torch.sum(mu)
 
     return X, mu
-
-
-def main():
-    """
-    Main function.
-    """
-    shape = (28, 28)
-
-    # Test 1
-    weights = torch.rand((784,), device=config.device)
-    support = torch.randint(0, 28, (784, 2), device=config.device)
-    to_return = grayscale_parser(shape, weights, support)
-    print(to_return.shape)
-    print(to_return.dtype)
-    print(to_return.device)
-
-    # Test 2
-    weights = torch.rand((784,), device=config.device)
-    weights = weights / torch.sum(weights)
-    support = torch.rand((784, 2), device=config.device) * 27
-    print(support)
-    to_return = grayscale_parser(shape, weights, support)
-    print(to_return.shape)
-    print(to_return.dtype)
-    print(to_return.device)
-
-
-if __name__ == '__main__':
-    main()
