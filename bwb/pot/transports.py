@@ -13,8 +13,8 @@ _log = logging.get_logger(__name__)
 
 class FitWithDistribution(typing.Protocol):
     """
-    Mixing class to be inherited by the BaseTransport class and be fitted with discrete
-    distributions defined in the package.
+    Mixing class to be inherited by the BaseTransport class and be fitted
+    with discrete distributions defined in the package.
     """
 
     def fit(
@@ -34,7 +34,7 @@ class FitWithDistribution(typing.Protocol):
         return self.fit(Xs=Xs, mu_s=mu_s, Xt=Xt, mu_t=mu_t)
 
 
-# noinspection PyUnresolvedReferences,PyAttributeOutsideInit,PyPep8Naming,PyUnusedLocal
+# noinspection PyAttributeOutsideInit,PyUnresolvedReferences
 class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
     """Base class for OTDA objects
 
@@ -58,7 +58,8 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
 
     `transform_labels` method should always get as input a `ys` parameter
 
-    `inverse_transform_labels` method should always get as input a `yt` parameter
+    `inverse_transform_labels` method should always get as input a `yt`
+    parameter
     """
 
     metric: str
@@ -67,9 +68,18 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
     distribution_estimation: typing.Callable
 
     @logging.register_total_time_method(_log)
-    def fit(self, Xs=None, mu_s=None, ys=None, Xt=None, mu_t=None, yt=None) -> object:
+    def fit(
+        self,
+        Xs=None,
+        mu_s=None,
+        ys=None,
+        Xt=None,
+        mu_t=None,
+        yt=None
+    ) -> object:
         r"""Build a coupling matrix from source and target sets of samples
-        :math:`(\mathbf{X_s}, \mathbf{y_s})` and :math:`(\mathbf{X_t}, \mathbf{y_t})`
+        :math:`(\mathbf{X_s}, \mathbf{y_s})` and :math:`(\mathbf{X_t},
+        \mathbf{y_t})`
 
         Parameters
         ----------
@@ -121,8 +131,14 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
                         self.cost_[idx_s[0], j] = self.limit_max
 
             # distribution estimation
-            self.mu_s = mu_s if mu_s is not None else self.distribution_estimation(Xs)
-            self.mu_t = mu_t if mu_t is not None else self.distribution_estimation(Xt)
+            if mu_s is None:
+                self.mu_s = self.distribution_estimation(Xs)
+            else:
+                self.mu_s = mu_s
+            if mu_t is not None:
+                self.mu_t = mu_t
+            else:
+                self.mu_t = self.distribution_estimation(Xt)
 
             # store arrays of samples
             self.xs_ = Xs
@@ -130,10 +146,19 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
 
         return self
 
-    def fit_transform(self, Xs=None, mu_s=None, ys=None, Xt=None, mu_t=None, yt=None):
+    def fit_transform(
+        self,
+        Xs=None,
+        mu_s=None,
+        ys=None,
+        Xt=None,
+        mu_t=None,
+        yt=None
+    ):
         r"""Build a coupling matrix from source and target sets of samples
-        :math:`(\mathbf{X_s}, \mathbf{y_s})` and :math:`(\mathbf{X_t}, \mathbf{y_t})`
-        and transports source samples :math:`\mathbf{X_s}` onto target ones :math:`\mathbf{X_t}`
+        :math:`(\mathbf{X_s}, \mathbf{y_s})` and :math:`(\mathbf{X_t},
+        \mathbf{y_t})` and transports source samples :math:`\mathbf{X_s}`
+        onto target ones :math:`\mathbf{X_t}`
 
         Parameters
         ----------
@@ -163,7 +188,8 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
         return self.fit(Xs, mu_s, ys, Xt, mu_t, yt).transform(Xs, ys, Xt, yt)
 
     def transform(self, Xs=None, ys=None, Xt=None, yt=None, batch_size=128):
-        r"""Transports source samples :math:`\mathbf{X_s}` onto target ones :math:`\mathbf{X_t}`
+        r"""Transports source samples :math:`\mathbf{X_s}` onto target ones
+        :math:`\mathbf{X_t}`
 
         Parameters
         ----------
@@ -174,8 +200,8 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
         Xt : array-like, shape (n_target_samples, n_features)
             The target input samples.
         yt : array-like, shape (n_target_samples,)
-            The class labels for target. If some target samples are unlabelled, fill the
-            :math:`\mathbf{y_t}`'s elements with -1.
+            The class labels for target. If some target samples are
+            unlabelled, fill the :math:`\mathbf{y_t}`'s elements with -1.
 
             Warning: Note that, due to this convention -1 cannot be used as a
             class label
@@ -193,7 +219,8 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
         if ot.utils.check_params(Xs=Xs):
             if nx.array_equal(self.xs_, Xs):
                 # perform standard barycentric mapping
-                transp = self.coupling_ / nx.sum(self.coupling_, axis=1)[:, None]
+                transp = (self.coupling_
+                          / nx.sum(self.coupling_, axis=1)[:, None])
 
                 # set nans to 0
                 transp[~nx.isfinite(transp)] = 0
@@ -215,7 +242,8 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
                     idx = nx.argmin(D0, axis=1)
 
                     # transport the source samples
-                    transp = self.coupling_ / nx.sum(self.coupling_, axis=1)[:, None]
+                    transp = (self.coupling_
+                              / nx.sum(self.coupling_, axis=1)[:, None])
                     transp[~nx.isfinite(transp)] = 0
                     transp_Xs_ = nx.dot(transp, self.xt_)
 
@@ -229,8 +257,9 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
             return transp_Xs
 
     def transform_labels(self, ys=None):
-        r"""Propagate source labels :math:`\mathbf{y_s}` to obtain estimated target labels as in
-        :ref:`[27] <references-basetransport-transform-labels>`.
+        r"""Propagate source labels :math:`\mathbf{y_s}` to obtain
+        estimated target labels as in :ref:`[27]
+        <references-basetransport-transform-labels>`.
 
         Parameters
         ----------
@@ -247,8 +276,9 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
         References
         ----------
         .. [27] Ievgen Redko, Nicolas Courty, Rémi Flamary, Devis Tuia
-           "Optimal transport for multi-source domain adaptation under target shift",
-           International Conference on Artificial Intelligence and Statistics (AISTATS), 2019.
+           "Optimal transport for multi-source domain adaptation under
+           target shift", International Conference on Artificial
+           Intelligence and Statistics (AISTATS), 2019.
 
         """
         nx = self.nx
@@ -274,8 +304,14 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
 
             return transp_ys.T
 
-    def inverse_transform(self, Xs=None, ys=None, Xt=None, yt=None, batch_size=128):
-        r"""Transports target samples :math:`\mathbf{X_t}` onto source samples :math:`\mathbf{X_s}`
+    def inverse_transform(
+        self,
+        Xs=None, ys=None,
+        Xt=None, yt=None,
+        batch_size=128
+    ):
+        r"""Transports target samples :math:`\mathbf{X_t}` onto source
+        samples :math:`\mathbf{X_s}`
 
         Parameters
         ----------
@@ -286,8 +322,8 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
         Xt : array-like, shape (n_target_samples, n_features)
             The target input samples.
         yt : array-like, shape (n_target_samples,)
-            The target class labels. If some target samples are unlabelled, fill the
-            :math:`\mathbf{y_t}`'s elements with -1.
+            The target class labels. If some target samples are
+            unlabelled, fill the :math:`\mathbf{y_t}`'s elements with -1.
 
             Warning: Note that, due to this convention -1 cannot be used as a
             class label
@@ -305,7 +341,8 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
         if ot.utils.check_params(Xt=Xt):
             if nx.array_equal(self.xt_, Xt):
                 # perform standard barycentric mapping
-                transp_ = self.coupling_.T / nx.sum(self.coupling_, 0)[:, None]
+                transp_ = (self.coupling_.T
+                           / nx.sum(self.coupling_, 0)[:, None])
 
                 # set nans to 0
                 transp_[~nx.isfinite(transp_)] = 0
@@ -326,7 +363,8 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
                     idx = nx.argmin(D0, axis=1)
 
                     # transport the target samples
-                    transp_ = self.coupling_.T / nx.sum(self.coupling_, 0)[:, None]
+                    transp_ = (self.coupling_.T
+                               / nx.sum(self.coupling_, 0)[:, None])
                     transp_[~nx.isfinite(transp_)] = 0
                     transp_Xt_ = nx.dot(transp_, self.xs_)
 
@@ -340,8 +378,8 @@ class BaseTransport(ot.utils.BaseEstimator, FitWithDistribution):
             return transp_Xt
 
     def inverse_transform_labels(self, yt=None):
-        r"""Propagate target labels :math:`\mathbf{y_t}` to obtain estimated source labels
-        :math:`\mathbf{y_s}`
+        r"""Propagate target labels :math:`\mathbf{y_t}` to obtain
+        estimated source labels :math:`\mathbf{y_s}`
 
         Parameters
         ----------
@@ -403,7 +441,8 @@ class SinkhornTransport(BaseTransport):
     out_of_sample_map : string, optional (default="ferradans")
         The kind of out of sample mapping to apply to transport samples
         from a domain into another one. Currently, the only possible option is
-        "ferradans" which uses the method proposed in :ref:`[6] <references-sinkhorntransport>`.
+        "ferradans" which uses the method proposed in
+        :ref:`[6] <references-sinkhorntransport>`.
     limit_max: float, optional (default=np.infty)
         Controls the semi supervised mode. Transport between labeled source
         and target samples of different classes will exhibit a cost defined
@@ -462,7 +501,8 @@ class SinkhornTransport(BaseTransport):
     @logging.register_total_time_method(_log)
     def fit(self, Xs=None, mu_s=None, ys=None, Xt=None, mu_t=None, yt=None):
         r"""Build a coupling matrix from source and target sets of samples
-        :math:`(\mathbf{X_s}, \mathbf{y_s})` and :math:`(\mathbf{X_t}, \mathbf{y_t})`
+        :math:`(\mathbf{X_s}, \mathbf{y_s})` and :math:`(\mathbf{X_t},
+        \mathbf{y_t})`
 
         Parameters
         ----------
@@ -531,7 +571,8 @@ class EMDTransport(BaseTransport):
     out_of_sample_map : string, optional (default="ferradans")
         The kind of out of sample mapping to apply to transport samples
         from a domain into another one. Currently, the only possible option is
-        "ferradans" which uses the method proposed in :ref:`[6] <references-emdtransport>`.
+        "ferradans" which uses the method proposed in
+        :ref:`[6] <references-emdtransport>`.
     limit_max: float, optional (default=10)
         Controls the semi supervised mode. Transport between labeled source
         and target samples of different classes will exhibit an infinite cost
@@ -578,7 +619,8 @@ class EMDTransport(BaseTransport):
     @logging.register_total_time_method(_log)
     def fit(self, Xs=None, mu_s=None, ys=None, Xt=None, mu_t=None, yt=None):
         r"""Build a coupling matrix from source and target sets of samples
-        :math:`(\mathbf{X_s}, \mathbf{y_s})` and :math:`(\mathbf{X_t}, \mathbf{y_t})`
+        :math:`(\mathbf{X_s}, \mathbf{y_s})` and :math:`(\mathbf{X_t},
+        \mathbf{y_t})`
 
         Parameters
         ----------

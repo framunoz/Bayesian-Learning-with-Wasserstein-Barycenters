@@ -1,10 +1,12 @@
 """
-Module that implements the missing functionalities of convolutional wasserstein distances.
+Module that implements the missing functionalities of convolutional
+wasserstein distances.
 """
 import warnings
 
 import torch
 from ot.backend import get_backend
+
 from bwb.config import config
 
 
@@ -47,24 +49,27 @@ def convolutional_barycenter2d(
     H0=None,
     **kwargs
 ):
-    r"""Compute the entropic regularized wasserstein barycenter of distributions :math:`\mathbf{A}`
-    where :math:`\mathbf{A}` is a collection of 2D images. This function use the API used in POT.
+    r"""Compute the entropic regularized wasserstein barycenter of
+    distributions :math:`\mathbf{A}` where :math:`\mathbf{A}` is a
+    collection of 2D images. This function use the API used in POT.
 
      The function solves the following optimization problem:
 
     .. math::
-       \mathbf{a} = \mathop{\arg \min}_\mathbf{a} \quad \sum_i W_{reg}(\mathbf{a},\mathbf{a}_i)
+       \mathbf{a} = \mathop{\arg \min}_\mathbf{a} \quad
+       \sum_i W_{reg}(\mathbf{a},\mathbf{a}_i)
 
     where :
 
     - :math:`W_{reg}(\cdot,\cdot)` is the entropic regularized Wasserstein
       distance (see :py:func:`ot.bregman.sinkhorn`)
-    - :math:`\mathbf{a}_i` are training distributions (2D images) in the mast two dimensions
-      of matrix :math:`\mathbf{A}`
+    - :math:`\mathbf{a}_i` are training distributions (2D images) in
+      the mast two dimensions of matrix :math:`\mathbf{A}`
     - `reg` is the regularization strength scalar value
 
-    The algorithm used for solving the problem is the Sinkhorn-Knopp matrix scaling algorithm
-    as proposed in :ref:`[21] <references-convolutional-barycenter-2d>`
+    The algorithm used for solving the problem is the Sinkhorn-Knopp
+    matrix scaling algorithm as proposed in :ref:`[21]
+    <references-convolutional-barycenter-2d>`
 
     Parameters
     ----------
@@ -91,8 +96,8 @@ def convolutional_barycenter2d(
     entrop_sharp : bool, optional
         if True, use an entropic regularization.
     H0 : float, optional
-        Only used if entrop_sharp is True. Is the threshold of the entropic regularization
-        algorithm.
+        Only used if entrop_sharp is True. Is the threshold of the
+        entropic regularization algorithm.
 
     Returns
     -------
@@ -106,10 +111,10 @@ def convolutional_barycenter2d(
     References
     ----------
 
-    .. [21] Solomon, J., De Goes, F., Peyré, G., Cuturi, M., Butscher,
-        A., Nguyen, A. & Guibas, L. (2015).     Convolutional wasserstein distances:
-        Efficient optimal transportation on geometric domains. ACM Transactions
-        on Graphics (TOG), 34(4), 66
+    .. [21] Solomon, J., De Goes, F., Peyré, G., Cuturi, M., Butscher, A.,
+    Nguyen, A. & Guibas, L. (2015).     Convolutional wasserstein distances:
+    Efficient optimal transportation on geometric domains. ACM Transactions
+    on Graphics (TOG), 34(4), 66
 
     .. [37] Janati, H., Cuturi, M., Gramfort, A. Proceedings of the 37th
         International Conference on Machine Learning, PMLR 119:4692-4701, 2020
@@ -148,8 +153,8 @@ def _convolutional_barycenter2d(
     log=False,
     warn=True,
 ):
-    r"""Compute the entropic regularized wasserstein barycenter of distributions A
-    where A is a collection of 2D images.
+    r"""Compute the entropic regularized wasserstein barycenter of
+    distributions A where A is a collection of 2D images.
     """
 
     if not isinstance(A, torch.Tensor):
@@ -219,7 +224,8 @@ def _convolutional_barycenter2d(
 
             if verbose:
                 if ii % 200 == 0:
-                    print("{:5s}|{:12s}".format("It.", "Err") + "\n" + "-" * 19)
+                    print("{:5s}|{:12s}".format("It.", "Err")
+                          + "\n" + "-" * 19)
                 print("{:5d}|{:8e}|".format(ii, err))
 
             if err < stopThr:

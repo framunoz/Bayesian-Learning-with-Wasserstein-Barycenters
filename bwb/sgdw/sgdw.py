@@ -12,8 +12,8 @@ from torch import linalg as LA
 
 import bwb._logging as logging
 import bwb.distributions as dist
-import bwb.distributions.utils
-import bwb.pot.bregman
+import bwb.distributions.utils as dist_utils
+import bwb.pot.bregman as bregman
 import bwb.pot.transports as tpt
 from bwb.sgdw.utils import (DetentionParameters, History, IterationParameters,
                             Report,
@@ -463,7 +463,7 @@ class DiscreteDistributionSGDW(
         self,
     ) -> tuple[t.Sequence[dist.DiscreteDistribution], discrete_pos_wgt]:
         mu_0: dist.DiscreteDistribution = self.distr_sampler.draw()
-        X_k, m = bwb.distributions.utils.partition(
+        X_k, m = dist_utils.partition(
             X=mu_0.enumerate_nz_support_(), mu=mu_0.nz_probs, alpha=self.alpha
         )
         X_k, m = X_k.to(self.val), m.to(self.val)
@@ -651,7 +651,7 @@ class ConvDistributionDrawSGDW(DistributionDrawSGDW):
     @t.final
     @t.override
     def _compute_geodesic(self, gs_weights_lst_k, lst_gamma_k) -> torch.Tensor:
-        return bwb.pot.bregman.convolutional_barycenter2d(
+        return bregman.convolutional_barycenter2d(
             A=torch.stack(gs_weights_lst_k),
             weights=torch.as_tensor(lst_gamma_k, dtype=self.dtype,
                                     device=self.device),
@@ -734,7 +734,7 @@ def compute_bwb_discrete_distribution(
     # Compute locations through the partition
     _log.info("Computing initial weights")
     tic = time.time()
-    X_k, m = bwb.distributions.utils.partition(
+    X_k, m = dist_utils.partition(
         X=mu_0.enumerate_nz_support_(), mu=mu_0.nz_probs, alpha=alpha
     )
     X_k, m = X_k.to(dtype=dtype, device=device), m.to(dtype=dtype,
@@ -897,7 +897,7 @@ def compute_bwb_distribution_draw(
         # Compute the distribution of mu_{k+1}
         gamma_k = learning_rate(k)
 
-        gs_weights_kp1, _ = bwb.pot.bregman.convolutional_barycenter2d(
+        gs_weights_kp1, _ = bregman.convolutional_barycenter2d(
             A=[gs_weights_k, m_k.grayscale_weights],
             weights=[1 - gamma_k, gamma_k],
             reg=reg,
@@ -998,7 +998,7 @@ def compute_bwb_distribution_draw_projected(
         gamma_k = learning_rate(k)
         _log.debug(f"{gamma_k = :.6f}")
 
-        gs_weights_kp1, _ = bwb.pot.bregman.convolutional_barycenter2d(
+        gs_weights_kp1, _ = bregman.convolutional_barycenter2d(
             A=[gs_weights_k, m_k.grayscale_weights],
             weights=[1 - gamma_k, gamma_k],
             reg=reg,

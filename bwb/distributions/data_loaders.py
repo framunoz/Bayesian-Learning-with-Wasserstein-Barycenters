@@ -26,9 +26,10 @@ class BaseDistributionDataLoader[DistributionT](
     t.MutableMapping[int, DistributionT], metaclass=abc.ABCMeta
 ):
     """
-    Base class for DataLoaders. It is a :py:class:`MutableMapping` that creates instances of
-    distributions in a 'lazy' way, saving computation time. It ends up representing several
-    distributions from a tensor with the corresponding weights.
+    Base class for DataLoaders. It is a :py:class:`MutableMapping` that
+    creates instances of distributions in a 'lazy' way, saving
+    computation time. It ends up representing several distributions
+    from a tensor with the corresponding weights.
     """
 
     def __init__(
@@ -47,14 +48,16 @@ class BaseDistributionDataLoader[DistributionT](
             torch.isclose(probs_tensor_sum, torch.ones_like(probs_tensor_sum))
         ).all():
             raise ValueError(
-                "The sum over the dim 1 of the tensor probs_tensor must all be 1."
+                "The sum over the dim 1 of the tensor "
+                "probs_tensor must all be 1."
             )
 
         # Set the tensor of log-probabilities
         self.logits_tensor = torch.log(self.probs_tensor + config.eps)
 
         # And define the dictionary to wrap
-        self._models: dict[int, DistributionT] = {i: None for i in range(_n_probs)}
+        self._models: dict[int, DistributionT] = {i: None
+                                                  for i in range(_n_probs)}
 
         toc = time.time()
         _log.debug(f"Δt={toc - tic:.2f} [seg]")
@@ -95,20 +98,28 @@ class BaseDistributionDataLoader[DistributionT](
         )
 
 
-class DiscreteDistributionDataLoader(BaseDistributionDataLoader[dist.DiscreteDistribution]):
+class DiscreteDistributionDataLoader(
+    BaseDistributionDataLoader[dist.DiscreteDistribution]):
     """
-    DataLoader for the :py:class:`bwb.distributions.discrete_distributions.DiscreteDistributions`.
+    DataLoader for the
+    :py:class:`bwb.distributions.discrete_distributions.DiscreteDistributions`.
     """
 
-    def _create_distribution_instance(self, index: int) -> dist.DiscreteDistribution:
+    def _create_distribution_instance(
+        self,
+        index: int
+    ) -> dist.DiscreteDistribution:
         return dist.DiscreteDistribution(self.probs_tensor[index])
 
 
-class DistributionDrawDataLoader(BaseDistributionDataLoader[dist.DistributionDraw]):
-    """A class of type :py:class:`MutableMapping` that wraps a dictionary. It stores information
-    from probability arrays and logits. This class can be thought of as using the flyweight
-    pattern, so as not to take up too much instantiation time, or if an instance already exists,
-    to reuse it."""
+class DistributionDrawDataLoader(
+    BaseDistributionDataLoader[dist.DistributionDraw]
+):
+    """A class of type :py:class:`MutableMapping` that wraps a
+    dictionary. It stores information from probability arrays and logits.
+    This class can be thought of as using the flyweight
+    pattern, so as not to take up too much instantiation time, or if an
+    instance already exists, to reuse it."""
 
     def __init__(
         self,
@@ -118,9 +129,13 @@ class DistributionDrawDataLoader(BaseDistributionDataLoader[dist.DistributionDra
         floor=0,
     ):
         """
-        :param models_array: Arreglo de modelos.
-        :param tuple[int, int] original_shape: Dimensiones de las imágenes originales.
-        :param int floor: Número que funciona como valor mínimo de las imágenes.
+        :param models_array: Array of models. Each model is a tensor of
+            probabilities.
+        :param tuple[int, int] original_shape: Shape of the original
+            images.
+        :param int floor: The floor value for the probabilities.
+        :param tuple[int, int] final_shape: The final shape of the
+            images.
         """
         _log.debug("Creating a DistributionDrawDataLoader instance.")
         tic = time.time()
@@ -157,7 +172,8 @@ class DistributionDrawDataLoader(BaseDistributionDataLoader[dist.DistributionDra
         toc = time.time()
         _log.debug(f"Δt={toc - tic:.2f} [seg]")
 
-        super(DistributionDrawDataLoader, self).__init__(probs_tensor=probs_tensor)
+        super(DistributionDrawDataLoader, self).__init__(
+            probs_tensor=probs_tensor)
 
     def _create_distribution_instance(self, index) -> dist.DistributionDraw:
         weights = self.transform(self.probs_tensor[index])
@@ -176,7 +192,8 @@ class DistributionDrawDataLoader(BaseDistributionDataLoader[dist.DistributionDra
         # logits array with shape (n_models, n_support)
         logits_models = self.logits_tensor
 
-        # Take the evaluations of the logits, resulting in a tensor of shape (n_models, n_data)
+        # Take the evaluations of the logits, resulting in a tensor of
+        # shape (n_models, n_data)
         evaluations = torch.take_along_dim(logits_models, data, 1)
 
         # Get the likelihood as cache. The shape is (n_models,)

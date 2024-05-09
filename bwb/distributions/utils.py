@@ -3,7 +3,7 @@ from math import prod
 import torch
 
 import bwb._logging as logging
-from bwb.config import config
+from ..config import config
 
 __all__ = [
     "grayscale_parser",

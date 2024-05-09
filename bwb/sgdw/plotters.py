@@ -7,9 +7,9 @@ import torch
 from matplotlib import pyplot as plt
 
 import bwb._logging as logging
-from bwb.distributions import DistributionDraw
-from bwb.sgdw.sgdw import BaseSGDW, Runnable
-from bwb.sgdw.utils import ReportOptions
+from .sgdw import BaseSGDW, Runnable
+from .utils import ReportOptions
+from ..distributions import DistributionDraw
 
 _log = logging.get_logger(__name__)
 

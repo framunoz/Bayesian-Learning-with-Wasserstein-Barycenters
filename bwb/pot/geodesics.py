@@ -63,7 +63,8 @@ class McCannGeodesic(BaseGeodesic):
 
         if dim_0 != dim_1:
             raise ValueError(
-                f"The number of dimensions between the arrays 'Xs' and 'Xt' do not match. {dim_0} != {dim_1}"
+                f"The number of dimensions between the arrays 'Xs' and "
+                f"'Xt' do not match. {dim_0} != {dim_1}"
             )
 
         self.X0_: torch.Tensor = torch.unsqueeze(Xs, dim=1)
@@ -76,7 +77,8 @@ class McCannGeodesic(BaseGeodesic):
         X = (1 - t) * self.X0_ + t * self.X1_
         coupling = self.transport.coupling_
         nz_coord = torch.nonzero(
-            ~torch.isclose(torch.zeros_like(coupling), coupling, rtol=rtol, atol=atol),
+            ~torch.isclose(torch.zeros_like(coupling), coupling,
+                           rtol=rtol, atol=atol),
             as_tuple=True,
         )
         X_to_return = X[nz_coord]
@@ -106,8 +108,7 @@ class PartitionedBarycentricProjGeodesic(BarycentricProjGeodesic):
 
     @logging.register_init_method(_log)
     def _fit(self, Xs=None, mu_s=None, Xt=None, mu_t=None):
-        # nx = ot.backend.get_backend(Xs, mu_s, Xt, mu_t)
         Xs, mu_s = partition(X=Xs, mu=mu_s, alpha=self.alpha)
-        # Xs, mu_s = nx.from_numpy(X_, type_as=Xs), nx.from_numpy(mu_, type_as=mu_s)
 
-        return super(PartitionedBarycentricProjGeodesic, self)._fit(Xs, mu_s, Xt, mu_t)
+        return super(PartitionedBarycentricProjGeodesic, self)._fit(Xs, mu_s,
+                                                                    Xt, mu_t)

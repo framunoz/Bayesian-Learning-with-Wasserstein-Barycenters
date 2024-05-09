@@ -17,15 +17,18 @@ def check_is_fitted(estimator, attributes=None, *, msg=None, all_or_any=all):
     Checks if the estimator is fitted by verifying the presence of
     fitted attributes (ending with a trailing underscore) and otherwise
     raises a NotFittedError with the given message.
-    If an estimator does not set any attributes with a trailing underscore, it
-    can define a ``__sklearn_is_fitted__`` method returning a boolean to specify if the
-    estimator is fitted or not.
+    If an estimator does not set any attributes with a trailing
+    underscore, it can define a ``__sklearn_is_fitted__`` method
+    returning a boolean to specify if the estimator is fitted or not.
 
     :param estimator: Estimator instance for which the check is performed.
-    :param attributes: Attribute name(s) given as string or a list/tuple of strings.
+    :param attributes: Attribute name(s) given as string or a list/tuple
+        of strings.
     :param msg: The error message.
-    :param all_or_any: Specify whether all or any of the given attributes must exist.
-    :raises TypeError: If the estimator is a class or not an estimator instance.
+    :param all_or_any: Specify whether all or any of the given
+        attributes must exist.
+    :raises TypeError: If the estimator is a class or not an estimator
+        instance.
     :raises NotFittedError: If the attributes are not found.
     """
     if isclass(estimator):
@@ -45,7 +48,8 @@ def check_is_fitted(estimator, attributes=None, *, msg=None, all_or_any=all):
         fitted = all_or_any([hasattr(estimator, attr) for attr in attributes])
     else:
         fitted = [
-            v for v in vars(estimator) if v.endswith("_") and not v.startswith("__")
+            v for v in vars(estimator)
+            if v.endswith("_") and not v.startswith("__")
         ]
 
     if not fitted:

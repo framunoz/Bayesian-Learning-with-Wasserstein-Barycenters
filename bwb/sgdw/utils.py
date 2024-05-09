@@ -14,9 +14,15 @@ import bwb._logging as logging
 _log = logging.get_logger(__name__)
 
 
-def step_scheduler(*, a: float = 1, b: float = 0, c: float = 1) -> t.Callable[[int], float]:
+def step_scheduler(
+    *,
+    a: float = 1,
+    b: float = 0,
+    c: float = 1
+) -> t.Callable[[int], float]:
     r"""
-    This function returns a step scheduler with parameters :math:`a`, :math:`b`, and :math:`c`.
+    This function returns a step scheduler with parameters :math:`a`,
+    :math:`b`, and :math:`c`.
 
     The formula for the step scheduler is given by:
     .. math::
@@ -25,8 +31,8 @@ def step_scheduler(*, a: float = 1, b: float = 0, c: float = 1) -> t.Callable[[i
     :param a: The scale parameter of the gamma distribution. Default is 1.
     :param b: The location parameter of the gamma distribution. Default is 0.
     :param c: The shape parameter of the gamma distribution. Default is 1.
-    :return: A step scheduler that takes a single parameter :math:`k` and returns the value
-        of the step scheduler at :math:`k`.
+    :return: A step scheduler that takes a single parameter :math:`k`
+        and returns the value of the step scheduler at :math:`k`.
     """
 
     def _step_scheduler(k):
@@ -101,12 +107,15 @@ class Schedule:
         if not callable(learning_rate):
             raise TypeError("learning_rate must be a callable")
 
-        # Check if learning_rate is callable that accepts an integer and returns a float
+        # Check if learning_rate is callable that accepts an integer
+        # and returns a float
         try:
             if not isinstance(learning_rate(1), float):
                 raise ValueError("learning_rate must return a float")
         except Exception as e:
-            raise ValueError("learning_rate must accept an integer argument") from e
+            raise ValueError(
+                "learning_rate must accept an integer argument"
+            ) from e
 
         self._learning_rate: t.Callable[[int], float] = learning_rate
 
@@ -130,12 +139,14 @@ class Schedule:
                 """Return the batch size."""
                 return aux
 
-        # Check if batch_size is callable that accepts an integer and returns an integer
+        # Check if batch_size is callable that accepts an integer and
+        # returns an integer
         try:
             if not isinstance(batch_size(0), int):
                 raise ValueError("batch_size must return an integer")
         except Exception as e:
-            raise ValueError("batch_size must accept an integer argument") from e
+            raise ValueError(
+                "batch_size must accept an integer argument") from e
 
         self._batch_size: t.Callable[[int], int] = batch_size
 
@@ -146,7 +157,10 @@ class DetentionParameters:
     """
 
     def __init__(
-        self, tol: float = 1e-8, max_iter: int = 100_000, max_time: float = float("inf")
+        self,
+        tol: float = 1e-8,
+        max_iter: int = 100_000,
+        max_time: float = float("inf")
     ):
         self.tol = tol
         self.max_iter = max_iter
@@ -176,7 +190,8 @@ class DetentionParameters:
 
     @max_iter.setter
     def max_iter(self, max_iter: int):
-        if not (isinstance(max_iter, num.Integral) or max_iter == float("inf")):
+        if not (isinstance(max_iter, num.Integral)
+                or max_iter == float("inf")):
             raise TypeError("max_iter must be an integer or infinity")
         if max_iter <= 0:
             raise ValueError("max_iter must be positive")
@@ -202,7 +217,8 @@ class DetentionParameters:
         if self.max_time != float("inf"):
             max_time = self.max_time
             time_fmt = str(timedelta(seconds=max_time))[:-4]
-        max_iter_fmt = f"{self.max_iter:_}" if self.max_iter != float("inf") else "∞"
+        max_iter_fmt = f"{self.max_iter:_}" if self.max_iter != float(
+            "inf") else "∞"
 
         return (f"DetentionParameters(tol={self.tol:.2e}, "
                 f"max_iter={max_iter_fmt}, max_time={time_fmt})")
@@ -242,14 +258,8 @@ class IterationParameters(Iterator[int]):
         """
         Initializes the iteration metrics.
 
-        This method sets the initial values for the iteration metrics used in the class.
-        It initializes the following attributes:
-        - k: The iteration number (initialized to 0).
-        - tic: The start time of the algorithm (initialized to the current time).
-        - tic_: The start time of the iteration (initialized to the current time).
-        - toc: The end time of the iteration (initialized to the current time).
-        - diff_t: The time difference between tic_ and toc.
-        - w_dist: The Wasserstein distance (initialized to infinity).
+        This method sets the initial values for the iteration metrics
+        used in the class.
         """
         self.k = -1
         self.tic = time.time()
@@ -262,8 +272,8 @@ class IterationParameters(Iterator[int]):
         """
         Start the iteration.
 
-        This method starts the iteration and sets the start time of the iteration to the current
-        time.
+        This method starts the iteration and sets the start time of the
+        iteration to the current time.
         """
         self.tic_ = time.time()
 
@@ -301,13 +311,17 @@ class IterationParameters(Iterator[int]):
         :return: True if the detention criteria is met, False otherwise.
         """
         return (
-            self.k >= self.det_params.max_iter  # Reaches maximum iteration
-            or self.total_time >= self.det_params.max_time  # Reaches maximum time
-            or self.w_dist < self.det_params.tol  # Achieves convergence in distance
+            # Reaches maximum iteration
+            self.k >= self.det_params.max_iter
+            # Reaches maximum time
+            or self.total_time >= self.det_params.max_time
+            # Achieves convergence in distance
+            or self.w_dist < self.det_params.tol
         )
 
     def __repr__(self) -> str:
-        w_dist_fmt = f"{self.w_dist:.6f}" if self.w_dist != float("inf") else "∞"
+        w_dist_fmt = f"{self.w_dist:.6f}" if self.w_dist != float(
+            "inf") else "∞"
         time_fmt = str(timedelta(seconds=self.total_time))[:-4]
         return (f"IterationParameters(k={self.k:_}, w_dist={w_dist_fmt}, "
                 f"t={time_fmt}, Δt={self.diff_t * 1000:.2f} [ms])")
@@ -341,7 +355,8 @@ class HistoryOptions(t.TypedDict, total=False):
     distr_samp: bool
 
 
-HistoryOptionsLiteral = t.Literal["pos_wgt", "distr", "pos_wgt_samp", "distr_samp"]
+HistoryOptionsLiteral = t.Literal[
+    "pos_wgt", "distr", "pos_wgt_samp", "distr_samp"]
 
 
 class History[DistributionT, pos_wgt_t]:
@@ -373,7 +388,8 @@ class History[DistributionT, pos_wgt_t]:
         self.options["distr_samp"] = distr_samp
 
         # Initialize the histories
-        self._create_distribution: t.Optional[t.Callable[[pos_wgt_t], DistributionT]] = (
+        self._create_distribution: t.Optional[
+            t.Callable[[pos_wgt_t], DistributionT]] = (
             None
         )
         self._get_pos_wgt_from_dist: t.Optional[
@@ -399,7 +415,10 @@ class History[DistributionT, pos_wgt_t]:
 
     @property
     def create_distr(self) -> t.Callable[[pos_wgt_t], DistributionT]:
-        """The function to create a distribution from the position and weight."""
+        """
+        The function to create a distribution from the position and
+        weight.
+        """
         if self._create_distribution is None:
             raise ValueError("create_distr must be set")
         return self._create_distribution
@@ -414,7 +433,10 @@ class History[DistributionT, pos_wgt_t]:
 
     @property
     def get_pos_wgt_from_dist(self) -> t.Callable[[DistributionT], pos_wgt_t]:
-        """The function to get the position and weight from the distribution."""
+        """
+        The function to get the position and weight from the
+        distribution.
+        """
         if self._get_pos_wgt_from_dist is None:
             raise ValueError("get_pos_wgt_from_dist must be set")
         return self._get_pos_wgt_from_dist
@@ -441,22 +463,27 @@ class History[DistributionT, pos_wgt_t]:
 
         :param pos_wgt: To add the position and weight in the history.
         :param distr: To add the distribution in the history.
-        :param pos_wgt_samp: To add the position and weight samplings in the history.
-        :param distr_samp: To add the distribution samplings in the history.
-        :param create_distribution: A function to create a distribution from the position and
-            weight.
-        :param get_pos_wgt_from_dist: A function to get the position and weight from the
-            distribution.
+        :param pos_wgt_samp: To add the position and weight samplings
+            in the history.
+        :param distr_samp: To add the distribution samplings in the
+            history.
+        :param create_distribution: A function to create a distribution
+            from the position and weight.
+        :param get_pos_wgt_from_dist: A function to get the position and
+            weight from the distribution.
         """
         self.options["pos_wgt"] = (
             pos_wgt if pos_wgt is not None else self.options["pos_wgt"]
         )
-        self.options["distr"] = distr if distr is not None else self.options["distr"]
+        self.options["distr"] = distr if distr is not None else self.options[
+            "distr"]
         self.options["pos_wgt_samp"] = (
-            pos_wgt_samp if pos_wgt_samp is not None else self.options["pos_wgt_samp"]
+            pos_wgt_samp if pos_wgt_samp is not None else self.options[
+                "pos_wgt_samp"]
         )
         self.options["distr_samp"] = (
-            distr_samp if distr_samp is not None else self.options["distr_samp"]
+            distr_samp if distr_samp is not None else self.options[
+                "distr_samp"]
         )
 
         self.create_distr = (
@@ -470,21 +497,28 @@ class History[DistributionT, pos_wgt_t]:
             else self.get_pos_wgt_from_dist
         )
 
-    def init_histories(self, lst_mu_0: t.Sequence[DistributionT], pos_wgt_0: pos_wgt_t):
+    def init_histories(
+        self,
+        lst_mu_0: t.Sequence[DistributionT],
+        pos_wgt_0: pos_wgt_t
+    ):
         """
         Initialize the histories for the algorithm.
 
         This method should initialize the histories for the algorithm.
 
-        :param lst_mu_0: The list of distributions sampled by the sampler at the first iteration.
-        :param pos_wgt_0: The position and weight that come from the first sample.
+        :param lst_mu_0: The list of distributions sampled by the
+            sampler at the first iteration.
+        :param pos_wgt_0: The position and weight that come from the
+            first sample.
         """
         if self.options["pos_wgt"]:
             self.pos_wgt = [pos_wgt_0]
         if self.options["distr"]:
             self.distr = [self.create_distr(pos_wgt_0)]
         if self.options["pos_wgt_samp"]:
-            self.pos_wgt_samp = [[self.get_pos_wgt_from_dist(mu) for mu in lst_mu_0]]
+            self.pos_wgt_samp = [
+                [self.get_pos_wgt_from_dist(mu) for mu in lst_mu_0]]
         if self.options["distr_samp"]:
             self.distr_samp = [lst_mu_0]
 
@@ -492,9 +526,11 @@ class History[DistributionT, pos_wgt_t]:
         """
         Update the position and weight for the next iteration.
 
-        This method should update the position and weight for the next iteration.
+        This method should update the position and weight for the next
+        iteration.
 
-        :param pos_wgt_kp1: The position and weight that come from the next sample.
+        :param pos_wgt_kp1: The position and weight that come from the
+            next sample.
         """
         if self.options["pos_wgt"]:
             self.pos_wgt.append(pos_wgt_kp1)
@@ -503,20 +539,25 @@ class History[DistributionT, pos_wgt_t]:
         """
         Update the distribution history for the next iteration.
 
-        This method should update the distribution history for the next iteration.
+        This method should update the distribution history for the next
+        iteration.
 
-        :param pos_wgt_kp1: The position and weight that come from the next sample.
+        :param pos_wgt_kp1: The position and weight that come from the
+            next sample.
         """
         if self.options["distr"]:
             self.distr.append(self.create_distr(pos_wgt_kp1))
 
     def update_pos_wgt_samp(self, lst_mu_k):
         """
-        Update the position and weight sampler history for the next iteration.
+        Update the position and weight sampler history for the next
+            iteration.
 
-        This method should update the position and weight sampler history for the next iteration.
+        This method should update the position and weight sampler
+        history for the next iteration.
 
-        :param lst_mu_k: The list of distributions sampled by the sampler at the current iteration.
+        :param lst_mu_k: The list of distributions sampled by the
+            sampler at the current iteration.
         """
         if self.options["pos_wgt_samp"]:
             self.pos_wgt_samp.append(
@@ -527,9 +568,11 @@ class History[DistributionT, pos_wgt_t]:
         """
         Update the distribution sampler history for the next iteration.
 
-        This method should update the distribution sampler history for the next iteration.
+        This method should update the distribution sampler history for
+        the next iteration.
 
-        :param lst_mu_k: The list of distributions sampled by the sampler at the current iteration.
+        :param lst_mu_k: The list of distributions sampled by the
+            sampler at the current iteration.
         """
         if self.options["distr_samp"]:
             self.distr_samp.append(lst_mu_k)
@@ -540,8 +583,10 @@ class History[DistributionT, pos_wgt_t]:
 
         This method should update the histories for the next iteration.
 
-        :param pos_wgt_kp1: The position and weight that come from the next sample.
-        :param lst_mu_k: The list of distributions sampled by the sampler at the current iteration.
+        :param pos_wgt_kp1: The position and weight that come from the
+            next sample.
+        :param lst_mu_k: The list of distributions sampled by the
+            sampler at the current iteration.
         """
         self.update_pos_wgt(pos_wgt_kp1)
         self.update_distr(pos_wgt_kp1)
@@ -568,7 +613,8 @@ class History[DistributionT, pos_wgt_t]:
         """
         Check if the history has any of the histories.
 
-        :return: True if the history has any of the histories, False otherwise.
+        :return: True if the history has any of the histories, False
+            otherwise.
         """
         return any(
             [
@@ -683,7 +729,8 @@ class Report:
         """
         Set the parameters of the report.
 
-        :param include_dict: The dictionary with the keys and values to include in the report.
+        :param include_dict: The dictionary with the keys and values to
+            include in the report.
         :param len_bar: The length of the bar in the report.
         """
         include_dict = include_dict or {}
@@ -721,7 +768,8 @@ class Report:
             report += f"Δt = {self.iter_params.diff_t * 1000:.2f} [ms], "
 
         if self.include["dt_per_iter"]:
-            dt_per_iter = self.iter_params.total_time * 1000 / (self.iter_params.k + 1)
+            dt_per_iter = self.iter_params.total_time * 1000 / (
+                self.iter_params.k + 1)
             report += f"Δt per iter. = {dt_per_iter:.2f} [ms/iter], "
 
         report = report[:-2] + " " + bar

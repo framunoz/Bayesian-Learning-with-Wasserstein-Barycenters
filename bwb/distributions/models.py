@@ -7,9 +7,9 @@ import typing as t
 import torch
 from torchvision.datasets import VisionDataset
 
-from bwb.config import conf
-from bwb.distributions.discrete_distribution import DistributionDraw
-from bwb.utils.protocols import array_like_t
+from .discrete_distribution import DistributionDraw
+from ..config import conf
+from ..utils.protocols import array_like_t
 
 __all__ = [
     "DiscreteModelsSetP",
@@ -52,12 +52,19 @@ class BaseDiscreteModelsSet[DistributionT](metaclass=abc.ABCMeta):
 
 
 @t.runtime_checkable
-class DiscreteWeightedModelSetP[DistributionT](DiscreteModelsSetP[DistributionT], t.Protocol):
+class DiscreteWeightedModelSetP[DistributionT](
+    DiscreteModelsSetP[DistributionT], t.Protocol
+):
     """
-    Protocol for classes that are a weighted set of models with a discrete support.
+    Protocol for classes that are a weighted set of models with a
+     discrete support.
     """
 
-    def compute_likelihood(self, data: array_like_t = None, **kwargs) -> torch.Tensor:
+    def compute_likelihood(
+        self,
+        data: array_like_t = None,
+        **kwargs
+    ) -> torch.Tensor:
         """
         Compute the probabilities of the data given the models.
 
@@ -75,7 +82,11 @@ class BaseDiscreteWeightedModelSet[DistributionT](
     """
 
     @abc.abstractmethod
-    def compute_likelihood(self, data: array_like_t = None, **kwargs) -> torch.Tensor:
+    def compute_likelihood(
+        self,
+        data: array_like_t = None,
+        **kwargs
+    ) -> torch.Tensor:
         """
         Compute the probabilities of the data given the models.
 
@@ -87,8 +98,8 @@ class BaseDiscreteWeightedModelSet[DistributionT](
 
 class ModelDataset(BaseDiscreteModelsSet[DistributionDraw]):
     """
-    An adapter class that adapts a ``torchvision.vision.VisionDataset`` to a
-    ``BaseDiscreteModelsSet``.
+    An adapter class that adapts a ``torchvision.vision.VisionDataset``
+    to a ``BaseDiscreteModelsSet``.
     """
 
     def __init__(
@@ -112,4 +123,7 @@ class ModelDataset(BaseDiscreteModelsSet[DistributionDraw]):
         )
 
     def __repr__(self) -> str:
-        return f"ModelDataset(device={self.device}, dtype={self.dtype}, dataset={self.dataset})"
+        return (f"ModelDataset("
+                f"device={self.device}, "
+                f"dtype={self.dtype}, "
+                f"dataset={self.dataset})")
