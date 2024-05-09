@@ -122,6 +122,12 @@ def partition(X: torch.Tensor, mu: torch.Tensor, alpha: float):
     :param alpha: The alpha parameter.
     :return: The partitioned samples.
     """
+    if mu.dtype not in [torch.float32, torch.float64]:
+        logging.raise_error(
+            "The mu tensor must be of type float32 or float64",
+            _log, ValueError
+        )
+
     alpha = torch.tensor(alpha)
 
     if alpha <= 0:
