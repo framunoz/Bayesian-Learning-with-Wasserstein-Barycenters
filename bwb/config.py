@@ -1,21 +1,23 @@
-"""Configuration module for the library. This module contains the configuration class and some
-helper functions to change the configuration. The configuration is a singleton, so it is shared
-across the whole library."""
+"""Configuration module for the library. This module contains the
+configuration class and some helper functions to change the
+configuration. The configuration is a singleton, so it is shared across
+the whole library."""
 import threading
 import typing as t
 import warnings
 
 import torch
 
-import bwb._logging as logging
+from bwb._logging import log_config
 
-_log = logging.get_logger(__name__)
+_log = log_config.get_logger(__name__)
 
 
 # noinspection DuplicatedCode
 class _SingletonMeta(type):
     """Metaclass to implements Singleton Pattern. Obtained from
-    https://refactoring.guru/design-patterns/singleton/python/example#example-1"""
+    https://refactoring.guru/design-patterns/singleton/python/example#example-1
+    """
 
     _instances = {}
     _lock: threading.Lock = threading.Lock()
@@ -38,13 +40,13 @@ class CudaNotAvailableError(Exception):
         self.n_cuda = n_cuda
 
 
-# IDEA: Make the config an observer, so that when the dtype or device is changed, all the tensors
-#   are changed. This can be done by adding a list of observers and calling a method when the
-#   configuration is changed.
+# IDEA: Make the config an observer, so that when the dtype or device
+# is changed, all the tensors are changed. This can be done by adding a
+# list of observers and calling a method when the configuration is changed.
 class Config(metaclass=_SingletonMeta):
     """
-    Configuration class for the library. This class is a singleton, so it is shared across the
-    whole library.
+    Configuration class for the library. This class is a singleton, so
+    it is shared across the whole library.
     """
     # The dtype selected by default
     dtype = torch.float32
@@ -59,12 +61,12 @@ class Config(metaclass=_SingletonMeta):
     _eps = None
 
     @property
-    def eps(self):
+    def eps(self) -> torch.Tensor:
         """
-        Get the positive minimum for kernel parameters. This is usually slightly larger than zero
-        to avoid numerical errors.
+        Get the positive minimum for parameters. This is usually
+        slightly larger than zero to avoid numerical errors.
 
-        :return:
+        :return: The positive minimum for parameters.
         """
         if self._eps is None:
             self._eps = torch.tensor(torch.finfo(self.dtype).eps)
@@ -77,9 +79,9 @@ class Config(metaclass=_SingletonMeta):
     @classmethod
     def use_half_precision(cls):
         """
-        Use half precision (float16) for all tensors. This may be much faster on GPUs,
-        but has reduced precision and may more often cause numerical instability. Only
-        recommended on GPUs.
+        Use half precision (float16) for all tensors. This may be much
+        faster on GPUs, but has reduced precision and may more often
+        cause numerical instability. Only recommended on GPUs.
         """
         if cls.device.type == 'cpu':
             msg = "WARNING: half precision not recommend on CPU"
@@ -90,24 +92,27 @@ class Config(metaclass=_SingletonMeta):
     @classmethod
     def use_single_precision(cls):
         """
-        Use single precision (float32) for all tensors. This may be faster on GPUs,
-        but has reduced precision and may more often cause numerical instability.
+        Use single precision (float32) for all tensors. This may be
+        faster on GPUs, but has reduced precision and may more often
+        cause numerical instability.
         """
         cls.dtype = torch.float32
 
     @classmethod
     def use_double_precision(cls):
         """
-        Use double precision (float64) for all tensors. This is the recommended precision for
-        numerical stability, but can be significantly slower.
+        Use double precision (float64) for all tensors. This is the
+        recommended precision for numerical stability, but can be
+        significantly slower.
         """
         cls.dtype = torch.float64
 
     @classmethod
     def use_cpu(cls, n=None):
         """
-        Use the CPU instead of the GPU for tensor calculations. This is the default if no GPU is
-        available. If you have more than one CPU, you can use a specific CPU by setting `n`.
+        Use the CPU instead of the GPU for tensor calculations. This is
+        the default if no GPU is available. If you have more than one
+        CPU, you can use a specific CPU by setting `n`.
         """
         if n is None:
             cls.device = torch.device('cpu')
@@ -117,8 +122,9 @@ class Config(metaclass=_SingletonMeta):
     @classmethod
     def use_gpu(cls, n: t.Optional[int] = None):
         """
-        Use the GPU instead of the CPU for tensor calculations. This is the default if a GPU is
-        available. If you have more than one GPU, you can use a specific GPU by setting `n`.
+        Use the GPU instead of the CPU for tensor calculations. This is
+        the default if a GPU is available. If you have more than one
+        GPU, you can use a specific GPU by setting ``n``.
         """
         if not torch.cuda.is_available():
             msg = "CUDA is not available"
@@ -146,7 +152,8 @@ class Config(metaclass=_SingletonMeta):
     @classmethod
     def print_gpu_information(cls):
         """
-        Print information about whether CUDA is supported, and if so which GPU is being used.
+        Print information about whether CUDA is supported, and if so
+        which GPU is being used.
         """
         if not torch.cuda.is_available():
             msg = "CUDA is not available"
@@ -160,19 +167,30 @@ class Config(metaclass=_SingletonMeta):
         for n in range(torch.cuda.device_count()):
             print(
                 "%2d  %s%s" % (
-                    n, torch.cuda.get_device_name(n), " (selected)" if n == current else "")
+                    n, torch.cuda.get_device_name(n),
+                    " (selected)" if n == current else "")
             )
 
     @classmethod
     def set_eps(cls, val):
         """
-        Set the positive minimum for kernel parameters. This is usually slightly larger than zero
-        to avoid numerical instabilities.
+        Set the positive minimum for kernel parameters. This is usually
+        slightly larger than zero to avoid numerical instabilities.
         """
         cls.eps = val
 
     def __repr__(self):
-        return f"Config(dtype={self.dtype}, device={self.device}, eps={self.eps:.2e})"
+        to_return = self.__class__.__name__ + "("
+
+        to_return += f"dtype={self.dtype}, "
+        to_return += f"device={self.device}, "
+        to_return += f"eps={self.eps:.2e}, "
+
+        if to_return.endswith(", "):
+            to_return = to_return[:-2]
+        to_return += ")"
+
+        return to_return
 
 
 config = Config()
