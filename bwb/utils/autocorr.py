@@ -1,5 +1,6 @@
 """
-This module provides functions to estimate the autocorrelation time of a time series.
+This module provides functions to estimate the autocorrelation time of
+a time series.
 """
 import torch
 
@@ -65,40 +66,44 @@ def auto_window(taus, c, device=None):
 def integrated_time(x, c=5, tol=50, quiet=True, has_walkers=True, device=None):
     """Estimate the integrated autocorrelation time of a time series.
 
-    This estimate uses the iterative procedure described on page 16 of `Sokal's notes
+    This estimate uses the iterative procedure described on page 16 of
+    `Sokal's notes
     <https://www.semanticscholar.org/paper/Monte-Carlo-Methods-in-Statistical-Mechanics%3A-and-Sokal/0bfe9e3db30605fe2d4d26e1a288a5e2997e7225>`_
     to determine a reasonable window size.
 
     Args:
         x (torch.Tensor): The time series. If 2-dimensional, the tensor
             dimensions are interpreted as ``(n_step, n_walker)`` unless
-            ``has_walkers==False``, in which case they are interpreted as
-            ``(n_step, n_param)``. If 3-dimensional, the dimensions are
-            interpreted as ``(n_step, n_walker, n_param)``.
-        c (Optional[float]): The step size for the window search. (default:
-            ``5``)
-        tol (Optional[float]): The minimum number of autocorrelation times
-            needed to trust the estimate. (default: ``50``)
-        quiet (Optional[bool]): This argument controls the behavior when the
-            chain is too short. If ``True``, give a warning instead of raising
-            an :class:`AutocorrError`. (default: ``False``)
+            ``has_walkers==False``, in which case they are interpreted
+            as ``(n_step, n_param)``. If 3-dimensional, the dimensions
+            are interpreted as ``(n_step, n_walker, n_param)``.
+        c (Optional[float]): The step size for the window search.
+            (default: ``5``)
+        tol (Optional[float]): The minimum number of autocorrelation
+            times needed to trust the estimate. (default: ``50``)
+        quiet (Optional[bool]): This argument controls the behavior when
+            the chain is too short. If ``True``, give a warning instead
+            of raising an :class:`AutocorrError`. (default: ``False``)
         has_walkers (Optional[bool]): Whether the last axis should be
-            interpreted as walkers or parameters if ``x`` has 2 dimensions.
-            (default: ``True``)
-        device (Optional[torch.device]): The target device for computation.
-            If not specified, the device of the input tensor `x` will be used.
+            interpreted as walkers or parameters if ``x`` has 2
+            dimensions. (default: ``True``)
+        device (Optional[torch.device]): The target device for
+            computation. If not specified, the device of the input
+            tensor `x` will be used.
 
     Returns:
-        float or tensor: An estimate of the integrated autocorrelation time of
-            the time series ``x``.
+        float or tensor: An estimate of the integrated autocorrelation
+            time of the time series ``x``.
 
     Raises
-        AutocorrError: If the autocorrelation time can't be reliably estimated
-            from the chain and ``quiet`` is ``False``. This normally means
+        AutocorrError: If the autocorrelation time can't be reliably
+            estimated from the chain and ``quiet`` is ``False``. This
+            normally means
             that the chain is too short.
 
     """
-    # Check if a device is specified, otherwise use the device of the input tensor
+    # Check if a device is specified, otherwise use the device of the
+    #   input tensor
     if device is None:
         device = x.device
 
