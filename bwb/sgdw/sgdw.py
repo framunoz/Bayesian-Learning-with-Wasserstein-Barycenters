@@ -15,7 +15,8 @@ import bwb.distributions as dist
 import bwb.distributions.utils
 import bwb.pot.bregman
 import bwb.pot.transports as tpt
-from bwb.sgdw.utils import (DetentionParameters, History, IterationParameters, Report,
+from bwb.sgdw.utils import (DetentionParameters, History, IterationParameters,
+                            Report,
                             ReportOptions,
                             Schedule)
 from wgan_gp.wgan_gp_vae.utils import ProjectorOnManifold
@@ -57,39 +58,47 @@ class Runnable[DistributionT, pos_wgt_t](metaclass=abc.ABCMeta):
 
 # MARK: BaseSGDW Class
 # noinspection PyMethodOverriding
-class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], metaclass=abc.ABCMeta):
+class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t],
+                                         metaclass=abc.ABCMeta):
     r"""
     Base class for Stochastic Gradient Descent in Wasserstein Space.
 
-    This class provides a base implementation for Stochastic Gradient Descent in Wasserstein Space.
-    It defines the common attributes and methods used by the derived classes.
+    This class provides a base implementation for Stochastic Gradient
+    Descent in Wasserstein Space. It defines the common attributes and
+    methods used by the derived classes.
 
-    :param step_scheduler: A callable function that takes an integer argument (k) and returns the
-        learning rate (:math:`\gamma_k`) for iteration k.
+    :param step_scheduler: A callable function that takes an integer
+        argument :math:`k` and returns the learning rate :math:`\gamma_k`
+        for iteration :math:`k`.
     :type step_scheduler: callable
-    :param batch_size: A callable function that takes an integer argument (k) and returns the batch
-        size (S_k) for iteration k. Alternatively, it can be a constant integer value.
+    :param batch_size: A callable function that takes an integer
+        argument :math:`k` and returns the batch size :math:`S_k` for
+        iteration :math:`k`. Alternatively, it can be a constant integer
+        value.
     :type batch_size: callable or int
     :param tol: The tolerance value for convergence. Defaults to 1e-8.
     :type tol: float
-    :param max_iter: The maximum number of iterations. Defaults to 100_000.
+    :param max_iter: The maximum number of iterations.
+        Defaults to 100_000.
     :type max_iter: int
-    :param max_time: The maximum time allowed for the algorithm to run. Defaults to infinity.
+    :param max_time: The maximum time allowed for the algorithm to run.
+        Defaults to infinity.
     :type max_time: float
-    :param report_every: The frequency at which to report the metrics. Defaults to 10.
+    :param report_every: The frequency at which to report the metrics.
+        Defaults to 10.
     :type report_every: int
 
-    :raises TypeError: If learning_rate is not a callable or batch_size is not a callable or an
-        integer.
-    :raises ValueError: If learning_rate does not return a float or batch_size does not return an
-        integer.
+    :raises TypeError: If ``learning_rate`` is not a callable or
+        ``batch_size`` is not a callable or an integer.
+    :raises ValueError: If ``learning_rate`` does not return a float or
+        ``batch_size`` does not return an integer.
     """
 
     def __init__(
         self,
         distr_sampler: dist.DistributionSampler[DistributionT],
-        step_scheduler,  # The \gamma_k schedule
-        batch_size=1,  # The S_k schedule
+        step_scheduler,
+        batch_size=1,
         tol: float = 1e-8,  # Tolerance to converge
         max_iter: int = 100_000,  # Maximum number of iterations
         max_time: float = float("inf"),  # Maximum time in seconds
@@ -117,11 +126,11 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
         # Values for dtype and device
         mu = self.distr_sampler.draw()
         self.dtype = mu.dtype
-        """The data type for the algorithm. Defaults to the data type of the first distribution 
-        drawn from the sampler."""
+        """The data type for the algorithm. Defaults to the data type 
+        of the first distribution drawn from the sampler."""
         self.device = mu.device
-        """The device for the algorithm. Defaults to the device of the first distribution drawn 
-        from the sampler."""
+        """The device for the algorithm. Defaults to the device of the 
+        first distribution drawn from the sampler."""
         self.val = torch.tensor(1, dtype=self.dtype, device=self.device)
         """A tensor with value 1, used to pass to the device."""
 
@@ -146,7 +155,8 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
         """
         Create a distribution from the position and weight.
 
-        This method should create a distribution from the position and weight and return it.
+        This method should create a distribution from the position and
+        weight and return it.
 
         :param pos_wgt: The position and weight.
         :return: The distribution created from the position and weight.
@@ -158,7 +168,8 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
         """
         Get the position and weight from a distribution.
 
-        This method should get the position and weight from a distribution and return it.
+        This method should get the position and weight from a
+        distribution and return it.
 
         :param mu: The distribution.
         :return: The position and weight from the distribution.
@@ -168,27 +179,34 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
     @abc.abstractmethod
     def first_sample(self) -> tuple[t.Sequence[DistributionT], pos_wgt_t]:
         """
-        Draw the first sample from the distribution sampler. This corresponds to the first step
-        of the algorithm.
+        Draw the first sample from the distribution sampler. This
+        corresponds to the first step of the algorithm.
 
-        This method should draw the first sample from the distribution sampler and return it.
+        This method should draw the first sample from the distribution
+        sampler and return it.
 
-        :return: The first sample from the distribution sampler and the position and weight that
-            come from the sample.
+        :return: The first sample from the distribution sampler and the
+            position and weight that come from the sample.
         """
         pass
 
     @abc.abstractmethod
     def update_pos_wgt(
-        self, pos_wgt_k: pos_wgt_t, lst_mu_k: t.Sequence[DistributionT], gamma_k: float
+        self,
+        pos_wgt_k: pos_wgt_t,
+        lst_mu_k: t.Sequence[DistributionT],
+        gamma_k: float
     ) -> pos_wgt_t:
         """
         Update the position and weight for the next iteration.
 
-        This method should update the position and weight for the next iteration and return it.
+        This method should update the position and weight for the next
+        iteration and return it.
 
-        :param pos_wgt_k: The position and weight that come from the current sample.
-        :param lst_mu_k: The list of distributions drawn from the sampler at the current iteration.
+        :param pos_wgt_k: The position and weight that come from the
+            current sample.
+        :param lst_mu_k: The list of distributions drawn from the
+            sampler at the current iteration.
         :param gamma_k: The learning rate for the next sample.
         """
         pass
@@ -202,15 +220,17 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
         r"""
         Set the step and batch size schedules for the algorithm.
 
-        :param step_schedule: A callable function that takes an integer argument (:math:`k`) and
-            returns the step :math:`\gamma_k` for iteration :math:`k`.
-        :param batch_size: A callable function that takes an integer argument (:math:`k`) and
-            returns the batch size (:math:`S_k`) for iteration :math:`k`. Alternatively, it can be
+        :param step_schedule: A callable function that takes an integer
+            argument :math:`k` and returns the step :math:`\gamma_k` for
+            iteration :math:`k`.
+        :param batch_size: A callable function that takes an integer
+            argument :math:`k` and returns the batch size :math:`S_k` for
+            iteration :math:`k`. Alternatively, it can be
             a constant integer value.
-        :raises TypeError: If learning_rate is not a callable or batch_size is not a callable or an
-            integer.
-        :raises ValueError: If learning_rate does not return a float or batch_size does not return
-            an integer.
+        :raises TypeError: If ``learning_rate`` is not a callable or
+            ``batch_size`` is not a callable or an integer.
+        :raises ValueError: If ``learning_rate`` does not return a
+            float or ``batch_size`` does not return an integer.
         :return: The object itself.
         """
         self.schd.step_schedule = step_schedule
@@ -219,22 +239,28 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
 
     @t.final
     def set_detention_params(
-        self, tol: float = 1e-8, max_iter: int = 100_000, max_time: float = float("inf")
+        self,
+        tol: float = 1e-8,
+        max_iter: int = 100_000,
+        max_time: float = float("inf")
     ):
         """
         Set the detention parameters for the model.
 
-        :param tol: The tolerance value for convergence. Defaults to 1e-8.
+        :param tol: The tolerance value for convergence.
+            Defaults to 1e-8.
         :type tol: float
-        :param max_iter: The maximum number of iterations. Defaults to 100_000.
+        :param max_iter: The maximum number of iterations.
+            Defaults to 100_000.
         :type max_iter: int
-        :param max_time: The maximum time allowed for the algorithm to run. Defaults to infinity.
+        :param max_time: The maximum time allowed for the algorithm to
+            run. Defaults to infinity.
         :type max_time: float
         :return: The object itself.
-        :raises TypeError: If tol is not a real number, max_iter is not an integer or max_time is
-            not a real number.
-        :raises ValueError: If tol is not positive, max_iter is not positive or max_time is not
-            positive.
+        :raises TypeError: If ``tol`` is not a real number, ``max_iter``
+            is not an integer or ``max_time`` is not a real number.
+        :raises ValueError: If ``tol`` is not positive, ``max_iter``
+            is not positive or ``max_time`` is not positive.
         """
         self.det_params.tol = tol
         self.det_params.max_iter = max_iter
@@ -247,7 +273,8 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
         """
         Draw S_k samples from the distribution sampler.
 
-        This method should draw S_k samples from the distribution sampler and return them.
+        This method should draw S_k samples from the distribution
+        sampler and return them.
 
         :param S_k: The batch size for the current iteration.
         :return: A list of distributions drawn from the sampler.
@@ -258,13 +285,16 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
         self, pos_wgt_k: pos_wgt_t, pos_wgt_kp1: pos_wgt_t, gamma_k: float
     ) -> float:
         """
-        Compute the Wasserstein distance between two positions and weights.
+        Compute the Wasserstein distance between two positions and
+        weights.
 
-        This method should compute the Wasserstein distance between two positions and weights and
-        return it.
+        This method should compute the Wasserstein distance between two
+        positions and weights and return it.
 
-        :param pos_wgt_k: The position and weight that come from the current sample.
-        :param pos_wgt_kp1: The position and weight that come from the next sample.
+        :param pos_wgt_k: The position and weight that come from the
+            current sample.
+        :param pos_wgt_kp1: The position and weight that come from the
+            next sample.
         :param gamma_k: The learning rate for the next sample.
         """
         return float("inf")
@@ -276,8 +306,10 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
         """
         Compute the Wasserstein distance between two positions and weights.
 
-        :param pos_wgt_k: The position and weight that come from the current sample.
-        :param pos_wgt_kp1: The position and weight that come from the next sample.
+        :param pos_wgt_k: The position and weight that come from the
+            current sample.
+        :param pos_wgt_kp1: The position and weight that come from the
+            next sample.
         :param gamma_k: The learning rate for the next sample.
         """
         wass_dist = self._compute_wass_dist(pos_wgt_k, pos_wgt_kp1, gamma_k)
@@ -285,8 +317,8 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
 
     def create_barycenter(self, pos_wgt: pos_wgt_t) -> DistributionT:
         """
-        Create the barycenter from the position and weight. This method is called at the end of
-        the algorithm. To use template pattern
+        Create the barycenter from the position and weight. This method
+        is called at the end of the algorithm. To use template pattern.
         """
         return self.create_distribution(pos_wgt)
 
@@ -336,16 +368,20 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
         """
         Run the algorithm.
 
-        This method runs the algorithm and returns the final position weights and optional
-        history data.
+        This method runs the algorithm and returns the final position
+        weights and optional history data.
 
-        :param pos_wgt_hist: Whether to include the position weights in the history.
-        :param distr_hist: Whether to include the distributions in the history.
-        :param pos_wgt_samp_hist: Whether to include the position weights of the samples in the
+        :param pos_wgt_hist: Whether to include the position weights
+            in the history.
+        :param distr_hist: Whether to include the distributions in the
             history.
-        :param distr_samp_hist: Whether to include the distributions of the samples in the history.
+        :param pos_wgt_samp_hist: Whether to include the position
+            weights of the samples in the history.
+        :param distr_samp_hist: Whether to include the distributions
+            of the samples in the history.
         :param include_dict: The options to include in the report.
-        :return: A tuple containing the final position weights and optional history data.
+        :return: A tuple containing the final position weights and
+            optional history data.
         """
         self.hist.set_params(
             pos_wgt=pos_wgt_hist,
@@ -360,8 +396,8 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
 
         _, pos_wgt_k = self.init_algorithm()
 
-        # The logic of the detention criteria and update are in the iterable class
-        #  `IterationParameters`
+        # The logic of the detention criteria and update are in the
+        #   iterable class :class:`IterationParameters`
         for k in self.iter_params:
             # Run a step of the algorithm
             pos_wgt_k = self.step_algorithm(k, pos_wgt_k)
@@ -380,7 +416,9 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], met
 
 
 # MARK: SGDW with discrete distributions
-class DiscreteDistributionSGDW(BaseSGDW[dist.DiscreteDistribution, discrete_pos_wgt]):
+class DiscreteDistributionSGDW(
+    BaseSGDW[dist.DiscreteDistribution, discrete_pos_wgt]
+):
     def __init__(
         self,
         transport: tpt.BaseTransport,
@@ -458,12 +496,16 @@ class DiscreteDistributionSGDW(BaseSGDW[dist.DiscreteDistribution, discrete_pos_
     @t.final
     @t.override
     def _compute_wass_dist(
-        self, pos_wgt_k: discrete_pos_wgt, pos_wgt_kp1: discrete_pos_wgt, gamma_k: float
+        self,
+        pos_wgt_k: discrete_pos_wgt,
+        pos_wgt_kp1: discrete_pos_wgt,
+        gamma_k: float
     ):
         X_k, m = pos_wgt_k
         X_kp1, m = pos_wgt_kp1
         diff = X_k - X_kp1
-        w_dist = float((gamma_k ** 2) * torch.sum(m * LA.norm(diff, dim=1) ** 2))
+        w_dist = float(
+            (gamma_k ** 2) * torch.sum(m * LA.norm(diff, dim=1) ** 2))
         return w_dist
 
 
@@ -501,7 +543,10 @@ class DistributionDrawSGDW(
 
     @t.final
     @t.override
-    def create_distribution(self, pos_wgt: torch.Tensor) -> dist.DistributionDraw:
+    def create_distribution(
+        self,
+        pos_wgt: torch.Tensor
+    ) -> dist.DistributionDraw:
         gs_weights_k = pos_wgt
         return dist.DistributionDraw.from_grayscale_weights(gs_weights_k)
 
@@ -531,14 +576,20 @@ class DistributionDrawSGDW(
         """
         Set the parameters for geodesic computation.
 
-        :param float reg: Regularization term for Sinkhorn algorithm. Default is 3e-3.
-        :param str method: Method to use for geodesic computation. Default is "sinkhorn".
-        :param int num_iter_max: Maximum number of iterations for Sinkhorn algorithm.
-            Default is 1000.
-        :param float stop_thr: Stopping threshold for Sinkhorn algorithm. Default is 1e-8.
-        :param bool verbose: Whether to print verbose output during computation. Default is False.
-        :param bool warn: Whether to display warning messages. Default is False.
-        :param kwargs: Additional keyword arguments to be passed to the geodesic computation method.
+        :param float reg: Regularization term for Sinkhorn algorithm.
+            Default is 3e-3.
+        :param str method: Method to use for geodesic computation.
+            Default is "sinkhorn".
+        :param int num_iter_max: Maximum number of iterations for
+            Sinkhorn algorithm. Default is 1000.
+        :param float stop_thr: Stopping threshold for Sinkhorn
+            algorithm. Default is 1e-8.
+        :param bool verbose: Whether to print verbose output during
+            computation. Default is False.
+        :param bool warn: Whether to display warning messages.
+            Default is False.
+        :param kwargs: Additional keyword arguments to be passed to
+            the geodesic computation method.
         :return: The current instance of the class.
         """
         self.conv_bar_kwargs = dict(
@@ -602,7 +653,8 @@ class ConvDistributionDrawSGDW(DistributionDrawSGDW):
     def _compute_geodesic(self, gs_weights_lst_k, lst_gamma_k) -> torch.Tensor:
         return bwb.pot.bregman.convolutional_barycenter2d(
             A=torch.stack(gs_weights_lst_k),
-            weights=torch.as_tensor(lst_gamma_k, dtype=self.dtype, device=self.device),
+            weights=torch.as_tensor(lst_gamma_k, dtype=self.dtype,
+                                    device=self.device),
             **self.conv_bar_kwargs,
         )
 
@@ -613,7 +665,8 @@ class DebiesedDistributionDrawSGDW(DistributionDrawSGDW):
     def _compute_geodesic(self, gs_weights_lst_k, lst_gamma_k) -> torch.Tensor:
         return ot.bregman.convolutional_barycenter2d_debiased(
             A=torch.stack(gs_weights_lst_k),
-            weights=torch.as_tensor(lst_gamma_k, dtype=self.dtype, device=self.device),
+            weights=torch.as_tensor(lst_gamma_k, dtype=self.dtype,
+                                    device=self.device),
             **self.conv_bar_kwargs,
         )
 
@@ -658,7 +711,8 @@ def compute_bwb_discrete_distribution(
 ):
     # Warning for deprecation
     warnings.warn(
-        "This function is deprecated. Use the DiscreteDistributionSGDW class instead.",
+        "This function is deprecated. "
+        "Use the DiscreteDistributionSGDW class instead.",
         DeprecationWarning,
         stacklevel=2,
     )
@@ -683,7 +737,8 @@ def compute_bwb_discrete_distribution(
     X_k, m = bwb.distributions.utils.partition(
         X=mu_0.enumerate_nz_support_(), mu=mu_0.nz_probs, alpha=alpha
     )
-    X_k, m = X_k.to(dtype=dtype, device=device), m.to(dtype=dtype, device=device)
+    X_k, m = X_k.to(dtype=dtype, device=device), m.to(dtype=dtype,
+                                                      device=device)
     toc = time.time()
     _log.info(f"total init weights: {len(m)}, Δt = {toc - tic:.2f} [seg]")
 
@@ -691,7 +746,8 @@ def compute_bwb_discrete_distribution(
     if position_history:
         position_history = [X_k]
     if distribution_history:
-        distribution_history = [dist.DiscreteDistribution(support=X_k, weights=m)]
+        distribution_history = [
+            dist.DiscreteDistribution(support=X_k, weights=m)]
     if distrib_sampler_history:
         distrib_sampler_history = [[mu_0]]
 
@@ -708,11 +764,14 @@ def compute_bwb_discrete_distribution(
 
         if k % report_every == 0:
             _log.info(
-                _bar + f" {k = }, "
-                       f"w_dist = {w_dist:.4f}, "
-                       f"t = {toc - tic:.2f} [seg], "
-                       f"Δt = {diff_t * 1000:.2f} [ms], "
-                       f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.2f} [ms/iter] " + _bar
+                _bar
+                + f" {k = }, "
+                + f"w_dist = {w_dist:.4f}, "
+                + f"t = {toc - tic:.2f} [seg], "
+                + f"Δt = {diff_t * 1000:.2f} [ms], "
+                + f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.2f} "
+                  f"[ms/iter] "
+                + _bar
             )
 
         if distrib_sampler_history:
@@ -725,11 +784,11 @@ def compute_bwb_discrete_distribution(
             t_mu_i_k: dist.DiscreteDistribution = distrib_sampler.draw()
             if distrib_sampler_history:
                 distrib_sampler_history[-1].append(t_mu_i_k)
-            t_X_i_k, t_m_i_k = t_mu_i_k.enumerate_nz_support_(), t_mu_i_k.nz_probs
+            t_X_i_k = t_mu_i_k.enumerate_nz_support_()
+            t_m_i_k = t_mu_i_k.nz_probs
             # Pass to device
-            t_X_i_k, t_m_i_k = t_X_i_k.to(dtype=dtype, device=device), t_m_i_k.to(
-                dtype=dtype, device=device
-            )
+            t_X_i_k = t_X_i_k.to(dtype=dtype, device=device)
+            t_m_i_k = t_m_i_k.to(dtype=dtype, device=device)
             t_m_i_k /= torch.sum(t_m_i_k)
 
             # Compute optimal transport
@@ -748,7 +807,8 @@ def compute_bwb_discrete_distribution(
 
         # Compute Wasserstein distance
         diff = X_k - T_X_k
-        w_dist = float((gamma_k ** 2) * torch.sum(m * LA.norm(diff, dim=1) ** 2))
+        w_dist = float(
+            (gamma_k ** 2) * torch.sum(m * LA.norm(diff, dim=1) ** 2))
 
         # Add to history
         if position_history:
@@ -790,7 +850,8 @@ def compute_bwb_distribution_draw(
 ):
     # Warning for deprecation
     warnings.warn(
-        "This function is deprecated. Use the DistributionDrawSGDW class instead.",
+        "This function is deprecated. "
+        "Use the DistributionDrawSGDW class instead.",
         DeprecationWarning,
         stacklevel=2,
     )
@@ -820,10 +881,13 @@ def compute_bwb_distribution_draw(
         tic_ = time.time()
         if k % report_every == 0:
             _log.info(
-                _bar + f" {k = }, "
-                       f"t = {toc - tic:.2f} [seg], "
-                       f"Δt = {diff_t * 1000:.2f} [ms], "
-                       f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.2f} [ms/iter] " + _bar
+                _bar
+                + f" {k = }, "
+                + f"t = {toc - tic:.2f} [seg], "
+                + f"Δt = {diff_t * 1000:.2f} [ms], "
+                + f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.2f} "
+                  f"[ms/iter] "
+                + _bar
             )
 
         m_k: dist.DistributionDraw = distrib_sampler.draw()
@@ -848,7 +912,8 @@ def compute_bwb_distribution_draw(
         if weights_history:
             weights_history.append(gs_weights_k)
         if distribution_history:
-            mu_kp1 = dist.DistributionDraw.from_grayscale_weights(gs_weights_kp1)
+            mu_kp1 = dist.DistributionDraw.from_grayscale_weights(
+                gs_weights_kp1)
             distribution_history.append(mu_kp1)
 
         # Update
@@ -885,7 +950,8 @@ def compute_bwb_distribution_draw_projected(
 ):
     # Warning for deprecation
     warnings.warn(
-        "This function is deprecated. Use the DistributionDrawSGDW class instead.",
+        "This function is deprecated. "
+        "Use the DistributionDrawSGDW class instead.",
         DeprecationWarning,
         stacklevel=2,
     )
@@ -915,10 +981,13 @@ def compute_bwb_distribution_draw_projected(
         tic_ = time.time()
         if k % report_every == 0:
             _log.info(
-                _bar + f" {k = }, "
-                       f"t = {toc - tic:.2f} [seg], "
-                       f"Δt = {diff_t * 1000:.2f} [ms], "
-                       f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.2f} [ms/iter] " + _bar
+                _bar
+                + f" {k = }, "
+                + f"t = {toc - tic:.2f} [seg], "
+                + f"Δt = {diff_t * 1000:.2f} [ms], "
+                + f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.2f} "
+                  f"[ms/iter] "
+                + _bar
             )
 
         m_k: dist.DistributionDraw = distrib_sampler.draw()
@@ -947,7 +1016,8 @@ def compute_bwb_distribution_draw_projected(
         if weights_history:
             weights_history.append(gs_weights_k)
         if distribution_history:
-            mu_kp1 = dist.DistributionDraw.from_grayscale_weights(gs_weights_kp1)
+            mu_kp1 = dist.DistributionDraw.from_grayscale_weights(
+                gs_weights_kp1)
             distribution_history.append(mu_kp1)
 
         # Update
