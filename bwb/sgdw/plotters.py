@@ -14,7 +14,8 @@ from bwb.sgdw.utils import ReportOptions
 _log = logging.get_logger(__name__)
 
 
-class Plotter[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t], metaclass=abc.ABCMeta):
+class Plotter[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t],
+                                        metaclass=abc.ABCMeta):
     fig: t.Optional[plt.Figure]
     ax: t.Optional[plt.Axes]
 
@@ -121,7 +122,10 @@ class PlotterComparison(Plotter[DistributionDraw, torch.Tensor]):
     @t.final
     @t.override
     @logging.register_total_time_method(_log)
-    def plot(self, init: int = None) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
+    def plot(
+        self,
+        init: int = None
+    ) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
         create_distr = self.sgdw.create_distribution
         max_imgs = self.n_rows * self.n_cols
         max_k = self.sgdw.iter_params.k
@@ -133,7 +137,8 @@ class PlotterComparison(Plotter[DistributionDraw, torch.Tensor]):
             )
         if init > max_k - max_imgs + 1:
             logging.raise_error(
-                f"init should be less than {max_k - max_imgs + 1}. Currently: {init = }",
+                f"init should be less than {max_k - max_imgs + 1}. "
+                f"Currently: {init = }",
                 _log, ValueError
             )
 
@@ -158,9 +163,12 @@ class PlotterComparison(Plotter[DistributionDraw, torch.Tensor]):
                 ax1.set_ylabel("Step")
 
             # Plot the sample
-            fig_sample: DistributionDraw = create_distr(self.hist.pos_wgt_samp[k][0])
+            hist = self.hist.pos_wgt_samp
+            fig_sample: DistributionDraw = create_distr(hist[k][0])
             ax0.imshow(fig_sample.image, cmap=self.cmap)
-            ax0.set_title(f"$k={k}$\n" + f"$\\gamma_k={gamma_k * 100:.1f}\\%$", size="x-small")
+            ax0.set_title(f"$k={k}$\n"
+                          + f"$\\gamma_k={gamma_k * 100:.1f}\\%$",
+                          size="x-small")
 
             # Plot the step
             fig_step: DistributionDraw = create_distr(self.hist.pos_wgt[k])

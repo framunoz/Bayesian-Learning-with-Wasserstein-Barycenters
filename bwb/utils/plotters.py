@@ -54,8 +54,11 @@ def save_fig(
     :type formats: list[str]
     :param dpi: The resolution of the image.
     :type dpi: int
-    :param kwargs: Optional arguments to pass to the matplotlib.pyplot.savefig function. For further
-        information, please see the documentation of that function.
+    :param kwargs: Optional arguments to pass to the
+        `matplotlib.pyplot.savefig
+        <https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.savefig.html>`_
+        function. For further information, please see the documentation
+        of that function.
     """
     path_to_save = Path(path) / name
     for fmt in formats:
@@ -69,7 +72,8 @@ def save_fig_with_path(
     **kwargs,
 ):
     """
-    Function that returns a function that saves a figure with a given path.
+    Function that returns a function that saves a figure with a given
+    path.
 
     :param path: The path of the file.
     :type path: Path | str
@@ -99,8 +103,11 @@ def plot_image(
     :type image: PIL.Image.Image
     :param title: The title of the plot.
     :type title: str
-    :param kwargs: Optional arguments to pass to the matplotlib.pyplot.imshow function. For further
-        information, please see the documentation of that function.
+    :param kwargs: Optional arguments to pass to the
+        `matplotlib.pyplot.imshow
+        <https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.imshow.html>`_
+        function. For further information, please see the documentation
+        of that function.
     :return: The figure and the axes of the plot.
     """
     kwargs.setdefault("cmap", _CMAP_DEFAULT)
@@ -126,8 +133,11 @@ def plot_draw(
     :type draw: DistributionDraw
     :param title: The title of the plot.
     :type title: str
-    :param kwargs: Optional arguments to pass to the matplotlib.pyplot.imshow function. For further
-        information, please see the documentation of that function.
+    :param kwargs: Optional arguments to pass to the
+        `matplotlib.pyplot.imshow
+        <https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.imshow.html>`_
+        function. For further information, please see the documentation
+        of that function.
     :return: The figure and the axes of the plot.
     """
     return plot_image(image=draw.image, title=title, **kwargs)
@@ -148,7 +158,8 @@ def plot_list_of_images(
     :type n_rows: int
     :param n_cols: The number of columns of the plot.
     :type n_cols: int
-    :param factor: The factor to multiply the number of rows by the number of columns.
+    :param factor: The factor to multiply the number of rows by the
+        number of columns.
     :type factor: float
     :param title: The title of the plot.
     :type title: str
@@ -161,12 +172,15 @@ def plot_list_of_images(
 
     n_images = len(list_of_images)
     if n_images < n_rows * n_cols:
-        msg = "The number of images is less than the number of rows times the number of columns."
+        msg = ("The number of images is less than the number of rows "
+               "times the number of columns.")
         _log.warning(msg)
         warnings.warn(msg, UserWarning, stacklevel=2)
     n_images = min(n_images, n_rows * n_cols)
 
-    labels: list[str] = labels if labels is not None else [f"{i}" for i in range(n_images)]
+    if labels is None:
+        labels = [f"{i}" for i in range(n_images)]
+
     if len(labels) < n_images:
         msg = "The number of labels is different from the number of images."
         _log.warning(msg)
@@ -201,13 +215,15 @@ def plot_list_of_draws(
     """
     Function that plots a list of DistributionDraws instances.
 
-    :param list_of_draws: The list of DistributionDraws instances to draw.
+    :param list_of_draws: The list of DistributionDraws instances to
+        draw.
     :type list_of_draws: list[DistributionDraws]
     :param n_rows: The number of rows of the plot.
     :type n_rows: int
     :param n_cols: The number of columns of the plot.
     :type n_cols: int
-    :param factor: The factor to multiply the number of rows by the number of columns.
+    :param factor: The factor to multiply the number of rows by the
+        number of columns.
     :type factor: float
     :param title: The title of the plot.
     :type title: str
@@ -218,7 +234,8 @@ def plot_list_of_draws(
 
     """
 
-    list_of_images: list[PIL.Image.Image] = [draw.image for draw in list_of_draws]
+    list_of_images: list[PIL.Image.Image] = [draw.image for draw in
+                                             list_of_draws]
     return plot_list_of_images(
         list_of_images=list_of_images,
         n_rows=n_rows, n_cols=n_cols, factor=factor,
@@ -246,9 +263,12 @@ def plot_histogram_from_points(
     :param title: The title of the plot.
     :param xlabel: The label of the x-axis.
     :param ylabel: The label of the y-axis.
-    :param histplot_kwargs: Optional arguments to pass to the seaborn.histplot function. For further
-        information, please see the documentation of that function.
-    :return: The return of the seaborn.histplot function.
+    :param histplot_kwargs: Optional arguments to pass to the
+        `seaborn.histplot
+        <https://seaborn.pydata.org/generated/seaborn.histplot.html>`_
+        function. For further information, please see the documentation
+        of that function.
+    :return: The return of the ``seaborn.histplot`` function.
     """
     # Instance the kwargs of the histplot and set default values.
     histplot_kwargs = dict() if histplot_kwargs is None else histplot_kwargs
@@ -265,7 +285,8 @@ def plot_histogram_from_points(
         ylabel_ = "Y-Axis" if ylabel is None else ylabel
 
     df = pd.DataFrame(data)
-    histplot_return = sns.histplot(data=df, x=0, y=1, **histplot_kwargs)  # type: plt.Axes
+    histplot_return = sns.histplot(data=df, x=0, y=1,
+                                   **histplot_kwargs)  # type: plt.Axes
     plt.xlabel(xlabel_)
     plt.ylabel(ylabel_)
     plt.title(title)
