@@ -15,6 +15,7 @@ import bwb.distributions as dist
 import bwb.distributions.utils as dist_utils
 import bwb.pot.bregman as bregman
 import bwb.pot.transports as tpt
+from bwb.protocols import HasDeviceDType
 from bwb.sgdw.utils import (DetentionParameters, History, IterationParameters,
                             Report,
                             ReportOptions,
@@ -59,6 +60,7 @@ class Runnable[DistributionT, pos_wgt_t](metaclass=abc.ABCMeta):
 # MARK: BaseSGDW Class
 # noinspection PyMethodOverriding
 class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t],
+                                         HasDeviceDType,
                                          metaclass=abc.ABCMeta):
     r"""
     Base class for Stochastic Gradient Descent in Wasserstein Space.
@@ -124,18 +126,21 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t],
         self.report = Report(self.iter_params, report_every=report_every)
 
         # Values for dtype and device
-        mu = self.distr_sampler.draw()
-        self.dtype = mu.dtype
-        """The data type for the algorithm. Defaults to the data type 
-        of the first distribution drawn from the sampler."""
-        self.device = mu.device
-        """The device for the algorithm. Defaults to the device of the 
-        first distribution drawn from the sampler."""
         self.val = torch.tensor(1, dtype=self.dtype, device=self.device)
         """A tensor with value 1, used to pass to the device."""
 
         # Callback
         self._callback: t.Callable[[], None] = lambda: None
+
+    @t.override
+    @property
+    def dtype(self) -> torch.dtype:
+        return self.distr_sampler.dtype
+
+    @t.override
+    @property
+    def device(self) -> torch.device:
+        return self.distr_sampler.device
 
     @property
     def callback(self) -> t.Callable[[], None]:
@@ -147,7 +152,7 @@ class BaseSGDW[DistributionT, pos_wgt_t](Runnable[DistributionT, pos_wgt_t],
         return self._callback
 
     @callback.setter
-    def callback(self, callback):
+    def callback(self, callback: t.Callable[[], None]) -> None:
         self._callback = callback
 
     @abc.abstractmethod
@@ -572,7 +577,7 @@ class DistributionDrawSGDW(
         verbose=False,
         warn=False,
         **kwargs,
-    ):
+    ) -> t.Self:
         """
         Set the parameters for geodesic computation.
 
@@ -621,7 +626,12 @@ class DistributionDrawSGDW(
 
     @t.final
     @t.override
-    def update_pos_wgt(self, pos_wgt_k, lst_mu_k, gamma_k) -> torch.Tensor:
+    def update_pos_wgt(
+        self,
+        pos_wgt_k: torch.Tensor,
+        lst_mu_k: t.Sequence[dist.DistributionDraw],
+        gamma_k: float
+    ) -> torch.Tensor:
         # TODO: REFACTOR THIS!
         S_k = len(lst_mu_k)
         gs_weights_kp1 = self._compute_geodesic(
@@ -639,7 +649,10 @@ class DistributionDrawSGDW(
 
     @t.final
     @t.override
-    def create_barycenter(self, pos_wgt):
+    def create_barycenter(
+        self,
+        pos_wgt: torch.Tensor
+    ) -> dist.DistributionDraw:
         # In the last iteration, project to the manifold
         if self.projector is not None:
             pos_wgt = self.projector(pos_wgt).to(self.val)
@@ -681,7 +694,7 @@ class DebiesedDistributionDrawSGDW(DistributionDrawSGDW):
         verbose=False,
         warn=False,
         **kwargs,
-    ):
+    ) -> t.Self:
         return super().set_geodesic_params(
             reg=reg,
             method=method,
@@ -721,7 +734,7 @@ def compute_bwb_discrete_distribution(
         aux = batch_size
 
         # noinspection PyMissingOrEmptyDocstring,PyUnusedLocal
-        def batch_size(n):
+        def batch_size(n: int) -> int:
             return aux
 
     batch_size: t.Callable[[int], int]
@@ -729,7 +742,6 @@ def compute_bwb_discrete_distribution(
     # Paso 1: Sampling a mu_0
     mu_0: dist.DiscreteDistribution = distrib_sampler.draw()
     dtype, device = mu_0.dtype, mu_0.device
-    _log.info(f"{dtype = }, {device = }")
 
     # Compute locations through the partition
     _log.info("Computing initial weights")
@@ -765,7 +777,7 @@ def compute_bwb_discrete_distribution(
         if k % report_every == 0:
             _log.info(
                 _bar
-                + f" {k = }, "
+                + f" k = {k}, "
                 + f"w_dist = {w_dist:.4f}, "
                 + f"t = {toc - tic:.2f} [seg], "
                 + f"Δt = {diff_t * 1000:.2f} [ms], "
@@ -859,7 +871,7 @@ def compute_bwb_distribution_draw(
     # Paso 1: Sampling a mu_0
     mu_k: dist.DistributionDraw = distrib_sampler.draw()
     dtype, device = mu_k.dtype, mu_k.device
-    _log.info(f"{dtype = }, {device = }")
+    _log.info(f"dtype = {dtype}, device = {device}")
 
     gs_weights_k = mu_k.grayscale_weights
 
@@ -882,7 +894,7 @@ def compute_bwb_distribution_draw(
         if k % report_every == 0:
             _log.info(
                 _bar
-                + f" {k = }, "
+                + f" k = {k}, "
                 + f"t = {toc - tic:.2f} [seg], "
                 + f"Δt = {diff_t * 1000:.2f} [ms], "
                 + f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.2f} "
@@ -959,7 +971,7 @@ def compute_bwb_distribution_draw_projected(
     # Paso 1: Sampling a mu_0
     mu_k: dist.DistributionDraw = distrib_sampler.draw()
     dtype, device = mu_k.dtype, mu_k.device
-    _log.info(f"{dtype = }, {device = }")
+    _log.info(f"dtype = {dtype}, device = {device}")
 
     gs_weights_k = mu_k.grayscale_weights
 
@@ -982,7 +994,7 @@ def compute_bwb_distribution_draw_projected(
         if k % report_every == 0:
             _log.info(
                 _bar
-                + f" {k = }, "
+                + f" k = {k}, "
                 + f"t = {toc - tic:.2f} [seg], "
                 + f"Δt = {diff_t * 1000:.2f} [ms], "
                 + f"Δt per iter. = {(toc - tic) * 1000 / (k + 1):.2f} "
@@ -996,7 +1008,7 @@ def compute_bwb_distribution_draw_projected(
 
         # Compute the distribution of mu_{k+1}
         gamma_k = learning_rate(k)
-        _log.debug(f"{gamma_k = :.6f}")
+        _log.debug(f"gamma_k = {gamma_k:.6f}")
 
         gs_weights_kp1, _ = bregman.convolutional_barycenter2d(
             A=[gs_weights_k, m_k.grayscale_weights],
