@@ -12,7 +12,7 @@ import numpy as np
 import PIL.Image
 import torch
 
-import bwb._logging as logging
+import bwb.logging_ as logging
 from bwb.utils.protocols import (device_t, DiscreteDistribSamplerP, DrawP,
                                  seed_t)
 

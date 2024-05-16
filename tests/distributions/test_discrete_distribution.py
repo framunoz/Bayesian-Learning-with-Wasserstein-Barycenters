@@ -4,7 +4,6 @@ Tests for the :mod:`bwb.distributions.discrete_distribution` module.
 import pytest
 import torch
 
-from bwb import _logging
 from bwb.distributions.discrete_distribution import (DiscreteDistribution,
                                                      DistributionDraw)
 

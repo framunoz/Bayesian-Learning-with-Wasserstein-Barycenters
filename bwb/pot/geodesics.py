@@ -3,7 +3,7 @@ from typing import Protocol
 
 import torch
 
-import bwb._logging as logging
+import bwb.logging_ as logging
 import bwb.pot.transports as tpt
 from bwb.distributions.utils import partition
 from bwb.utils.validation import check_is_fitted

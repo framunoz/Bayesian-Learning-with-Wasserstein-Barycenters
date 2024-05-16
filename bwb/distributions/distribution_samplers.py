@@ -12,8 +12,8 @@ from pathlib import Path
 
 import torch
 
-import bwb._logging as logging
 import bwb.distributions as dist
+import bwb.logging_ as logging
 import bwb.utils.validation as validation
 from .models import DiscreteModelsSetP
 from ..config import config

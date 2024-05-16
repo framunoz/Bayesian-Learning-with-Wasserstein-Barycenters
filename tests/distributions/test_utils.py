@@ -2,7 +2,6 @@ import pytest
 import torch
 
 import bwb.distributions.utils as utils
-from bwb import _logging
 
 _log = _logging.get_logger(__name__)
 

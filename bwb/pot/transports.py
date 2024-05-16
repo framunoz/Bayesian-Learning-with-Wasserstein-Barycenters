@@ -5,7 +5,7 @@ import typing
 import numpy as np
 import ot
 
-import bwb._logging as logging
+import bwb.logging_ as logging
 from bwb import distributions as distrib
 
 _log = logging.get_logger(__name__)

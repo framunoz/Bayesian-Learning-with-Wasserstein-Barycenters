@@ -9,7 +9,7 @@ from copy import deepcopy
 from datetime import timedelta
 from typing import Iterator
 
-import bwb._logging as logging
+import bwb.logging_ as logging
 
 _log = logging.get_logger(__name__)
 

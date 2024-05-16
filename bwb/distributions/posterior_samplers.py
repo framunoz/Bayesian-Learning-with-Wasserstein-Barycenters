@@ -7,7 +7,7 @@ import hamiltorch
 import torch
 from hamiltorch import Sampler
 
-import bwb._logging as logging
+import bwb.logging_ as logging
 from bwb import distributions as dist
 from . import DiscreteDistribSampler
 from .distribution_samplers import BaseGeneratorDistribSampler, GeneratorP

@@ -10,9 +10,9 @@ import ot
 import torch
 from torch import linalg as LA
 
-import bwb._logging as logging
 import bwb.distributions as dist
 import bwb.distributions.utils as dist_utils
+import bwb.logging_ as logging
 import bwb.pot.bregman as bregman
 import bwb.pot.transports as tpt
 from bwb.protocols import HasDeviceDType

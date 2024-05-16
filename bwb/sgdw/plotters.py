@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 
-import bwb._logging as logging
+import bwb.logging_ as logging
 from .sgdw import BaseSGDW, Runnable
 from .utils import ReportOptions
 from ..distributions import DistributionDraw

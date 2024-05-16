@@ -8,7 +8,7 @@ import warnings
 
 import torch
 
-from bwb._logging import log_config
+from bwb.logging_ import log_config
 
 _log = log_config.get_logger(__name__)
 

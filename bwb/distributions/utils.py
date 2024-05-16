@@ -2,7 +2,7 @@ from math import prod
 
 import torch
 
-import bwb._logging as logging
+import bwb.logging_ as logging
 from ..config import config
 
 __all__ = [

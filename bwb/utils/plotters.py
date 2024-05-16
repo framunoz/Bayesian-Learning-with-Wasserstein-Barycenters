@@ -11,7 +11,7 @@ import PIL.Image
 import seaborn as sns
 from matplotlib import pyplot as plt
 
-import bwb._logging as logging
+import bwb.logging_ as logging
 
 __all__ = [
     "plot_image",

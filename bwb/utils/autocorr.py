@@ -4,7 +4,7 @@ a time series.
 """
 import torch
 
-import bwb._logging as logging
+import bwb.logging_ as logging
 from bwb.exceptions import AutocorrError
 
 __all__ = [

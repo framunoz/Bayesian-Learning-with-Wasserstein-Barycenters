@@ -10,7 +10,7 @@ import torch.distributions
 import torchvision.transforms.functional as F
 from PIL import Image
 
-import bwb._logging as logging
+import bwb.logging_ as logging
 from .utils import grayscale_parser
 from ..config import config
 from ..protocols import HasDeviceDType

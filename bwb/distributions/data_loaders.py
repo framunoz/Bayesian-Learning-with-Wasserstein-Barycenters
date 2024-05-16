@@ -8,8 +8,8 @@ import typing as t
 import torch
 import torchvision.transforms as T
 
-import bwb._logging as logging
 import bwb.distributions as dist
+import bwb.logging_ as logging
 from bwb.config import config
 from bwb.utils.protocols import array_like_t
 
