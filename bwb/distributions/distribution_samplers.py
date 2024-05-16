@@ -17,6 +17,7 @@ import bwb.distributions as dist
 import bwb.utils.validation as validation
 from .models import DiscreteModelsSetP
 from ..config import config
+from ..protocols import HasDeviceDType
 from ..utils.protocols import path_t, seed_t
 from ..utils.utils import set_generator, timeit_to_total_time
 
@@ -42,7 +43,8 @@ class GeneratorP(t.Protocol):
         ...
 
 
-class DistributionSampler[DistributionT](metaclass=abc.ABCMeta):
+class DistributionSampler[DistributionT](HasDeviceDType,
+                                         metaclass=abc.ABCMeta):
     r"""
     Base class for distributions that sampling other distributions.
     i.e. it represents a distribution :math:`\Lambda(dm) \in \mathcal{P}(
@@ -51,6 +53,16 @@ class DistributionSampler[DistributionT](metaclass=abc.ABCMeta):
 
     def __init__(self) -> None:
         self.total_time = 0.0  # Total time to draw samples
+
+    @t.override
+    @property
+    def device(self) -> torch.device:
+        return self.draw().device
+
+    @t.override
+    @property
+    def dtype(self) -> torch.dtype:
+        return self.draw().dtype
 
     @abc.abstractmethod
     def draw(self, seed: seed_t = None) -> DistributionT:
@@ -175,8 +187,6 @@ class DiscreteDistribSampler[DistributionT](
 
         # The set of models
         self.models_: DiscreteModelsSetP[DistributionT] = models
-        self.device: torch.device = models.get(0).device
-        self.dtype: torch.dtype = models.get(0).dtype
 
         self.models_index_: torch.Tensor = torch.arange(
             len(models), device=self.device
@@ -184,6 +194,16 @@ class DiscreteDistribSampler[DistributionT](
 
         # The probabilities need to be set!
         return self
+
+    @t.override
+    @property
+    def device(self) -> torch.device:
+        return self.models_.get(0).device
+
+    @t.override
+    @property
+    def dtype(self) -> torch.dtype:
+        return self.models_.get(0).dtype
 
     def get_model(self, i: int) -> DistributionT:
         """Get the model with index i."""
@@ -702,7 +722,7 @@ class BaseGeneratorDistribSampler[DistributionT](
 
         return new
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict:
         logging.raise_warning(
             "The generator_, transform_out_ and noise_sampler_ "
             "attributes will not be saved. "
@@ -727,7 +747,7 @@ class BaseGeneratorDistribSampler[DistributionT](
 
         return state
 
-    def _getstate_half_(self, state):
+    def _getstate_half_(self, state) -> dict:
         """
         To use template pattern on the __getstate__ method.
 
@@ -817,7 +837,7 @@ class GeneratorDistribSampler(
 
 
 class PosteriorPiN(DistributionSampler, metaclass=abc.ABCMeta):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
         # Raise a warning of deprecation
@@ -828,7 +848,7 @@ class PosteriorPiN(DistributionSampler, metaclass=abc.ABCMeta):
 
 
 class DiscretePosteriorPiN(DiscreteDistribSampler):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         # Raise a warning of deprecation
@@ -839,24 +859,27 @@ class DiscretePosteriorPiN(DiscreteDistribSampler):
         )
 
 
-def __main():
+def __main() -> None:
+    """
+    Main function for testing purposes.
+    """
     from icecream import ic
     from pathlib import Path
 
     input_size = 128
     output_size = (32, 32)
 
-    def noise_sampler(size):
+    def noise_sampler(size) -> torch.Tensor:
         """Dummy noise_sampler."""
         return torch.rand((size, input_size, 1, 1)).to(config.device)
 
     # noinspection PyUnusedLocal
-    def generator(z):
+    def generator(z) -> torch.Tensor:
         """Dummy generator."""
         return torch.rand((1, output_size[0], output_size[1])).to(
             config.device)
 
-    def transform_out(x):
+    def transform_out(x) -> torch.Tensor:
         """Dummy transform_out."""
         return x
 
