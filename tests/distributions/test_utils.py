@@ -2,30 +2,31 @@ import pytest
 import torch
 
 import bwb.distributions.utils as utils
+import bwb.logging_ as logging
 
-_log = _logging.get_logger(__name__)
+_log = logging.get_logger(__name__)
 
-devices = ['cpu']
+devices = [torch.device('cpu')]
 if torch.cuda.is_available():
-    devices.append('cuda')
+    devices.append(torch.device('cuda:0'))
 
 dtypes = [torch.float16, torch.float32, torch.float64]
 
 
 @pytest.fixture(params=devices)
-def device(request):
+def device(request) -> torch.device:
     """Fixture to test the different devices."""
     return request.param
 
 
 @pytest.fixture(params=dtypes)
-def dtype(request):
+def dtype(request) -> torch.dtype:
     """Fixture to test the different data types."""
     return request.param
 
 
 @pytest.fixture
-def gen(device, dtype) -> tuple[torch.Generator, str, torch.dtype]:
+def gen(device, dtype) -> tuple[torch.Generator, torch.device, torch.dtype]:
     """
     Fixture to generate a generator with a seed and device.
 
@@ -33,13 +34,13 @@ def gen(device, dtype) -> tuple[torch.Generator, str, torch.dtype]:
     :param dtype: The data type of the generator.
     :return: The generator with the device and data type.
     """
-    _logging.set_level(_logging.DEBUG)
+    logging.set_level(logging.DEBUG)
     seed = torch.Generator().seed()
     _log.info(f"Seed: {seed}, device: {device}, dtype: {dtype}")
     return torch.Generator(device=device).manual_seed(seed), device, dtype
 
 
-def test_grayscale_parser_invalid_shape(gen):
+def test_grayscale_parser_invalid_shape(gen) -> None:
     gen, device, _ = gen
     shape = (30, 30)
     weights = torch.rand((784,), device=device, generator=gen)
@@ -48,7 +49,7 @@ def test_grayscale_parser_invalid_shape(gen):
         utils.grayscale_parser(shape, weights, support)
 
 
-def test_partition_invalid_alpha(gen):
+def test_partition_invalid_alpha(gen) -> None:
     gen, device, _ = gen
     X = torch.rand((784, 2), device=device, generator=gen)
     mu = torch.rand((784,), device=device, generator=gen)
@@ -58,7 +59,7 @@ def test_partition_invalid_alpha(gen):
 
 
 # noinspection PyTestUnpassedFixture
-def test_grayscale_parser_valid_input(gen):
+def test_grayscale_parser_valid_input(gen) -> None:
     generator, device, dtype = gen
     shape = (28, 28)
     weights = torch.rand(
@@ -71,11 +72,11 @@ def test_grayscale_parser_valid_input(gen):
     result = utils.grayscale_parser(shape, weights, support)
     assert result.shape == shape
     assert result.dtype == torch.uint8
-    assert result.device.type == device
+    assert result.device == device
 
 
 # noinspection PyTestUnpassedFixture
-def test_partition_valid_input(gen):
+def test_partition_valid_input(gen) -> None:
     generator, device, dtype = gen
     X = torch.rand(
         (784, 2), dtype=dtype, device=device, generator=generator
