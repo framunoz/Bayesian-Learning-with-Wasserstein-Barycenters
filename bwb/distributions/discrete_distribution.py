@@ -13,6 +13,7 @@ from PIL import Image
 import bwb._logging as logging
 from .utils import grayscale_parser
 from ..config import config
+from ..protocols import HasDeviceDType
 from ..utils.validation import shape_validation
 
 __all__ = [
@@ -22,6 +23,8 @@ __all__ = [
 ]
 
 _log = logging.get_logger(__name__)
+
+type SizeT = torch.Size | t.Tuple[int, ...]
 
 
 # noinspection PyPropertyDefinition
@@ -74,10 +77,18 @@ class DistributionP(t.Protocol):
 
 
 # noinspection PyAbstractClass
-class DiscreteDistribution(torch.distributions.Categorical):
+class DiscreteDistribution(torch.distributions.Categorical, HasDeviceDType):
     """
     Class that represent a discrete distribution, using de
-    ``Categorical`` class provided by PyTorch.
+    `Categorical
+    <https://pytorch.org/docs/stable/distributions.html#categorical>`_
+    class provided by PyTorch.
+
+    :param weights: Array of probabilities. If it is a Tensor type,
+        the device shall be fixed by this parameter.
+    :param support: Support of the distribution. Optional.
+    :param dtype: The dtype of the distribution.
+    :param device: The device of the distribution.
     """
 
     def __init__(
@@ -96,8 +107,8 @@ class DiscreteDistribution(torch.distributions.Categorical):
         :param support: Support of the distribution. Optional.
         :param validate_args:
         """
-        dtype = self._dtype = weights.dtype if dtype is None else dtype
-        device = self._device = weights.device if device is None else device
+        dtype = weights.dtype if dtype is None else dtype
+        device = weights.device if device is None else device
 
         # Save weights and support as tensor
         self.weights: torch.Tensor = torch.as_tensor(
@@ -110,8 +121,10 @@ class DiscreteDistribution(torch.distributions.Categorical):
                 support, device=device
             )
 
-        if (support is not None
-            and len(self.weights) != len(self._original_support)):
+        if (
+            support is not None
+            and len(self.weights) != len(self._original_support)
+        ):
             raise ValueError(
                 "The sizes of weights and support does not coincide:"
                 f" {len(self.weights)} != {len(self._original_support)}"
@@ -135,12 +148,12 @@ class DiscreteDistribution(torch.distributions.Categorical):
     @property
     def dtype(self) -> torch.dtype:
         """dtype of the instance."""
-        return self._dtype
+        return self.weights.dtype
 
     @property
     def device(self) -> torch.device:
         """device of the instance."""
-        return self._device
+        return self.weights.device
 
     def enumerate_support_(self, expand=True) -> torch.Tensor:
         """Enumerates the original support ``support`` and not its indices."""
@@ -179,9 +192,9 @@ class DistributionDraw(DiscreteDistribution):
 
     def __init__(
         self,
-        weights,
-        shape,
-        support=None,
+        weights: torch.Tensor,
+        shape: SizeT,
+        support: torch.Tensor = None,
         device: torch.device = None,
         dtype: torch.dtype = None
     ) -> None:
@@ -227,8 +240,8 @@ class DistributionDraw(DiscreteDistribution):
     @classmethod
     def from_weights(
         cls,
-        weights,
-        shape,
+        weights: torch.Tensor,
+        shape: SizeT,
         device: torch.Tensor = None,
         dtype: torch.dtype = None,
     ) -> t.Self:
@@ -255,7 +268,7 @@ class DistributionDraw(DiscreteDistribution):
     def from_discrete_distribution(
         cls,
         dd: DiscreteDistribution,
-        shape,
+        shape: SizeT,
         device: torch.device = None,
         dtype: torch.dtype = None,
     ) -> t.Self:
@@ -274,7 +287,7 @@ class DistributionDraw(DiscreteDistribution):
     @classmethod
     def from_grayscale_weights(
         cls,
-        grayscale_weights,
+        grayscale_weights: torch.Tensor,
         device: torch.device = None,
         dtype: torch.dtype = None,
     ) -> t.Self:
@@ -309,7 +322,7 @@ class DistributionDraw(DiscreteDistribution):
     @classmethod
     def from_array(
         cls,
-        grayscale,
+        grayscale: torch.Tensor,
         device: torch.device = None,
         dtype: torch.dtype = None,
     ) -> t.Self:
@@ -341,13 +354,13 @@ class DistributionDraw(DiscreteDistribution):
         # Get the weights from the grayscale
         grayscale_weights: torch.Tensor = grayscale / 255
         grayscale_weights /= torch.sum(grayscale_weights)
-        weights = grayscale_weights.reshape((-1,))
+        weights = grayscale_weights.reshape((-1,)).to(dtype)
 
         to_return = cls(weights=weights, shape=shape,
                         device=device, dtype=dtype)
 
         to_return._grayscale = grayscale
-        to_return._grayscale_weights = grayscale_weights
+        to_return._grayscale_weights = grayscale_weights.to(dtype)
 
         return to_return
 
@@ -373,7 +386,6 @@ class DistributionDraw(DiscreteDistribution):
             # Compute the grayscale
             self._grayscale = grayscale_parser(
                 self.shape, weights, support,
-                dtype=self.dtype, device=self.device
             )
 
         return self._grayscale
@@ -386,7 +398,7 @@ class DistributionDraw(DiscreteDistribution):
         probability weight.
         """
         if self._grayscale_weights is None:
-            gs_weights = self.grayscale / 255
+            gs_weights = self.grayscale.to(self.dtype) / 255
             gs_weights /= torch.sum(gs_weights)
             self._grayscale_weights = gs_weights
 
@@ -397,23 +409,29 @@ class DistributionDraw(DiscreteDistribution):
         """
         Representation of the Image.
 
-        :return: A PIL.Image.Image instance.
+        :return: A `PIL.Image.Image
+            <https://pillow.readthedocs.io/en/stable/reference/Image.html#PIL.Image.Image>`_
+            object.
         """
         return F.to_pil_image(255 - self.grayscale)
 
     def __repr__(self) -> str:
-        return type(
-            self
-        ).__name__ + (
-            f"(shape: {tuple(self.shape)}, "
-            f"device: {self.device}, "
-            f"dtype: {self.dtype})"
-        )
+        to_return = self.__class__.__name__ + "("
+        to_return += f"shape={tuple(self.shape)}, "
+        to_return += f"device={self.device}, "
+        to_return += f"dtype={self.dtype}), "
 
-    def _repr_png_(self):
-        """iPython display hook support
+        if to_return.endswith(", "):
+            to_return = to_return[:-len(", ")]
+
+        to_return += ")"
+
+        return to_return
+
+    def _repr_png_(self) -> bytes:
+        """iPython display hook support for PNG format.
 
         :returns: png version of the image as bytes
         """
-        # noinspection PyUnresolvedReferences,PyProtectedMember
+        # noinspection PyProtectedMember
         return self.image._repr_png_()
