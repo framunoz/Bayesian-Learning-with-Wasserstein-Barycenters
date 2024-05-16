@@ -15,12 +15,10 @@ import bwb.distributions.utils as dist_utils
 import bwb.logging_ as logging
 import bwb.pot.bregman as bregman
 import bwb.pot.transports as tpt
-from bwb.protocols import HasDeviceDType
-from bwb.sgdw.utils import (DetentionParameters, History, IterationParameters,
-                            Report,
-                            ReportOptions,
-                            Schedule)
 from wgan_gp.wgan_gp_vae.utils import ProjectorOnManifold
+from .utils import (DetentionParameters, History, IterationParameters, Report,
+                    ReportOptions, Schedule)
+from ..protocols import HasDeviceDType
 
 __all__ = [
     "Runnable",
