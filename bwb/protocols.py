@@ -12,7 +12,7 @@ class HasDtypeDeviceP(t.Protocol):
     device: torch.device
 
 
-class HasDtypeDevice(metaclass=abc.ABCMeta):
+class HasDeviceDType(metaclass=abc.ABCMeta):
     """
     A base class for objects that have a dtype and a device.
     """
