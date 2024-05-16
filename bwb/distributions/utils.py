@@ -21,8 +21,8 @@ def __grayscale(
     support1, support2 = support[:, 0], support[:, 1]
     for w, pos1, pos2 in zip(weights, support1, support2):
         to_return[pos1, pos2] += w
-    to_return = to_return / torch.max(to_return)  # .type(torch.uint8)
-    to_return = to_return * 255
+    to_return /= torch.max(to_return)
+    to_return *= 255
     return to_return
 
 
@@ -145,6 +145,6 @@ def partition(X: torch.Tensor, mu: torch.Tensor, alpha: float):
         _log.info(f"Number of rows in the new X: {n_rows}")
 
     X, mu = _partition(X, mu, alpha)
-    mu = mu / torch.sum(mu)
+    mu /= torch.sum(mu)
 
     return X, mu
