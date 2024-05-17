@@ -1,3 +1,8 @@
+"""
+Module to plot the steps of the SGDW algorithm. This module defines
+many classes that wrap the SGDW algorithm and plot the steps at
+a specific iteration.
+"""
 import abc
 import typing as t
 from itertools import product
@@ -52,6 +57,13 @@ class Plotter[DistributionT, PosWgtT](
         """
         return self.sgdw.create_distribution
 
+    @property
+    def k(self) -> int:
+        """
+        Get the current iteration.
+        """
+        return self.sgdw.iter_params.k
+
     @abc.abstractmethod
     def plot(
         self,
@@ -73,9 +85,7 @@ class Plotter[DistributionT, PosWgtT](
         if self.plot_every is None:
             return None
 
-        k = self.sgdw.iter_params.k
-
-        if k % self.plot_every == self.plot_every - 1:
+        if self.k % self.plot_every == self.plot_every - 1:
             self.fig, self.ax = self.plot()
 
     @t.final
@@ -88,6 +98,7 @@ class Plotter[DistributionT, PosWgtT](
         return self.sgdw.run()
 
 
+# TODO: REFACTORIZAR LAS DOS CLASES DE ABAJO, SE PUEDE ABSTRAER VARIAS COSAS
 class PlotterComparison(Plotter[DistributionDraw, torch.Tensor]):
     sgdw: SGDW[DistributionDraw, torch.Tensor]
 
@@ -119,7 +130,7 @@ class PlotterComparison(Plotter[DistributionDraw, torch.Tensor]):
     ) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
 
         max_imgs = self.n_rows * self.n_cols
-        max_k = self.sgdw.iter_params.k
+        max_k = self.k
         init = max_k - max_imgs + 1 if init is None else init
         if init < 0:
             logging.raise_error(
@@ -210,7 +221,7 @@ class PlotterComparisonProjected(Plotter[DistributionDraw, torch.Tensor]):
         create_distr: t.Callable[[torch.Tensor], DistributionDraw]
 
         max_imgs = self.n_rows * self.n_cols
-        max_k = self.sgdw.iter_params.k
+        max_k = self.k
         init = max_k - max_imgs + 1 if init is None else init
         if init < 0:
             logging.raise_error(
