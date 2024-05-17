@@ -30,6 +30,7 @@ __all__ = [
 ]
 
 type DiscretePosWgt = tuple[torch.Tensor, torch.Tensor]
+type DistDrawPosWgt = torch.Tensor
 type CallbackFn = t.Callable[[], None]
 
 _log = logging.get_logger(__name__)
@@ -78,12 +79,9 @@ class SGDW[DistributionT, PosWgtT](
     metaclass=abc.ABCMeta
 ):
     r"""
-    Base class for Stochastic Gradient Descent in Wasserstein Space.
+    Base class that works as interface for Stochastic Gradient Descent
+    in Wasserstein Space.
     """
-    distr_sampler: DistributionSamplerP[DistributionT]
-    schd: utils.Schedule
-    det_params: utils.DetentionParameters
-    iter_params: utils.IterationParameters
 
     def __init__(
         self,
@@ -109,19 +107,19 @@ class SGDW[DistributionT, PosWgtT](
         """
         Representation for the class.
         """
-        to_return = tab * n_tab + self.__class__.__name__ + "("
+        to_return = tab * n_tab + self.__class__.__name__ + ":"
         add_repr = self._additional_repr_(sep, tab, n_tab + 1, new_line)
         if add_repr:
-            to_return += new_line + add_repr + tab * n_tab
-        to_return += ")"
+            to_return += new_line + add_repr
+        if to_return.endswith(sep):
+            to_return = to_return[:-len(sep)]
 
         return to_return
 
     def __repr__(self) -> str:
         new_line = "\n"
-        tab = "  "
-        comma = ","
-        sep = comma + new_line
+        tab = "    "
+        sep = new_line
 
         return self._repr_(sep, tab, 0, new_line)
 
@@ -274,21 +272,17 @@ class BaseSGDW[DistributionT, PosWgtT](
 
     :param step_scheduler: A callable function that takes an integer
         argument :math:`k` and returns the learning rate :math:`\gamma_k`
-        for iteration :math:`k`.
-    :type step_scheduler: callable
+        for iteration :math:`k`. Alternatively, it can be a constant
+        float value.
     :param batch_size: A callable function that takes an integer
         argument :math:`k` and returns the batch size :math:`S_k` for
         iteration :math:`k`. Alternatively, it can be a constant integer
         value.
-    :type batch_size: callable or int
     :param tol: The tolerance value for convergence. Defaults to 1e-8.
-    :type tol: float
     :param max_iter: The maximum number of iterations.
         Defaults to 100_000.
-    :type max_iter: int
     :param max_time: The maximum time allowed for the algorithm to run.
         Defaults to infinity.
-    :type max_time: float
 
     :raises TypeError: If ``learning_rate`` is not a callable or
         ``batch_size`` is not a callable or an integer.
@@ -301,17 +295,12 @@ class BaseSGDW[DistributionT, PosWgtT](
         distr_sampler: DistributionSamplerP[DistributionT],
         step_scheduler: utils.StepSchedulerArg,
         batch_size: utils.BatchSizeArg = 1,
-        tol: float = 1e-8,  # Tolerance to converge
-        max_iter: int = 100_000,  # Maximum number of iterations
-        max_time: float = float("inf"),  # Maximum time in seconds
+        tol: float = 1e-8,
+        max_iter: int = 100_000,
+        max_time: float = float("inf"),
     ):
-        # Schedule parameters
         schd = utils.Schedule(step_scheduler, batch_size)
-
-        # Detention parameters
         det_params = utils.DetentionParameters(tol, max_iter, max_time)
-
-        # Iteration metrics
         iter_params = utils.IterationParameters(det_params)
 
         super().__init__(distr_sampler, schd, det_params, iter_params)
@@ -321,6 +310,18 @@ class BaseSGDW[DistributionT, PosWgtT](
 
         # A value to pass to the device and dtype
         self._val = torch.tensor(1, dtype=self.dtype, device=self.device)
+
+    @t.override
+    def _additional_repr_(
+        self, sep: str, tab: str, n_tab: int, new_line: str
+    ) -> str:
+        space = tab * n_tab
+        to_return = super()._additional_repr_(sep, tab, n_tab, new_line)
+        to_return += space + "distr_sampler=" + repr(self.distr_sampler) + sep
+        to_return += space + "det_params=" + repr(self.det_params) + sep
+        to_return += space + "iter_params=" + repr(self.iter_params) + sep
+
+        return to_return
 
     @property
     def callback(self) -> CallbackFn:
@@ -352,6 +353,194 @@ class BaseSGDW[DistributionT, PosWgtT](
         :param gamma_k: The learning rate for the next sample.
         """
         return float("inf")
+
+
+# MARK: SGDW with distributions based in draws
+class DistributionDrawSGDW(
+    BaseSGDW[D.DistributionDraw, DistDrawPosWgt],
+    metaclass=abc.ABCMeta
+):
+    _conv_bar_kwargs = dict(
+        reg=3e-3,
+        method="sinkhorn",
+        numItermax=10_000,
+        stopThr=1e-4,
+        verbose=False,
+        warn=False,
+    )
+
+    def __init__(
+        self,
+        distr_sampler: DistributionSamplerP[D.DistributionDraw],
+        step_scheduler: utils.StepSchedulerArg,
+        batch_size: utils.BatchSizeArg = 1,
+        tol: float = 0,
+        max_iter: int = 100_000,
+        max_time: float = float("inf"),
+    ):
+        super().__init__(
+            distr_sampler=distr_sampler,
+            step_scheduler=step_scheduler,
+            batch_size=batch_size,
+            tol=tol,
+            max_iter=max_iter,
+            max_time=max_time,
+        )
+        self.conv_bar_kwargs = deepcopy(self._conv_bar_kwargs)
+
+    @t.final
+    @t.override
+    def create_distribution(
+        self,
+        pos_wgt: DistDrawPosWgt
+    ) -> D.DistributionDraw:
+        return D.DistributionDraw.from_grayscale_weights(pos_wgt)
+
+    @t.final
+    @t.override
+    def get_pos_wgt(self, mu: D.DistributionDraw) -> DistDrawPosWgt:
+        return mu.grayscale_weights
+
+    @t.final
+    @t.override
+    def first_sample(
+        self,
+    ) -> tuple[t.Sequence[D.DistributionDraw], DistDrawPosWgt]:
+        mu_0: D.DistributionDraw = self.distr_sampler.draw()
+        return [mu_0], mu_0.grayscale_weights
+
+    def set_geodesic_params(
+        self,
+        reg=3e-3,
+        method="sinkhorn",
+        num_iter_max=10_000,
+        stop_thr=1e-4,
+        verbose=False,
+        warn=False,
+        **kwargs,
+    ) -> t.Self:
+        """
+        Set the parameters for geodesic computation.
+
+        :param float reg: Regularization term for Sinkhorn algorithm.
+        :param str method: Method to use for geodesic computation.
+        :param int num_iter_max: Maximum number of iterations for
+            Sinkhorn algorithm.
+        :param float stop_thr: Stopping threshold for Sinkhorn
+            algorithm.
+        :param bool verbose: Whether to print verbose output during
+            computation.
+        :param bool warn: Whether to display warning messages.
+        :param kwargs: Additional keyword arguments to be passed to
+            the geodesic computation method.
+        :return: The current instance of the class.
+        """
+        self.conv_bar_kwargs.update(
+            reg=reg,
+            method=method,
+            numItermax=num_iter_max,
+            stopThr=stop_thr,
+            verbose=verbose,
+            warn=warn,
+            **kwargs,
+        )
+
+        return self
+
+    @abc.abstractmethod
+    def _compute_geodesic(
+        self,
+        gs_weights_lst_k: list[DistDrawPosWgt],
+        lst_gamma_k: list[float],
+    ) -> DistDrawPosWgt:
+        """
+        Compute the geodesic or barycenter of the grayscale weights,
+        using the list of grayscale weights and the list of weights
+        for the geodesic.
+
+        :param gs_weights_lst_k: The list of grayscale weights.
+        :param lst_gamma_k: The list of weights.
+        :return: The geodesic between the points.
+        """
+        ...
+
+    @t.final
+    @t.override
+    def update_pos_wgt(
+        self,
+        pos_wgt_k: DistDrawPosWgt,
+        lst_mu_k: t.Sequence[D.DistributionDraw],
+        gamma_k: float
+    ) -> DistDrawPosWgt:
+        S_k = len(lst_mu_k)
+        gs_weights_kp1 = self._compute_geodesic(
+            [pos_wgt_k] + [mu_k.grayscale_weights for mu_k in lst_mu_k],
+            [1 - gamma_k] + [gamma_k / S_k] * S_k
+        )
+        return gs_weights_kp1
+
+
+class ConvDistributionDrawSGDW(DistributionDrawSGDW):
+    @t.final
+    @t.override
+    def _compute_geodesic(
+        self,
+        gs_weights_lst_k: list[DistDrawPosWgt],
+        lst_gamma_k: list[float],
+    ) -> DistDrawPosWgt:
+        return bregman.convolutional_barycenter2d(
+            A=torch.stack(gs_weights_lst_k),
+            weights=torch.as_tensor(lst_gamma_k,
+                                    dtype=self.dtype, device=self.device),
+            **self.conv_bar_kwargs,
+        )
+
+
+class DebiesedDistributionDrawSGDW(DistributionDrawSGDW):
+    _conv_bar_kwargs = dict(
+        reg=1e-2,
+        method="sinkhorn",
+        numItermax=10_000,
+        stopThr=1e-3,
+        verbose=False,
+        warn=False,
+    )
+
+    @t.final
+    @t.override
+    def _compute_geodesic(
+        self,
+        gs_weights_lst_k: list[DistDrawPosWgt],
+        lst_gamma_k: list[float],
+    ) -> DistDrawPosWgt:
+        return ot.bregman.convolutional_barycenter2d_debiased(
+            A=torch.stack(gs_weights_lst_k),
+            weights=torch.as_tensor(lst_gamma_k,
+                                    dtype=self.dtype, device=self.device),
+            **self.conv_bar_kwargs,
+        )
+
+    @t.final
+    @t.override
+    def set_geodesic_params(
+        self,
+        reg=1e-2,
+        method="sinkhorn",
+        num_iter_max=10_000,
+        stop_thr=1e-3,
+        verbose=False,
+        warn=False,
+        **kwargs,
+    ) -> t.Self:
+        return super().set_geodesic_params(
+            reg=reg,
+            method=method,
+            num_iter_max=num_iter_max,
+            stop_thr=stop_thr,
+            verbose=verbose,
+            warn=warn,
+            **kwargs,
+        )
 
 
 # MARK: SGDW with discrete distributions
@@ -438,193 +627,12 @@ class DiscreteDistributionSGDW(
         pos_wgt_kp1: DiscretePosWgt,
         gamma_k: float
     ):
-        X_k, m = pos_wgt_k
+        X_k, _ = pos_wgt_k
         X_kp1, m = pos_wgt_kp1
         diff = X_k - X_kp1
         w_dist = float((gamma_k ** 2)
                        * torch.sum(m * LA.norm(diff, dim=1) ** 2))
         return w_dist
-
-
-# MARK: SGDW with distributions based in draws
-class DistributionDrawSGDW(
-    BaseSGDW[D.DistributionDraw, torch.Tensor], metaclass=abc.ABCMeta
-):
-    _conv_bar_kwargs = dict(
-        reg=3e-3,
-        method="sinkhorn",
-        numItermax=10_000,
-        stopThr=1e-4,
-        verbose=False,
-        warn=False,
-    )
-
-    def __init__(
-        self,
-        distr_sampler: DistributionSamplerP[D.DistributionDraw],
-        step_scheduler: utils.StepSchedulerArg,
-        batch_size: utils.BatchSizeArg = 1,
-        tol: float = 0,
-        max_iter: int = 100_000,
-        max_time: float = float("inf"),
-    ):
-        super().__init__(
-            distr_sampler=distr_sampler,
-            step_scheduler=step_scheduler,
-            batch_size=batch_size,
-            tol=tol,
-            max_iter=max_iter,
-            max_time=max_time,
-        )
-        self.conv_bar_kwargs = deepcopy(self._conv_bar_kwargs)
-
-    @t.final
-    @t.override
-    def create_distribution(
-        self,
-        pos_wgt: torch.Tensor
-    ) -> D.DistributionDraw:
-        gs_weights_k = pos_wgt
-        return D.DistributionDraw.from_grayscale_weights(gs_weights_k)
-
-    @t.final
-    @t.override
-    def get_pos_wgt(self, mu: D.DistributionDraw) -> torch.Tensor:
-        return mu.grayscale_weights
-
-    @t.final
-    @t.override
-    def first_sample(
-        self,
-    ) -> tuple[t.Sequence[D.DistributionDraw], torch.Tensor]:
-        mu_0: D.DistributionDraw = self.distr_sampler.draw()
-        return [mu_0], mu_0.grayscale_weights
-
-    def set_geodesic_params(
-        self,
-        reg=3e-3,
-        method="sinkhorn",
-        num_iter_max=10_000,
-        stop_thr=1e-4,
-        verbose=False,
-        warn=False,
-        **kwargs,
-    ) -> t.Self:
-        """
-        Set the parameters for geodesic computation.
-
-        :param float reg: Regularization term for Sinkhorn algorithm.
-            Default is 3e-3.
-        :param str method: Method to use for geodesic computation.
-            Default is "sinkhorn".
-        :param int num_iter_max: Maximum number of iterations for
-            Sinkhorn algorithm. Default is 1000.
-        :param float stop_thr: Stopping threshold for Sinkhorn
-            algorithm. Default is 1e-8.
-        :param bool verbose: Whether to print verbose output during
-            computation. Default is False.
-        :param bool warn: Whether to display warning messages.
-            Default is False.
-        :param kwargs: Additional keyword arguments to be passed to
-            the geodesic computation method.
-        :return: The current instance of the class.
-        """
-        self.conv_bar_kwargs.update(
-            reg=reg,
-            method=method,
-            numItermax=num_iter_max,
-            stopThr=stop_thr,
-            verbose=verbose,
-            warn=warn,
-            **kwargs,
-        )
-
-        return self
-
-    @abc.abstractmethod
-    def _compute_geodesic(
-        self,
-        gs_weights_lst_k: list[torch.Tensor],
-        lst_gamma_k: list[float],
-    ) -> torch.Tensor:
-        """
-        Compute the geodesic between two points in the Wasserstein space.
-
-        :param gs_weights_lst_k: The list of grayscale weights.
-        :param lst_gamma_k: The list of weights for the geodesic.
-        :return: The geodesic between the points.
-        """
-        ...
-
-    @t.final
-    @t.override
-    def update_pos_wgt(
-        self,
-        pos_wgt_k: torch.Tensor,
-        lst_mu_k: t.Sequence[D.DistributionDraw],
-        gamma_k: float
-    ) -> torch.Tensor:
-        S_k = len(lst_mu_k)
-        gs_weights_kp1 = self._compute_geodesic(
-            [pos_wgt_k] + [mu_k.grayscale_weights for mu_k in lst_mu_k],
-            [1 - gamma_k] + [gamma_k / S_k] * S_k
-        )
-        return gs_weights_kp1
-
-
-class ConvDistributionDrawSGDW(DistributionDrawSGDW):
-    @t.final
-    @t.override
-    def _compute_geodesic(self, gs_weights_lst_k, lst_gamma_k) -> torch.Tensor:
-        return bregman.convolutional_barycenter2d(
-            A=torch.stack(gs_weights_lst_k),
-            weights=torch.as_tensor(lst_gamma_k,
-                                    dtype=self.dtype, device=self.device),
-            **self.conv_bar_kwargs,
-        )
-
-
-class DebiesedDistributionDrawSGDW(DistributionDrawSGDW):
-    _conv_bar_kwargs = dict(
-        reg=1e-2,
-        method="sinkhorn",
-        numItermax=10_000,
-        stopThr=1e-3,
-        verbose=False,
-        warn=False,
-    )
-
-    @t.final
-    @t.override
-    def _compute_geodesic(self, gs_weights_lst_k, lst_gamma_k) -> torch.Tensor:
-        return ot.bregman.convolutional_barycenter2d_debiased(
-            A=torch.stack(gs_weights_lst_k),
-            weights=torch.as_tensor(lst_gamma_k,
-                                    dtype=self.dtype, device=self.device),
-            **self.conv_bar_kwargs,
-        )
-
-    @t.final
-    @t.override
-    def set_geodesic_params(
-        self,
-        reg=1e-2,
-        method="sinkhorn",
-        num_iter_max=10_000,
-        stop_thr=1e-3,
-        verbose=False,
-        warn=False,
-        **kwargs,
-    ) -> t.Self:
-        return super().set_geodesic_params(
-            reg=reg,
-            method=method,
-            num_iter_max=num_iter_max,
-            stop_thr=stop_thr,
-            verbose=verbose,
-            warn=warn,
-            **kwargs,
-        )
 
 
 # MARK: Deprecated functions
