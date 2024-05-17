@@ -369,8 +369,6 @@ class BaseGeneratorDistribSampler[DistributionT](
     noise_sampler_: t.Callable[[int, torch.Generator], torch.Tensor]
     generator_: GeneratorP
     transform_out_: t.Callable[[torch.Tensor], torch.Tensor]
-    dtype: torch.dtype
-    device: torch.device
 
     def __init__(
         self,
@@ -513,8 +511,6 @@ class BaseGeneratorDistribSampler[DistributionT](
         except Exception as _:
             raise ValueError("The noise sampler must accept an integer.")
         self.noise_sampler_: t.Callable[[int], torch.Tensor] = noise_sampler
-        self.device: torch.device = noise.device
-        self.dtype: torch.dtype = noise.dtype
 
         # Validation of the generator
         try:
@@ -571,6 +567,16 @@ class BaseGeneratorDistribSampler[DistributionT](
 
         self._fitted = True
         return self
+
+    @t.override
+    @property
+    def dtype(self) -> torch.dtype:
+        return self.noise_sampler_(1).dtype
+
+    @t.override
+    @property
+    def device(self) -> torch.device:
+        return self.noise_sampler_(1).device
 
     def _additional_repr_(self, sep: str) -> str:
         """
