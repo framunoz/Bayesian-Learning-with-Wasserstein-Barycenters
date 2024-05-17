@@ -35,12 +35,14 @@ class SGDWBaseWrapper[DistributionT, PosWgtT](SGDW[DistributionT, PosWgtT]):
         )
         self.wrapee = wrapee
 
-    def _additional_repr_(
-        self, sep: str, tab: str, n_tab: int, new_line: str
-    ) -> str:
-        to_return = super()._additional_repr_(sep, tab, n_tab, new_line)
-        wrapee_repr = self.wrapee._repr_(sep, tab, n_tab, new_line)
-        to_return += wrapee_repr + sep
+    def _repr_(self, sep: str, tab: str, n_tab: int, new_line: str) -> str:
+        space = tab * n_tab
+        to_return = space + self.__class__.__name__ + ":"
+        add_repr = self._additional_repr_(sep, tab, n_tab + 1, new_line)
+        if add_repr:
+            to_return += new_line + add_repr
+        wrapee_repr = self.wrapee._repr_(sep, tab, n_tab + 1, new_line)
+        to_return += wrapee_repr
         return to_return
 
     @t.override
@@ -145,7 +147,14 @@ class ReportProxy[DistributionT, PosWgtT](
         space = tab * n_tab
         to_return = super()._additional_repr_(sep, tab, n_tab, new_line)
         to_return += space + f"report_every={self.report_every}" + sep
-        to_return += space + f"level={self.level}" + sep
+        level = {
+            logging.DEBUG:    "DEBUG",
+            logging.INFO:     "INFO",
+            logging.WARNING:  "WARNING",
+            logging.ERROR:    "ERROR",
+            logging.CRITICAL: "CRITICAL",
+        }
+        to_return += space + f"level={level[self.level]}" + sep
         return to_return
 
     def make_report(self) -> str:
@@ -212,11 +221,10 @@ class ReportProxy[DistributionT, PosWgtT](
 class BaseRegisterProxy[DistributionT, PosWgtT, RegisterValueT](
     SGDWBaseWrapper[DistributionT, PosWgtT]
 ):
-    register_lst: t.List[RegisterValueT]
 
     def __init__(self, wrapee: SGDW[DistributionT, PosWgtT]) -> None:
         super().__init__(wrapee)
-        self.register_lst = []
+        self.register_lst: list[RegisterValueT] = []
 
     def _additional_repr_(
         self, sep: str, tab: str, n_tab: int, new_line: str
@@ -227,7 +235,7 @@ class BaseRegisterProxy[DistributionT, PosWgtT, RegisterValueT](
         return to_return
 
     @abc.abstractmethod
-    def get_register(
+    def register(
         self,
         lst_mu: t.Sequence[DistributionT],
         pos_wgt: PosWgtT,
@@ -244,7 +252,7 @@ class BaseRegisterProxy[DistributionT, PosWgtT, RegisterValueT](
     @t.override
     def init_algorithm(self) -> tuple[t.Sequence[DistributionT], PosWgtT]:
         result = super().init_algorithm()
-        self.register_lst.append(self.get_register(*result))
+        self.register_lst.append(self.register(*result))
         return result
 
     @t.override
@@ -254,7 +262,7 @@ class BaseRegisterProxy[DistributionT, PosWgtT, RegisterValueT](
         pos_wgt_k: PosWgtT
     ) -> tuple[t.Sequence[DistributionT], PosWgtT]:
         result = super().step_algorithm(k, pos_wgt_k)
-        self.register_lst.append(self.get_register(*result))
+        self.register_lst.append(self.register(*result))
         return result
 
 
@@ -267,7 +275,7 @@ class PosWgtIterRegProxy[DistributionT, PosWgtT](
     """
 
     @t.override
-    def get_register(
+    def register(
         self,
         lst_mu: t.Sequence[DistributionT],
         pos_wgt: PosWgtT,
@@ -284,7 +292,7 @@ class DistrIterRegisterProxy[DistributionT, PosWgtT](
     """
 
     @t.override
-    def get_register(
+    def register(
         self,
         lst_mu: t.Sequence[DistributionT],
         pos_wgt: PosWgtT,
@@ -302,7 +310,7 @@ class PosWgtSampledRegProxy[DistributionT, PosWgtT](
     """
 
     @t.override
-    def get_register(
+    def register(
         self,
         lst_mu: t.Sequence[DistributionT],
         pos_wgt: PosWgtT,
@@ -319,7 +327,7 @@ class DistrSampledRegProxy[DistributionT, PosWgtT](
     """
 
     @t.override
-    def get_register(
+    def register(
         self,
         lst_mu: t.Sequence[DistributionT],
         pos_wgt: PosWgtT,
