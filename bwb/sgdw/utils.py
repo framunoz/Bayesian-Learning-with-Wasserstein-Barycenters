@@ -23,7 +23,7 @@ __all__ = [
 _log = logging.get_logger(__name__)
 
 type StepSchedulerFn = t.Callable[[int], float]
-type StepSchedulerArg = StepSchedulerFn
+type StepSchedulerArg = float | StepSchedulerFn
 type BatchSizeFn = t.Callable[[int], int]
 type BatchSizeArg = int | BatchSizeFn
 
@@ -81,25 +81,38 @@ class Schedule:
     @property
     def step_schedule(self) -> StepSchedulerFn:
         """The step schedule for the algorithm."""
-        return self._learning_rate
+        return self._step_schedule
 
     @step_schedule.setter
-    def step_schedule(self, learning_rate: StepSchedulerArg):
-        # Check if learning_rate is callable
-        if not callable(learning_rate):
-            raise TypeError("learning_rate must be a callable")
+    def step_schedule(self, step_schd: StepSchedulerArg) -> None:
+        # Check if step_schedule is callable or a float
+        if not callable(step_schd) and not isinstance(step_schd, float):
+            raise TypeError("step_schedule must be a callable or a float")
 
-        # Check if learning_rate is callable that accepts an integer
+        # If step_schedule is a float, convert it to a callable
+        if isinstance(step_schd, float):
+            # Check if step_schd is between 0 and 1
+            if not 0 <= step_schd <= 1:
+                raise ValueError("step_schedule must be between 0 and 1")
+
+            aux: float = step_schd
+
+            # noinspection PyUnusedLocal
+            def step_schd(n: int) -> float:
+                """Return the learning rate."""
+                return aux
+
+        # Check if step_schedule is callable that accepts an integer
         # and returns a float
         try:
-            if not isinstance(learning_rate(1), float):
-                raise ValueError("learning_rate must return a float")
+            if not isinstance(step_schd(1), float):
+                raise ValueError("step_schedule must return a float")
         except Exception as e:
             raise ValueError(
-                "learning_rate must accept an integer argument"
+                "step_schedule must accept an integer argument"
             ) from e
 
-        self._learning_rate: StepSchedulerFn = learning_rate
+        self._step_schedule: StepSchedulerFn = step_schd
 
     @property
     def batch_size(self) -> BatchSizeFn:
@@ -107,17 +120,21 @@ class Schedule:
         return self._batch_size
 
     @batch_size.setter
-    def batch_size(self, batch_size: BatchSizeArg):
+    def batch_size(self, batch_size: BatchSizeArg) -> None:
         # Check if batch_size is callable or an integer
         if not callable(batch_size) and not isinstance(batch_size, int):
             raise TypeError("batch_size must be a callable or an int")
 
         # If batch_size is an integer, convert it to a callable
         if isinstance(batch_size, int):
+            # Check if batch_size is positive
+            if batch_size <= 0:
+                raise ValueError("batch_size must be positive")
+
             aux: int = batch_size
 
             # noinspection PyUnusedLocal
-            def batch_size(n: int):
+            def batch_size(n: int) -> int:
                 """Return the batch size."""
                 return aux
 
@@ -128,9 +145,10 @@ class Schedule:
                 raise ValueError("batch_size must return an integer")
         except Exception as e:
             raise ValueError(
-                "batch_size must accept an integer argument") from e
+                "batch_size must accept an integer argument"
+            ) from e
 
-        self._batch_size: t.Callable[[int], int] = batch_size
+        self._batch_size: BatchSizeFn = batch_size
 
 
 class DetentionParameters:
