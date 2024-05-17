@@ -219,7 +219,8 @@ class ReportProxy[DistributionT, PosWgtT](
 
 
 class BaseRegisterProxy[DistributionT, PosWgtT, RegisterValueT](
-    SGDWBaseWrapper[DistributionT, PosWgtT]
+    SGDWBaseWrapper[DistributionT, PosWgtT],
+    metaclass=abc.ABCMeta,
 ):
 
     def __init__(self, wrapee: SGDW[DistributionT, PosWgtT]) -> None:
