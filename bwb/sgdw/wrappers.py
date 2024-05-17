@@ -7,6 +7,7 @@ import bwb.logging_ as logging
 from bwb.sgdw.sgdw import SGDW
 
 __all__ = [
+    "ProjectorFn",
     "ReportProxy",
     "PosWgtIterRegProxy",
     "DistrIterRegisterProxy",
