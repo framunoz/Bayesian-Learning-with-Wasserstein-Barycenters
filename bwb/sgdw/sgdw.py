@@ -24,8 +24,8 @@ import bwb.distributions.utils as D_utils
 import bwb.logging_ as logging
 import bwb.pot.bregman as bregman
 import bwb.pot.transports as tpt
-from . import utils
-from .. import protocols as P
+from bwb import protocols as P
+from bwb.sgdw import utils
 
 __all__ = [
     "CallbackFn",

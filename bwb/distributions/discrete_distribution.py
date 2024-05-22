@@ -11,10 +11,10 @@ import torchvision.transforms.functional as F
 from PIL import Image
 
 import bwb.logging_ as logging
-from .utils import grayscale_parser
-from ..config import config
-from ..protocols import HasDeviceDType
-from ..utils.validation import shape_validation
+from bwb.config import config
+from bwb.distributions.utils import grayscale_parser
+from bwb.protocols import HasDeviceDType
+from bwb.utils import shape_validation
 
 __all__ = [
     "DistributionP",

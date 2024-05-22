@@ -9,11 +9,14 @@ from hamiltorch import Sampler
 
 import bwb.logging_ as logging
 from bwb import distributions as D
-from . import DiscreteDistribSampler
-from .distribution_samplers import BaseGeneratorDistribSampler, GeneratorP
-from .models import DiscreteWeightedModelSetP
-from ..config import conf
-from ..utils import (
+from bwb.config import conf
+from bwb.distributions import DiscreteDistribSampler
+from bwb.distributions.distribution_samplers import (
+    BaseGeneratorDistribSampler,
+    GeneratorP,
+)
+from bwb.distributions.models import DiscreteWeightedModelSetP
+from bwb.utils import (
     ArrayLikeT,
     check_is_fitted,
     integrated_time,

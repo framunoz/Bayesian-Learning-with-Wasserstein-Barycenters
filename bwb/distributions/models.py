@@ -7,9 +7,9 @@ import typing as t
 import torch
 from torchvision.datasets import VisionDataset
 
-from .discrete_distribution import DistributionDraw
-from ..config import conf
-from ..utils.protocols import ArrayLikeT
+from bwb.config import conf
+from bwb.distributions import DistributionDraw
+from bwb.utils import ArrayLikeT
 
 __all__ = [
     "DiscreteModelsSetP",
