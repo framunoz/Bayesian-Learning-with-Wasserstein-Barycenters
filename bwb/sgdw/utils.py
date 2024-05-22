@@ -3,9 +3,8 @@ This module contains utility functions and classes for the algorithm.
 """
 import numbers as num
 import time
-import typing as t
 from datetime import timedelta
-from typing import Iterator
+from typing import Callable, Iterator
 
 import bwb.logging_ as logging
 
@@ -22,9 +21,9 @@ __all__ = [
 
 _log = logging.get_logger(__name__)
 
-type StepSchedulerFn = t.Callable[[int], float]
+type StepSchedulerFn = Callable[[int], float]
 type StepSchedulerArg = float | StepSchedulerFn
-type BatchSizeFn = t.Callable[[int], int]
+type BatchSizeFn = Callable[[int], int]
 type BatchSizeArg = int | BatchSizeFn
 
 
@@ -225,8 +224,36 @@ class DetentionParameters:
 
 
 class IterationParameters(Iterator[int]):
-    """
+    r"""
     This class contains the iteration parameters for the algorithm.
+
+    Examples
+    --------
+    Using this class is simple. You can initialize the class with the
+    detention parameters and then iterate over the class to get the
+    iteration number. Here is an example:
+
+    >>> det_params = DetentionParameters(max_iter=3)
+    >>> iter_params = IterationParameters(det_params)
+    >>> for k in iter_params:
+    ...     print(k)
+    0
+    1
+    2
+
+    The code above is equivalent to the following code:
+
+    >>> det_params = DetentionParameters(max_iter=3)
+    >>> iter_params = IterationParameters(det_params)
+    >>> iter_params.init_params()
+    >>> iter_params.update_iteration()
+    >>> while not iter_params.detention_criteria():
+    ...     iter_params.start_iteration()
+    ...     print(iter_params.k)
+    ...     iter_params.update_iteration()
+    0
+    1
+    2
     """
 
     def __init__(self, det_params: DetentionParameters):
@@ -338,7 +365,7 @@ class IterationParameters(Iterator[int]):
         if self.detention_criteria():
             raise StopIteration
 
-        # Start the timer for the iteration
+        # Start the timer for the next iteration
         self.start_iteration()
 
         # Return the iteration number
