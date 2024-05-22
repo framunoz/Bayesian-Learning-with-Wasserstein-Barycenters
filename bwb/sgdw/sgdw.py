@@ -12,7 +12,6 @@ from typing import (
     Protocol,
     Self,
     Sequence as Seq,
-    Union,
 )
 
 import ot
@@ -324,19 +323,6 @@ class BaseSGDW[DistributionT, PosWgtT](
     def _compute_wass_dist(
         self, pos_wgt_k: PosWgtT, pos_wgt_kp1: PosWgtT, gamma_k: float
     ) -> float:
-        """
-        Compute the Wasserstein distance between two positions and
-        weights.
-
-        This method should compute the Wasserstein distance between two
-        positions and weights and return it.
-
-        :param pos_wgt_k: The position and weight that come from the
-            current sample.
-        :param pos_wgt_kp1: The position and weight that come from the
-            next sample.
-        :param gamma_k: The learning rate for the next sample.
-        """
         return float("inf")
 
 
@@ -625,8 +611,8 @@ class DiscreteDistributionSGDW(
 def compute_bwb_discrete_distribution(
     transport: tpt.BaseTransport,
     distrib_sampler: DistributionSamplerP[D.DiscreteDistribution],
-    learning_rate: Callable[[int], float],  # The \gamma_k schedule
-    batch_size: Union[Callable[[int], int], int],  # The S_k schedule
+    learning_rate: utils.StepSchedulerArg,  # The \gamma_k schedule
+    batch_size: utils.BatchSizeArg,  # The S_k schedule
     alpha: float = 1.0,
     tol: float = 1e-8,  # Tolerance to converge
     max_iter: int = 100_000,
@@ -764,7 +750,7 @@ def compute_bwb_discrete_distribution(
 # noinspection PyMissingOrEmptyDocstring,DuplicatedCode,PyUnboundLocalVariable
 def compute_bwb_distribution_draw(
     distrib_sampler: DistributionSamplerP[D.DistributionDraw],
-    learning_rate: Callable[[int], float],  # The \gamma_k schedule
+    learning_rate: utils.StepSchedulerArg,  # The \gamma_k schedule
     reg: float = 3e-3,  # Regularization of the convolutional method
     entrop_sharp=False,
     max_iter: int = 100_000,
@@ -864,7 +850,7 @@ def compute_bwb_distribution_draw(
 def compute_bwb_distribution_draw_projected(
     distrib_sampler: DistributionSamplerP[D.DistributionDraw],
     projector,
-    learning_rate: Callable[[int], float],  # The \gamma_k schedule
+    learning_rate: utils.StepSchedulerArg,  # The \gamma_k schedule
     reg: float = 3e-3,  # Regularization of the convolutional method
     entrop_sharp=False,
     max_iter: int = 100_000,
