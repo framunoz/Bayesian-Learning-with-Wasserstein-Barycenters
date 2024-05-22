@@ -106,7 +106,7 @@ class SGDW[DistributionT, PosWgtT](
         """
         Representation for the class.
         """
-        to_return = tab * n_tab + self.__class__.__name__ + ":"
+        to_return = tab * n_tab + "- " + self.__class__.__name__ + ":"
         add_repr = self._additional_repr_(sep, tab, n_tab + 1, new_line)
         if add_repr:
             to_return += new_line + add_repr

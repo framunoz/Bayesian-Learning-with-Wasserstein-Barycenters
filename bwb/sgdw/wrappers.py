@@ -37,12 +37,12 @@ class SGDWBaseWrapper[DistributionT, PosWgtT](SGDW[DistributionT, PosWgtT]):
 
     def _repr_(self, sep: str, tab: str, n_tab: int, new_line: str) -> str:
         space = tab * n_tab
-        to_return = space + self.__class__.__name__ + ":"
+        to_return = space + "- " + self.__class__.__name__ + ":"
         add_repr = self._additional_repr_(sep, tab, n_tab + 1, new_line)
         if add_repr:
             to_return += new_line + add_repr
-        wrapee_repr = self.wrapee._repr_(sep, tab, n_tab + 1, new_line)
-        to_return += wrapee_repr
+        wrapee_repr = self.wrapee._repr_(sep, tab, n_tab, new_line)
+        to_return += new_line + wrapee_repr
         return to_return
 
     @t.override
