@@ -1,24 +1,24 @@
 import abc
-import typing as t
 from copy import deepcopy
 from datetime import timedelta
+from typing import (Callable, override, Sequence as Seq, TypedDict)
 
 import bwb.logging_ as logging
-from bwb.sgdw.sgdw import SGDW
+from bwb.sgdw.sgdw import CallbackFn, SGDW
 
 __all__ = [
     "ProjectorFn",
     "ReportProxy",
-    "PosWgtIterRegProxy",
-    "DistrIterRegisterProxy",
-    "PosWgtSampledRegProxy",
-    "DistrSampledRegProxy",
+    "LogPosWgtIterProxy",
+    "LogDistrIterProxy",
+    "LogPosWgtSampledProxy",
+    "LogDistrSampledProxy",
     "SGDWProjectedDecorator",
 ]
 
 log = logging.get_logger(__name__)
 
-type ProjectorFn[PosWgtT] = t.Callable[[PosWgtT], PosWgtT]
+type ProjectorFn[PosWgtT] = Callable[[PosWgtT], PosWgtT]
 
 
 class SGDWBaseWrapper[DistributionT, PosWgtT](SGDW[DistributionT, PosWgtT]):
@@ -45,60 +45,60 @@ class SGDWBaseWrapper[DistributionT, PosWgtT](SGDW[DistributionT, PosWgtT]):
         to_return += new_line + wrapee_repr
         return to_return
 
-    @t.override
+    @override
     @property
-    def callback(self) -> t.Callable[[], None]:
+    def callback(self) -> CallbackFn:
         return self.wrapee.callback
 
     @callback.setter
-    def callback(self, value: t.Callable[[], None]) -> None:
+    def callback(self, value: CallbackFn) -> None:
         self.wrapee.callback = value
 
-    @t.override
-    def first_sample(self) -> tuple[t.Sequence[DistributionT], PosWgtT]:
+    @override
+    def first_sample(self) -> tuple[Seq[DistributionT], PosWgtT]:
         return self.wrapee.first_sample()
 
-    @t.override
-    def init_algorithm(self) -> tuple[t.Sequence[DistributionT], PosWgtT]:
+    @override
+    def init_algorithm(self) -> tuple[Seq[DistributionT], PosWgtT]:
         return self.wrapee.init_algorithm()
 
-    @t.override
+    @override
     def update_pos_wgt(
         self,
         pos_wgt_k: PosWgtT,
-        lst_mu_k: t.Sequence[DistributionT],
+        lst_mu_k: Seq[DistributionT],
         gamma_k: float,
     ) -> PosWgtT:
         return self.wrapee.update_pos_wgt(pos_wgt_k, lst_mu_k, gamma_k)
 
-    @t.override
+    @override
     def _compute_wass_dist(
         self, pos_wgt_k: PosWgtT, pos_wgt_kp1: PosWgtT, gamma_k: float
     ) -> float:
         return self.wrapee._compute_wass_dist(pos_wgt_k, pos_wgt_kp1, gamma_k)
 
-    @t.override
+    @override
     def step_algorithm(
         self,
         k: int,
         pos_wgt_k: PosWgtT
-    ) -> tuple[t.Sequence[DistributionT], PosWgtT]:
+    ) -> tuple[Seq[DistributionT], PosWgtT]:
         return self.wrapee.step_algorithm(k, pos_wgt_k)
 
-    @t.override
+    @override
     def get_pos_wgt(self, mu: DistributionT) -> PosWgtT:
         return self.wrapee.get_pos_wgt(mu)
 
-    @t.override
+    @override
     def create_distribution(self, pos_wgt: PosWgtT) -> DistributionT:
         return self.wrapee.create_distribution(pos_wgt)
 
-    @t.override
+    @override
     def create_barycenter(self, pos_wgt: PosWgtT) -> DistributionT:
         return self.wrapee.create_barycenter(pos_wgt)
 
 
-class ReportOptions(t.TypedDict, total=False):
+class ReportOptions(TypedDict, total=False):
     """
     This class contains the report options for the algorithm.
     """
@@ -125,6 +125,7 @@ class ReportProxy[DistributionT, PosWgtT](
         dt=False,
         dt_per_iter=True,
     )
+    include_dict: ReportOptions
 
     def __init__(
         self,
@@ -137,10 +138,11 @@ class ReportProxy[DistributionT, PosWgtT](
         super().__init__(wrapee)
         self.report_every = report_every
         self.len_bar = len_bar
-        self.include_dict = deepcopy(include_dict or self.INCLUDE_OPTIONS)
+        self.include_dict = deepcopy(self.INCLUDE_OPTIONS)
+        self.include_dict.update(include_dict)
         self.level = level
 
-    @t.override
+    @override
     def _additional_repr_(
         self, sep: str, tab: str, n_tab: int, new_line: str
     ) -> str:
@@ -154,7 +156,7 @@ class ReportProxy[DistributionT, PosWgtT](
             logging.ERROR:    "ERROR",
             logging.CRITICAL: "CRITICAL",
         }
-        to_return += space + f"level={level[self.level]}" + sep
+        to_return += space + f"level={level.get(self.level, self.level)}" + sep
         return to_return
 
     def make_report(self) -> str:
@@ -204,12 +206,12 @@ class ReportProxy[DistributionT, PosWgtT](
         """
         return self.iter_params.k % self.report_every == 0
 
-    @t.override
+    @override
     def step_algorithm(
         self,
         k: int,
         pos_wgt_k: PosWgtT
-    ) -> tuple[t.Sequence[DistributionT], PosWgtT]:
+    ) -> tuple[Seq[DistributionT], PosWgtT]:
         result = super().step_algorithm(k, pos_wgt_k)
 
         if self.is_report_iter():
@@ -218,7 +220,7 @@ class ReportProxy[DistributionT, PosWgtT](
         return result
 
 
-class BaseRegisterProxy[DistributionT, PosWgtT, RegisterValueT](
+class BaseLogProxy[DistributionT, PosWgtT, RegisterValueT](
     SGDWBaseWrapper[DistributionT, PosWgtT],
     metaclass=abc.ABCMeta,
 ):
@@ -238,7 +240,7 @@ class BaseRegisterProxy[DistributionT, PosWgtT, RegisterValueT](
     @abc.abstractmethod
     def register(
         self,
-        lst_mu: t.Sequence[DistributionT],
+        lst_mu: Seq[DistributionT],
         pos_wgt: PosWgtT,
     ) -> RegisterValueT:
         """
@@ -250,89 +252,89 @@ class BaseRegisterProxy[DistributionT, PosWgtT, RegisterValueT](
     def __getitem__(self, item) -> RegisterValueT:
         return self.register_lst[item]
 
-    @t.override
-    def init_algorithm(self) -> tuple[t.Sequence[DistributionT], PosWgtT]:
+    @override
+    def init_algorithm(self) -> tuple[Seq[DistributionT], PosWgtT]:
         result = super().init_algorithm()
         self.register_lst.append(self.register(*result))
         return result
 
-    @t.override
+    @override
     def step_algorithm(
         self,
         k: int,
         pos_wgt_k: PosWgtT
-    ) -> tuple[t.Sequence[DistributionT], PosWgtT]:
+    ) -> tuple[Seq[DistributionT], PosWgtT]:
         result = super().step_algorithm(k, pos_wgt_k)
         self.register_lst.append(self.register(*result))
         return result
 
 
-class PosWgtIterRegProxy[DistributionT, PosWgtT](
-    BaseRegisterProxy[DistributionT, PosWgtT, PosWgtT]
+class LogPosWgtIterProxy[DistributionT, PosWgtT](
+    BaseLogProxy[DistributionT, PosWgtT, PosWgtT]
 ):
     """
-    Proxy class for the SGDW algorithm to register the position and
+    Proxy class for the SGDW algorithm to log the position and
     weights of the distribution at each iteration of the algorithm.
     """
 
-    @t.override
+    @override
     def register(
         self,
-        lst_mu: t.Sequence[DistributionT],
+        lst_mu: Seq[DistributionT],
         pos_wgt: PosWgtT,
     ) -> PosWgtT:
         return pos_wgt
 
 
-class DistrIterRegisterProxy[DistributionT, PosWgtT](
-    BaseRegisterProxy[DistributionT, PosWgtT, DistributionT]
+class LogDistrIterProxy[DistributionT, PosWgtT](
+    BaseLogProxy[DistributionT, PosWgtT, DistributionT]
 ):
     """
-    Proxy class for the SGDW algorithm to register the distribution at
+    Proxy class for the SGDW algorithm to log distribution at
     each iteration of the algorithm.
     """
 
-    @t.override
+    @override
     def register(
         self,
-        lst_mu: t.Sequence[DistributionT],
+        lst_mu: Seq[DistributionT],
         pos_wgt: PosWgtT,
     ) -> DistributionT:
         return self.create_distribution(pos_wgt)
 
 
-class PosWgtSampledRegProxy[DistributionT, PosWgtT](
-    BaseRegisterProxy[DistributionT, PosWgtT, t.Sequence[PosWgtT]]
+class LogPosWgtSampledProxy[DistributionT, PosWgtT](
+    BaseLogProxy[DistributionT, PosWgtT, Seq[PosWgtT]]
 ):
     """
-    Proxy class for the SGDW algorithm to register the positions and
+    Proxy class for the SGDW algorithm to log the positions and
     weights of the sampled distributions at each iteration of the
     algorithm.
     """
 
-    @t.override
+    @override
     def register(
         self,
-        lst_mu: t.Sequence[DistributionT],
+        lst_mu: Seq[DistributionT],
         pos_wgt: PosWgtT,
-    ) -> t.Sequence[PosWgtT]:
+    ) -> Seq[PosWgtT]:
         return [self.get_pos_wgt(mu) for mu in lst_mu]
 
 
-class DistrSampledRegProxy[DistributionT, PosWgtT](
-    BaseRegisterProxy[DistributionT, PosWgtT, t.Sequence[DistributionT]]
+class LogDistrSampledProxy[DistributionT, PosWgtT](
+    BaseLogProxy[DistributionT, PosWgtT, Seq[DistributionT]]
 ):
     """
-    Proxy class for the SGDW algorithm to register the sampled
+    Proxy class for the SGDW algorithm to log the sampled
     distributions at each iteration of the algorithm.
     """
 
-    @t.override
+    @override
     def register(
         self,
-        lst_mu: t.Sequence[DistributionT],
+        lst_mu: Seq[DistributionT],
         pos_wgt: PosWgtT,
-    ) -> t.Sequence[DistributionT]:
+    ) -> Seq[DistributionT]:
         return lst_mu
 
 
@@ -363,7 +365,7 @@ class SGDWProjectedDecorator[DistributionT, PosWgtT](
         proj_every = self.project_every
         return k % proj_every == proj_every - 1
 
-    @t.override
+    @override
     def _additional_repr_(
         self, sep: str, tab: str, n_tab: int, new_line: str
     ) -> str:
@@ -372,12 +374,12 @@ class SGDWProjectedDecorator[DistributionT, PosWgtT](
         to_return += space + f"project_every={self.project_every}" + sep
         return to_return
 
-    @t.override
+    @override
     def step_algorithm(
         self,
         k: int,
         pos_wgt_k: PosWgtT
-    ) -> tuple[t.Sequence[DistributionT], PosWgtT]:
+    ) -> tuple[Seq[DistributionT], PosWgtT]:
         lst_mu_kp1, pos_wgt_kp1 = super().step_algorithm(k, pos_wgt_k)
 
         if self.is_proj_iter():
@@ -385,7 +387,7 @@ class SGDWProjectedDecorator[DistributionT, PosWgtT](
 
         return lst_mu_kp1, pos_wgt_kp1
 
-    @t.override
+    @override
     def create_barycenter(self, pos_wgt: PosWgtT) -> DistributionT:
         pos_wgt = self.projector(pos_wgt)
         return super().create_barycenter(pos_wgt)

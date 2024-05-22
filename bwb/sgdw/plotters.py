@@ -4,33 +4,35 @@ many classes that wrap the SGDW algorithm and plot the steps at
 a specific iteration.
 """
 import abc
-import typing as t
 from itertools import product
+from typing import Callable, final, Optional, override
 
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
 
 import bwb.logging_ as logging
-from . import wrappers as W
-from .sgdw import Runnable, SGDW
-from ..distributions import DistributionDraw
+from bwb.distributions import DistributionDraw
+from bwb.sgdw import wrappers as W
+from bwb.sgdw.sgdw import Runnable, SGDW
 
 _log = logging.get_logger(__name__)
+
+type DistDrawPosWgtT = torch.Tensor
 
 
 class Plotter[DistributionT, PosWgtT](
     Runnable[DistributionT],
     metaclass=abc.ABCMeta
 ):
-    fig: t.Optional[plt.Figure]
-    ax: t.Optional[plt.Axes]
+    fig: Optional[plt.Figure]
+    ax: Optional[plt.Axes]
     sgdw: SGDW[DistributionT, PosWgtT]
 
     def __init__(
         self,
         sgdw: SGDW[DistributionT, PosWgtT],
-        plot_every: t.Optional[int] = None,
+        plot_every: Optional[int] = None,
         n_cols=12,
         n_rows=2,
         factor=1.5,
@@ -51,7 +53,7 @@ class Plotter[DistributionT, PosWgtT](
         self.ax = None
 
     @property
-    def create_distr(self) -> t.Callable[[PosWgtT], DistributionT]:
+    def create_distr(self) -> Callable[[PosWgtT], DistributionT]:
         """
         Create a distribution from the position and weight.
         """
@@ -67,7 +69,7 @@ class Plotter[DistributionT, PosWgtT](
     @abc.abstractmethod
     def plot(
         self,
-        init: t.Optional[int] = None
+        init: Optional[int] = None
     ) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
         """
         Plot the distributions.
@@ -77,7 +79,7 @@ class Plotter[DistributionT, PosWgtT](
         """
         pass
 
-    @t.final
+    @final
     def callback(self) -> None:
         """
         Callback function to plot the distributions.
@@ -88,8 +90,8 @@ class Plotter[DistributionT, PosWgtT](
         if self.k % self.plot_every == self.plot_every - 1:
             self.fig, self.ax = self.plot()
 
-    @t.final
-    @t.override
+    @final
+    @override
     def run(self) -> DistributionT:
         _log.info("Running the SGDW algorithm from the Plotter")
         self.sgdw.callback = self.callback
@@ -99,13 +101,13 @@ class Plotter[DistributionT, PosWgtT](
 
 
 # TODO: REFACTORIZAR LAS DOS CLASES DE ABAJO, SE PUEDE ABSTRAER VARIAS COSAS
-class PlotterComparison(Plotter[DistributionDraw, torch.Tensor]):
-    sgdw: SGDW[DistributionDraw, torch.Tensor]
+class PlotterComparison(Plotter[DistributionDraw, DistDrawPosWgtT]):
+    sgdw: SGDW[DistributionDraw, DistDrawPosWgtT]
 
     def __init__(
         self,
-        sgdw: SGDW[DistributionDraw, torch.Tensor],
-        plot_every: t.Optional[int] = None,
+        sgdw: SGDW[DistributionDraw, DistDrawPosWgtT],
+        plot_every: Optional[int] = None,
         n_cols=12,
         n_rows=1,
         factor=1.5,
@@ -118,11 +120,13 @@ class PlotterComparison(Plotter[DistributionDraw, torch.Tensor]):
                 f" Currently: {plot_every = } < {n_rows * n_cols = }",
                 _log, ValueError
             )
-        self.pos_wgt = self.sgdw = W.PosWgtIterRegProxy(self.sgdw)
-        self.pos_wgt_samp = self.sgdw = W.PosWgtSampledRegProxy(self.sgdw)
+        sgdw = self.sgdw
+        self.pos_wgt = W.LogPosWgtIterProxy(sgdw)
+        self.pos_wgt_samp = W.LogPosWgtSampledProxy(sgdw)
+        self.sgdw = sgdw
 
-    @t.final
-    @t.override
+    @final
+    @override
     @logging.register_total_time_method(_log)
     def plot(
         self,
@@ -182,15 +186,15 @@ class PlotterComparison(Plotter[DistributionDraw, torch.Tensor]):
         return fig, ax
 
 
-class PlotterComparisonProjected(Plotter[DistributionDraw, torch.Tensor]):
-    sgdw: SGDW[DistributionDraw, torch.Tensor]
+class PlotterComparisonProjected(Plotter[DistributionDraw, DistDrawPosWgtT]):
+    sgdw: SGDW[DistributionDraw, DistDrawPosWgtT]
 
     def __init__(
         self,
-        sgdw: SGDW[DistributionDraw, torch.Tensor],
-        projector: W.ProjectorFn[torch.Tensor],
-        proj_every: int = 1,
-        plot_every: t.Optional[int] = None,
+        sgdw: SGDW[DistributionDraw, DistDrawPosWgtT],
+        projector: W.ProjectorFn[DistDrawPosWgtT],
+        proj_every: int = 1, *,
+        plot_every: Optional[int] = None,
         n_cols=12,
         n_rows=1,
         factor=1.5,
@@ -204,21 +208,21 @@ class PlotterComparisonProjected(Plotter[DistributionDraw, torch.Tensor]):
                 _log, ValueError
             )
         sgdw = self.sgdw
-        self.pos_wgt_samp = sgdw = W.PosWgtSampledRegProxy(sgdw)
-        self.pos_wgt = sgdw = W.PosWgtIterRegProxy(sgdw)
+        self.pos_wgt_samp = sgdw = W.LogPosWgtSampledProxy(sgdw)
+        self.pos_wgt = sgdw = W.LogPosWgtIterProxy(sgdw)
         sgdw = W.SGDWProjectedDecorator(sgdw, projector, proj_every)
-        self.pos_wgt_proj = sgdw = W.PosWgtIterRegProxy(sgdw)
+        self.pos_wgt_proj = sgdw = W.LogPosWgtIterProxy(sgdw)
         self.sgdw = sgdw
 
-    @t.final
-    @t.override
+    @final
+    @override
     @logging.register_total_time_method(_log)
     def plot(
         self,
-        init: t.Optional[int] = None
+        init: Optional[int] = None
     ) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
         create_distr = self.sgdw.create_distribution
-        create_distr: t.Callable[[torch.Tensor], DistributionDraw]
+        create_distr: Callable[[DistDrawPosWgtT], DistributionDraw]
 
         max_imgs = self.n_rows * self.n_cols
         max_k = self.k
