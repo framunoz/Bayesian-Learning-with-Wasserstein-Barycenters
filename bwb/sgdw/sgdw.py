@@ -3,9 +3,17 @@ Module for Stochastic Gradient Descent Algorithms in Wasserstein Space.
 """
 import abc
 import time
-import typing as t
 import warnings
 from copy import deepcopy
+from typing import (
+    Callable,
+    final,
+    override,
+    Protocol,
+    Self,
+    Sequence as Seq,
+    Union,
+)
 
 import ot
 import torch
@@ -31,7 +39,7 @@ __all__ = [
 
 type DiscretePosWgt = tuple[torch.Tensor, torch.Tensor]
 type DistDrawPosWgt = torch.Tensor
-type CallbackFn = t.Callable[[], None]
+type CallbackFn = Callable[[], None]
 
 _log = logging.get_logger(__name__)
 _bar = "=" * 5
@@ -50,27 +58,18 @@ class Runnable[DistributionT](metaclass=abc.ABCMeta):
         ...
 
 
-class DistributionSamplerP[DistributionT](P.HasDeviceDTypeP, t.Protocol):
+class DistributionSamplerP[DistributionT](P.HasDeviceDTypeP, Protocol):
     """
-    A protocol for distribution samplers.
+    Protocol for distribution samplers.
     """
 
-    def sample(self, n: int) -> t.Sequence[DistributionT]:
+    def sample(self, n: int) -> Seq[DistributionT]:
         """
         Sample a sequence of distributions.
 
         :param n: The number of distributions to sample.
         :return: The sequence of distributions.
         """
-        ...
-
-    def draw(self) -> DistributionT:
-        """
-        Draw a distribution.
-
-        :return: The distribution.
-        """
-        ...
 
 
 class SGDW[DistributionT, PosWgtT](
@@ -79,8 +78,8 @@ class SGDW[DistributionT, PosWgtT](
     metaclass=abc.ABCMeta
 ):
     r"""
-    Base class that works as interface for Stochastic Gradient Descent
-    in Wasserstein Space.
+    Base class that works as interface for the Stochastic Gradient Descent
+    in Wasserstein Space classes.
     """
 
     def __init__(
@@ -123,14 +122,14 @@ class SGDW[DistributionT, PosWgtT](
 
         return self._repr_(sep, tab, 0, new_line)
 
-    @t.final
-    @t.override
+    @final
+    @override
     @property
     def dtype(self) -> torch.dtype:
         return self.distr_sampler.dtype
 
-    @t.final
-    @t.override
+    @final
+    @override
     @property
     def device(self) -> torch.device:
         return self.distr_sampler.device
@@ -151,13 +150,13 @@ class SGDW[DistributionT, PosWgtT](
         ...
 
     @abc.abstractmethod
-    def first_sample(self) -> tuple[t.Sequence[DistributionT], PosWgtT]:
+    def first_sample(self) -> tuple[Seq[DistributionT], PosWgtT]:
         """
         Draw the first sample from the distribution sampler.
         """
         ...
 
-    def init_algorithm(self) -> tuple[t.Sequence[DistributionT], PosWgtT]:
+    def init_algorithm(self) -> tuple[Seq[DistributionT], PosWgtT]:
         """
         Initialize the algorithm.
         """
@@ -170,7 +169,7 @@ class SGDW[DistributionT, PosWgtT](
     def update_pos_wgt(
         self,
         pos_wgt_k: PosWgtT,
-        lst_mu_k: t.Sequence[DistributionT],
+        lst_mu_k: Seq[DistributionT],
         gamma_k: float,
     ) -> PosWgtT:
         """
@@ -198,7 +197,7 @@ class SGDW[DistributionT, PosWgtT](
 
     def step_algorithm(
         self, k: int, pos_wgt_k: PosWgtT
-    ) -> tuple[t.Sequence[DistributionT], PosWgtT]:
+    ) -> tuple[Seq[DistributionT], PosWgtT]:
         """
         Run a step of the algorithm.
         """
@@ -235,8 +234,8 @@ class SGDW[DistributionT, PosWgtT](
         """
         return self.create_distribution(pos_wgt)
 
-    @t.final
-    @t.override
+    @final
+    @override
     def run(self) -> DistributionT:
         """
         Run the algorithm.
@@ -311,7 +310,7 @@ class BaseSGDW[DistributionT, PosWgtT](
         # A value to pass to the device and dtype
         self._val = torch.tensor(1, dtype=self.dtype, device=self.device)
 
-    @t.override
+    @override
     def _additional_repr_(
         self, sep: str, tab: str, n_tab: int, new_line: str
     ) -> str:
@@ -388,25 +387,25 @@ class DistributionDrawSGDW(
         )
         self.conv_bar_kwargs = deepcopy(self._conv_bar_kwargs)
 
-    @t.final
-    @t.override
+    @final
+    @override
     def create_distribution(
         self,
         pos_wgt: DistDrawPosWgt
     ) -> D.DistributionDraw:
         return D.DistributionDraw.from_grayscale_weights(pos_wgt)
 
-    @t.final
-    @t.override
+    @final
+    @override
     def get_pos_wgt(self, mu: D.DistributionDraw) -> DistDrawPosWgt:
         return mu.grayscale_weights
 
-    @t.final
-    @t.override
+    @final
+    @override
     def first_sample(
         self,
-    ) -> tuple[t.Sequence[D.DistributionDraw], DistDrawPosWgt]:
-        mu_0: D.DistributionDraw = self.distr_sampler.draw()
+    ) -> tuple[Seq[D.DistributionDraw], DistDrawPosWgt]:
+        mu_0, = self.distr_sampler.sample(1)  # type: D.DistributionDraw,
         return [mu_0], mu_0.grayscale_weights
 
     def set_geodesic_params(
@@ -418,7 +417,7 @@ class DistributionDrawSGDW(
         verbose=False,
         warn=False,
         **kwargs,
-    ) -> t.Self:
+    ) -> Self:
         """
         Set the parameters for geodesic computation.
 
@@ -464,12 +463,12 @@ class DistributionDrawSGDW(
         """
         ...
 
-    @t.final
-    @t.override
+    @final
+    @override
     def update_pos_wgt(
         self,
         pos_wgt_k: DistDrawPosWgt,
-        lst_mu_k: t.Sequence[D.DistributionDraw],
+        lst_mu_k: Seq[D.DistributionDraw],
         gamma_k: float
     ) -> DistDrawPosWgt:
         S_k = len(lst_mu_k)
@@ -481,8 +480,8 @@ class DistributionDrawSGDW(
 
 
 class ConvDistributionDrawSGDW(DistributionDrawSGDW):
-    @t.final
-    @t.override
+    @final
+    @override
     def _compute_geodesic(
         self,
         gs_weights_lst_k: list[DistDrawPosWgt],
@@ -506,8 +505,8 @@ class DebiesedDistributionDrawSGDW(DistributionDrawSGDW):
         warn=False,
     )
 
-    @t.final
-    @t.override
+    @final
+    @override
     def _compute_geodesic(
         self,
         gs_weights_lst_k: list[DistDrawPosWgt],
@@ -520,8 +519,8 @@ class DebiesedDistributionDrawSGDW(DistributionDrawSGDW):
             **self.conv_bar_kwargs,
         )
 
-    @t.final
-    @t.override
+    @final
+    @override
     def set_geodesic_params(
         self,
         reg=1e-2,
@@ -531,7 +530,7 @@ class DebiesedDistributionDrawSGDW(DistributionDrawSGDW):
         verbose=False,
         warn=False,
         **kwargs,
-    ) -> t.Self:
+    ) -> Self:
         return super().set_geodesic_params(
             reg=reg,
             method=method,
@@ -570,37 +569,37 @@ class DiscreteDistributionSGDW(
         self.alpha = alpha
         self.include_w_dist = True
 
-    @t.final
-    @t.override
+    @final
+    @override
     def create_distribution(
         self, pos_wgt: DiscretePosWgt
     ) -> D.DiscreteDistribution:
         X_k, m = pos_wgt
         return D.DiscreteDistribution(support=X_k, weights=m)
 
-    @t.final
-    @t.override
+    @final
+    @override
     def get_pos_wgt(self, mu: D.DiscreteDistribution) -> DiscretePosWgt:
         return mu.enumerate_nz_support_(), mu.nz_probs
 
-    @t.final
-    @t.override
+    @final
+    @override
     def first_sample(
         self,
-    ) -> tuple[t.Sequence[D.DiscreteDistribution], DiscretePosWgt]:
-        mu_0: D.DiscreteDistribution = self.distr_sampler.draw()
+    ) -> tuple[Seq[D.DiscreteDistribution], DiscretePosWgt]:
+        mu_0: D.DiscreteDistribution = self.distr_sampler.sample(1)[0]
         X_k, m = D_utils.partition(
             X=mu_0.enumerate_nz_support_(), mu=mu_0.nz_probs, alpha=self.alpha
         )
         X_k, m = X_k.to(self._val), m.to(self._val)
         return [mu_0], (X_k, m)
 
-    @t.final
-    @t.override
+    @final
+    @override
     def update_pos_wgt(
         self,
         pos_wgt_k: DiscretePosWgt,
-        lst_mu_k: t.Sequence[D.DiscreteDistribution],
+        lst_mu_k: Seq[D.DiscreteDistribution],
         gamma_k: float,
     ) -> DiscretePosWgt:
         X_k, m = pos_wgt_k
@@ -619,8 +618,8 @@ class DiscreteDistributionSGDW(
         X_kp1: torch.Tensor = (1 - gamma_k) * X_k + gamma_k * T_X_k
         return X_kp1, m
 
-    @t.final
-    @t.override
+    @final
+    @override
     def _compute_wass_dist(
         self,
         pos_wgt_k: DiscretePosWgt,
@@ -640,8 +639,8 @@ class DiscreteDistributionSGDW(
 def compute_bwb_discrete_distribution(
     transport: tpt.BaseTransport,
     distrib_sampler: DistributionSamplerP[D.DiscreteDistribution],
-    learning_rate: t.Callable[[int], float],  # The \gamma_k schedule
-    batch_size: t.Union[t.Callable[[int], int], int],  # The S_k schedule
+    learning_rate: Callable[[int], float],  # The \gamma_k schedule
+    batch_size: Union[Callable[[int], int], int],  # The S_k schedule
     alpha: float = 1.0,
     tol: float = 1e-8,  # Tolerance to converge
     max_iter: int = 100_000,
@@ -666,10 +665,10 @@ def compute_bwb_discrete_distribution(
         def batch_size(n: int) -> int:
             return aux
 
-    batch_size: t.Callable[[int], int]
+    batch_size: Callable[[int], int]
 
     # Paso 1: Sampling a mu_0
-    mu_0: D.DiscreteDistribution = distrib_sampler.draw()
+    mu_0: D.DiscreteDistribution = distrib_sampler.sample(1)[0]
     dtype, device = mu_0.dtype, mu_0.device
 
     # Compute locations through the partition
@@ -722,7 +721,7 @@ def compute_bwb_discrete_distribution(
         S_k = batch_size(k)
         for _ in range(S_k):
             # Paso 2: Draw \tilde\mu^i_k
-            t_mu_i_k: D.DiscreteDistribution = distrib_sampler.draw()
+            t_mu_i_k: D.DiscreteDistribution = distrib_sampler.sample(1)[0]
             if distrib_sampler_history:
                 distrib_sampler_history[-1].append(t_mu_i_k)
             t_X_i_k = t_mu_i_k.enumerate_nz_support_()
@@ -779,7 +778,7 @@ def compute_bwb_discrete_distribution(
 # noinspection PyMissingOrEmptyDocstring,DuplicatedCode,PyUnboundLocalVariable
 def compute_bwb_distribution_draw(
     distrib_sampler: DistributionSamplerP[D.DistributionDraw],
-    learning_rate: t.Callable[[int], float],  # The \gamma_k schedule
+    learning_rate: Callable[[int], float],  # The \gamma_k schedule
     reg: float = 3e-3,  # Regularization of the convolutional method
     entrop_sharp=False,
     max_iter: int = 100_000,
@@ -798,7 +797,7 @@ def compute_bwb_distribution_draw(
     )
 
     # Paso 1: Sampling a mu_0
-    mu_k: D.DistributionDraw = distrib_sampler.draw()
+    mu_k: D.DistributionDraw = distrib_sampler.sample(1)[0]
     dtype, device = mu_k.dtype, mu_k.device
     _log.info(f"dtype = {dtype}, device = {device}")
 
@@ -831,7 +830,7 @@ def compute_bwb_distribution_draw(
                 + _bar
             )
 
-        m_k: D.DistributionDraw = distrib_sampler.draw()
+        m_k: D.DistributionDraw = distrib_sampler.sample(1)[0]
         if distrib_sampler_history:
             distrib_sampler_history.append([m_k])
 
@@ -879,7 +878,7 @@ def compute_bwb_distribution_draw(
 def compute_bwb_distribution_draw_projected(
     distrib_sampler: DistributionSamplerP[D.DistributionDraw],
     projector,
-    learning_rate: t.Callable[[int], float],  # The \gamma_k schedule
+    learning_rate: Callable[[int], float],  # The \gamma_k schedule
     reg: float = 3e-3,  # Regularization of the convolutional method
     entrop_sharp=False,
     max_iter: int = 100_000,
@@ -898,7 +897,7 @@ def compute_bwb_distribution_draw_projected(
     )
 
     # Paso 1: Sampling a mu_0
-    mu_k: D.DistributionDraw = distrib_sampler.draw()
+    mu_k: D.DistributionDraw = distrib_sampler.sample(1)[0]
     dtype, device = mu_k.dtype, mu_k.device
     _log.info(f"dtype = {dtype}, device = {device}")
 
@@ -931,7 +930,7 @@ def compute_bwb_distribution_draw_projected(
                 + _bar
             )
 
-        m_k: D.DistributionDraw = distrib_sampler.draw()
+        m_k: D.DistributionDraw = distrib_sampler.sample(1)[0]
         if distrib_sampler_history:
             distrib_sampler_history.append([m_k])
 

@@ -11,7 +11,7 @@ import torchvision.transforms as T
 import bwb.distributions as dist
 import bwb.logging_ as logging
 from bwb.config import config
-from bwb.utils.protocols import array_like_t
+from bwb.utils.protocols import ArrayLikeT
 
 __all__ = [
     "BaseDistributionDataLoader",
@@ -123,7 +123,7 @@ class DistributionDrawDataLoader(
 
     def __init__(
         self,
-        models_array: array_like_t,
+        models_array: ArrayLikeT,
         original_shape,
         final_shape=None,
         floor=0,
@@ -179,7 +179,7 @@ class DistributionDrawDataLoader(
         weights = self.transform(self.probs_tensor[index])
         return dist.DistributionDraw(weights, self.shape)
 
-    def compute_likelihood(self, data: array_like_t, **kwargs) -> torch.Tensor:
+    def compute_likelihood(self, data: ArrayLikeT, **kwargs) -> torch.Tensor:
         """
         Compute the probabilities of the data given the models.
 

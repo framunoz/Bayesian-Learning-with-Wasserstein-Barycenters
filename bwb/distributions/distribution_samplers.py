@@ -7,19 +7,31 @@ import collections as c
 import copy
 import gzip
 import pickle
-import typing as t
 from pathlib import Path
+from typing import (
+    Callable,
+    final,
+    Optional,
+    override,
+    Protocol,
+    Self,
+    Sequence as Seq,
+)
 
 import torch
 
-import bwb.distributions as dist
+import bwb.distributions as D
 import bwb.logging_ as logging
-import bwb.utils.validation as validation
-from .models import DiscreteModelsSetP
-from ..config import config
-from ..protocols import HasDeviceDType
-from ..utils.protocols import path_t, seed_t
-from ..utils.utils import set_generator, timeit_to_total_time
+from bwb.config import config
+from bwb.distributions.models import DiscreteModelsSetP
+from bwb.protocols import HasDeviceDType
+from bwb.utils import (
+    check_is_fitted,
+    PathT,
+    SeedT,
+    set_generator,
+    timeit_to_total_time,
+)
 
 _log = logging.get_logger(__name__)
 
@@ -34,7 +46,7 @@ __all__ = [
 ]
 
 
-class GeneratorP(t.Protocol):
+class GeneratorP(Protocol):
     """
     Protocol for a generator model.
     """
@@ -43,8 +55,10 @@ class GeneratorP(t.Protocol):
         ...
 
 
-class DistributionSampler[DistributionT](HasDeviceDType,
-                                         metaclass=abc.ABCMeta):
+class DistributionSampler[DistributionT](
+    HasDeviceDType,
+    metaclass=abc.ABCMeta
+):
     r"""
     Base class for distributions that sampling other distributions.
     i.e. it represents a distribution :math:`\Lambda(dm) \in \mathcal{P}(
@@ -54,18 +68,18 @@ class DistributionSampler[DistributionT](HasDeviceDType,
     def __init__(self) -> None:
         self.total_time = 0.0  # Total time to draw samples
 
-    @t.override
+    @override
     @property
     def device(self) -> torch.device:
-        return self.draw().device
+        return self.sample(1)[0].device
 
-    @t.override
+    @override
     @property
     def dtype(self) -> torch.dtype:
-        return self.draw().dtype
+        return self.sample(1)[0].dtype
 
     @abc.abstractmethod
-    def draw(self, seed: seed_t = None) -> DistributionT:
+    def draw(self, seed: SeedT = None) -> DistributionT:
         """
         Draw a sample.
 
@@ -78,8 +92,8 @@ class DistributionSampler[DistributionT](HasDeviceDType,
     def sample(
         self,
         size: int = 1,
-        seed: seed_t = None
-    ) -> t.Sequence[DistributionT]:
+        seed: SeedT = None
+    ) -> Seq[DistributionT]:
         """
         Samples as many distributions as the ``size`` parameter
         indicates.
@@ -91,7 +105,7 @@ class DistributionSampler[DistributionT](HasDeviceDType,
         """
         ...
 
-    def save(self, filename: path_t) -> None:
+    def save(self, filename: PathT) -> None:
         """
         Save the object to a file.
 
@@ -115,7 +129,7 @@ class DistributionSampler[DistributionT](HasDeviceDType,
         f.close()
 
     @classmethod
-    def load(cls, filename: path_t) -> t.Self:
+    def load(cls, filename: PathT) -> Self:
         """
         Load the object from a file.
 
@@ -174,7 +188,7 @@ class DiscreteDistribSampler[DistributionT](
         self,
         models: DiscreteModelsSetP[DistributionT],
         **kwargs
-    ) -> t.Self:
+    ) -> Self:
         """Fit the distribution."""
         assert isinstance(models, DiscreteModelsSetP), (
             "The models must be a DiscreteModelsSet.\n"
@@ -195,24 +209,24 @@ class DiscreteDistribSampler[DistributionT](
         # The probabilities need to be set!
         return self
 
-    @t.override
+    @override
     @property
     def device(self) -> torch.device:
         return self.models_.get(0).device
 
-    @t.override
+    @override
     @property
     def dtype(self) -> torch.dtype:
         return self.models_.get(0).dtype
 
     def get_model(self, i: int) -> DistributionT:
         """Get the model with index i."""
-        validation.check_is_fitted(self, ["models_"])
+        check_is_fitted(self, ["models_"])
         if self._models_cache.get(i) is None:
             self._models_cache[i] = self.models_.get(i)
         return self._models_cache[i]
 
-    def _draw(self, seed: seed_t = None) -> tuple[DistributionT, int]:
+    def _draw(self, seed: SeedT = None) -> tuple[DistributionT, int]:
         """To use template pattern on the draw method."""
         rng: torch.Generator = set_generator(seed=seed, device=self.device)
 
@@ -224,20 +238,21 @@ class DiscreteDistribSampler[DistributionT](
         return self.get_model(i), i
 
     @timeit_to_total_time
-    def draw(self, seed: seed_t = None) -> DistributionT:
+    @override
+    def draw(self, seed: SeedT = None) -> DistributionT:
         """Draw a sample."""
-        validation.check_is_fitted(self, ["models_", "probabilities_"])
+        check_is_fitted(self, ["models_", "probabilities_"])
         to_return, i = self._draw(seed)
         if self.save_samples:  # Register the sample
             self.samples_history.append(i)
             self.samples_counter[i] += 1
         return to_return
 
-    def _rvs(
+    def _sample(
         self,
         size: int = 1,
-        seed: seed_t = None
-    ) -> tuple[t.Sequence[DistributionT], list[int]]:
+        seed: SeedT = None
+    ) -> tuple[Seq[DistributionT], list[int]]:
         """
         Samples as many distributions as the ``size`` parameter
         indicates.
@@ -252,22 +267,24 @@ class DiscreteDistribSampler[DistributionT](
         return [self.get_model(i) for i in indices], indices
 
     @timeit_to_total_time
+    @override
     def sample(
         self,
         size: int = 1,
-        seed: seed_t = None
-    ) -> t.Sequence[DistributionT]:
+        seed: SeedT = None
+    ) -> Seq[DistributionT]:
         """
         Samples as many distributions as the ``size`` parameter
         indicates.
         """
-        validation.check_is_fitted(self, ["models_", "probabilities_"])
-        to_return, list_indices = self._rvs(size, seed)
+        check_is_fitted(self, ["models_", "probabilities_"])
+        to_return, list_indices = self._sample(size, seed)
         if self.save_samples:  # Register the samples
             self.samples_history.extend(list_indices)
             self.samples_counter.update(list_indices)
         return to_return
 
+    @override
     def __repr__(self) -> str:
         to_return = self.__class__.__name__ + "("
 
@@ -306,11 +323,12 @@ class UniformDiscreteSampler[DistributionT](
     """
 
     @timeit_to_total_time
+    @override
     def fit(
         self,
         models: DiscreteModelsSetP[DistributionT],
         **kwargs
-    ) -> t.Self:
+    ) -> Self:
         super().fit(models)
         self.probabilities_: torch.Tensor = torch.ones(
             len(models),
@@ -324,6 +342,7 @@ class UniformDiscreteSampler[DistributionT](
 
         return self
 
+    @override
     def __repr__(self) -> str:
         to_return = self.__class__.__name__
 
@@ -366,13 +385,13 @@ class BaseGeneratorDistribSampler[DistributionT](
 
     SAVE_SAMPLES: bool = False
     SAVE_HALF_PRECISION: bool = True
-    noise_sampler_: t.Callable[[int, torch.Generator], torch.Tensor]
+    noise_sampler_: Callable[[int, torch.Generator], torch.Tensor]
     generator_: GeneratorP
-    transform_out_: t.Callable[[torch.Tensor], torch.Tensor]
+    transform_out_: Callable[[torch.Tensor], torch.Tensor]
 
     def __init__(
         self,
-        save_samples: t.Optional[bool] = None,
+        save_samples: Optional[bool] = None,
         use_half: bool = False
     ) -> None:
         super().__init__()
@@ -381,7 +400,11 @@ class BaseGeneratorDistribSampler[DistributionT](
         self.samples_history: list[torch.Tensor] = []
         self._fitted: bool = False
 
-    def _set_half_dtype[T](self, value: T, force: bool = False) -> T:
+    def _set_half_dtype[T](
+        self,
+        value: T,
+        force: bool = False
+    ) -> T:
         """
         Set the half precision dtype to the tensor, if the attribute
         ``use_half`` is True.
@@ -405,7 +428,11 @@ class BaseGeneratorDistribSampler[DistributionT](
 
         return [self._set_half_dtype(v, force) for v in value]
 
-    def _set_normal_dtype[T](self, value: T, force: bool = False) -> T:
+    def _set_normal_dtype[T](
+        self,
+        value: T,
+        force: bool = False
+    ) -> T:
         """
         Set the normal precision dtype to the tensor, if the attribute
         ``use_half`` is True.
@@ -447,7 +474,10 @@ class BaseGeneratorDistribSampler[DistributionT](
         ...
 
     @abc.abstractmethod
-    def _draw(self, seed: seed_t = None) -> tuple[DistributionT, torch.Tensor]:
+    def _draw(
+        self,
+        seed: SeedT = None
+    ) -> tuple[DistributionT, torch.Tensor]:
         """
         Draw a sample and return the distribution and the noise. This
         method is used to implement the draw method.
@@ -455,11 +485,11 @@ class BaseGeneratorDistribSampler[DistributionT](
         pass
 
     @abc.abstractmethod
-    def _rvs(
+    def _sample(
         self,
         size: int = 1,
-        seed: seed_t = None
-    ) -> tuple[t.Sequence[DistributionT], t.Sequence[torch.Tensor]]:
+        seed: SeedT = None
+    ) -> tuple[Seq[DistributionT], Seq[torch.Tensor]]:
         """
         Samples as many distributions as the `size` parameter indicates.
         """
@@ -468,10 +498,10 @@ class BaseGeneratorDistribSampler[DistributionT](
     def fit(
         self,
         generator: GeneratorP,
-        transform_out: t.Callable[[torch.Tensor], torch.Tensor],
-        noise_sampler: t.Callable[[int], torch.Tensor],
+        transform_out: Callable[[torch.Tensor], torch.Tensor],
+        noise_sampler: Callable[[int], torch.Tensor],
         **kwargs,
-    ) -> t.Self:
+    ) -> Self:
         """
         Fits the distribution sampler.
 
@@ -510,7 +540,7 @@ class BaseGeneratorDistribSampler[DistributionT](
                 )
         except Exception as _:
             raise ValueError("The noise sampler must accept an integer.")
-        self.noise_sampler_: t.Callable[[int], torch.Tensor] = noise_sampler
+        self.noise_sampler_: Callable[[int], torch.Tensor] = noise_sampler
 
         # Validation of the generator
         try:
@@ -568,12 +598,12 @@ class BaseGeneratorDistribSampler[DistributionT](
         self._fitted = True
         return self
 
-    @t.override
+    @override
     @property
     def dtype(self) -> torch.dtype:
         return self.noise_sampler_(1).dtype
 
-    @t.override
+    @override
     @property
     def device(self) -> torch.device:
         return self.noise_sampler_(1).device
@@ -592,6 +622,7 @@ class BaseGeneratorDistribSampler[DistributionT](
 
         return to_return
 
+    @override
     def __repr__(self, sep=", ") -> str:
         to_return = self.__class__.__name__ + "("
 
@@ -604,7 +635,7 @@ class BaseGeneratorDistribSampler[DistributionT](
 
         return to_return
 
-    @t.final
+    @final
     def transform_noise(self, noise: torch.Tensor) -> DistributionT:
         """
         Transforms the given noise tensor using the generator network.
@@ -625,14 +656,16 @@ class BaseGeneratorDistribSampler[DistributionT](
 
         return self.create_distribution(output)
 
-    @t.final
-    @t.override
-    def draw(self, seed: seed_t = None) -> DistributionT:
+    @final
+    @override
+    def draw(self, seed: SeedT = None) -> DistributionT:
         # Check if the distribution sampler is fitted
         if not self._fitted:
-            validation.check_is_fitted(self, ["generator_",
-                                              "transform_out_",
-                                              "noise_sampler_"])
+            check_is_fitted(self, [
+                "generator_",
+                "transform_out_",
+                "noise_sampler_"
+            ])
 
         to_return, noise = self._draw(seed)
         if self.save_samples:
@@ -641,27 +674,29 @@ class BaseGeneratorDistribSampler[DistributionT](
 
         return to_return
 
-    @t.final
-    @t.override
+    @final
+    @override
     def sample(
         self,
         size: int = 1,
-        seed: seed_t = None
-    ) -> t.Sequence[DistributionT]:
+        seed: SeedT = None
+    ) -> Seq[DistributionT]:
         # Check if the distribution sampler is fitted
         if not self._fitted:
-            validation.check_is_fitted(self, ["generator_",
-                                              "transform_out_",
-                                              "noise_sampler_"])
+            check_is_fitted(self, [
+                "generator_",
+                "transform_out_",
+                "noise_sampler_"
+            ])
 
-        to_return, noises = self._rvs(size, seed)
+        to_return, noises = self._sample(size, seed)
         if self.save_samples:
             noises = self._set_half_dtype(noises)
             self.samples_history.extend(noises)
 
         return to_return
 
-    def _get_noise(self, size: int = 1, seed: seed_t = None) -> torch.Tensor:
+    def _get_noise(self, size: int = 1, seed: SeedT = None) -> torch.Tensor:
         """
         Get noise samples. If the seed is None, a random seed will be
         used. If the noise sampler fails to generate noise with the seed,
@@ -697,7 +732,7 @@ class BaseGeneratorDistribSampler[DistributionT](
             )
         return noise
 
-    def __copy__(self) -> t.Self:
+    def __copy__(self) -> Self:
         generator = copy.copy(self.generator_)
         transform_out = copy.copy(self.transform_out_)
         noise_sampler = copy.copy(self.noise_sampler_)
@@ -711,7 +746,7 @@ class BaseGeneratorDistribSampler[DistributionT](
 
         return new
 
-    def __deepcopy__(self, memo=None) -> t.Self:
+    def __deepcopy__(self, memo=None) -> Self:
         if memo is None:
             memo = {}
 
@@ -728,6 +763,7 @@ class BaseGeneratorDistribSampler[DistributionT](
 
         return new
 
+    @override
     def __getstate__(self) -> dict:
         logging.raise_warning(
             "The generator_, transform_out_ and noise_sampler_ "
@@ -765,8 +801,8 @@ class BaseGeneratorDistribSampler[DistributionT](
         return state
 
     @classmethod
-    @t.override
-    def load(cls, filename: path_t) -> t.Self:
+    @override
+    def load(cls, filename: PathT) -> Self:
         new = super().load(filename)
         new._fitted = False
 
@@ -787,16 +823,16 @@ class BaseGeneratorDistribSampler[DistributionT](
     @classmethod
     def _load_half_(
         cls,
-        new: t.Self,
-        device: torch.device,
-        dtype: torch.dtype
+        new: Self,
+        device_: device,
+        dtype_: dtype
     ) -> None:
         """
         To use template pattern on the load method.
 
         :param new: The new instance.
-        :param device: The device to load the samples.
-        :param dtype: The dtype to load the samples.
+        :param device_: The device to load the samples.
+        :param dtype_: The dtype to load the samples.
         :return: The new instance.
         """
         new.samples_history = new._set_normal_dtype(new.samples_history,
@@ -805,64 +841,43 @@ class BaseGeneratorDistribSampler[DistributionT](
 
 # noinspection PyAttributeOutsideInit
 class GeneratorDistribSampler(
-    BaseGeneratorDistribSampler[dist.DistributionDraw]
+    BaseGeneratorDistribSampler[D.DistributionDraw]
 ):
     r"""
     Class for distributions that have a continuous set of models,
     and the models can be generated by a generator model.
     """
 
-    @t.final
-    @t.override
+    @final
+    @override
     def create_distribution(
         self,
         input_: torch.Tensor
-    ) -> dist.DistributionDraw:
-        return dist.DistributionDraw.from_grayscale_weights(input_.squeeze())
+    ) -> D.DistributionDraw:
+        return D.DistributionDraw.from_grayscale_weights(input_.squeeze())
 
-    @t.final
-    @t.override
-    def _draw(self, seed: seed_t = None) -> tuple[
-        dist.DistributionDraw, torch.Tensor]:
+    @final
+    @override
+    def _draw(
+        self,
+        seed: SeedT = None
+    ) -> tuple[D.DistributionDraw, torch.Tensor]:
         noise: torch.Tensor = self._get_noise(1, seed)
-        to_return: dist.DistributionDraw = self.transform_noise(noise)
+        to_return: D.DistributionDraw = self.transform_noise(noise)
         return to_return, noise
 
-    @t.final
-    @t.override
-    def _rvs(
+    @final
+    @override
+    def _sample(
         self,
         size: int = 1,
-        seed: seed_t = None
-    ) -> tuple[t.Sequence[dist.DistributionDraw], t.Sequence[torch.Tensor]]:
+        seed: SeedT = None
+    ) -> tuple[Seq[D.DistributionDraw], Seq[torch.Tensor]]:
         noises = [noise for noise in self._get_noise(size, seed)]
-        to_return: list[dist.DistributionDraw] = [
+        to_return: list[D.DistributionDraw] = [
             self.transform_noise(noise.unsqueeze(0)) for noise in noises
         ]
         return to_return, noises
-
-
-class PosteriorPiN(DistributionSampler, metaclass=abc.ABCMeta):
-    def __init__(self) -> None:
-        super().__init__()
-
-        # Raise a warning of deprecation
-        logging.raise_warning(
-            "PosteriorPiN is deprecated. Use DistributionSampler instead.",
-            _log, DeprecationWarning, stacklevel=2
-        )
-
-
-class DiscretePosteriorPiN(DiscreteDistribSampler):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
-        # Raise a warning of deprecation
-        logging.raise_warning(
-            "DiscretePosteriorPiN is deprecated. Use "
-            "DiscreteDistribSampler instead.",
-            _log, DeprecationWarning, stacklevel=2
-        )
 
 
 def __main() -> None:
@@ -894,7 +909,7 @@ def __main() -> None:
     ic(distr_sampler)
 
     try:
-        distr_sampler.draw()
+        distr_sampler.sample(1)
     except Exception as e:
         ic(e)
 
@@ -904,7 +919,7 @@ def __main() -> None:
         ic(e)
 
     distr_sampler.fit(generator, transform_out, noise_sampler)
-    distr_sampler.draw()
+    # distr_sampler.draw()
     distr_sampler.sample(10)
     ic(distr_sampler)
 

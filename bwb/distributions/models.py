@@ -9,7 +9,7 @@ from torchvision.datasets import VisionDataset
 
 from .discrete_distribution import DistributionDraw
 from ..config import conf
-from ..utils.protocols import array_like_t
+from ..utils.protocols import ArrayLikeT
 
 __all__ = [
     "DiscreteModelsSetP",
@@ -62,7 +62,7 @@ class DiscreteWeightedModelSetP[DistributionT](
 
     def compute_likelihood(
         self,
-        data: array_like_t = None,
+        data: ArrayLikeT = None,
         **kwargs
     ) -> torch.Tensor:
         """
@@ -84,7 +84,7 @@ class BaseDiscreteWeightedModelSet[DistributionT](
     @abc.abstractmethod
     def compute_likelihood(
         self,
-        data: array_like_t = None,
+        data: ArrayLikeT = None,
         **kwargs
     ) -> torch.Tensor:
         """

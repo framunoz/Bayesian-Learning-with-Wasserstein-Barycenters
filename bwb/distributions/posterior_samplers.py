@@ -1,22 +1,25 @@
 import copy
 import random
-import typing as t
 import warnings
+from typing import Any, Callable, final, override, Self, Sequence
 
 import hamiltorch
 import torch
 from hamiltorch import Sampler
 
 import bwb.logging_ as logging
-from bwb import distributions as dist
+from bwb import distributions as D
 from . import DiscreteDistribSampler
 from .distribution_samplers import BaseGeneratorDistribSampler, GeneratorP
 from .models import DiscreteWeightedModelSetP
 from ..config import conf
-from ..utils.autocorr import integrated_time
-from ..utils.protocols import array_like_t, seed_t
-from ..utils.utils import timeit_to_total_time
-from ..utils.validation import check_is_fitted
+from ..utils import (
+    ArrayLikeT,
+    check_is_fitted,
+    integrated_time,
+    SeedT,
+    timeit_to_total_time,
+)
 
 _log = logging.get_logger(__name__)
 
@@ -29,7 +32,7 @@ __all__ = [
 
 
 def log_likelihood_model(
-    model: dist.DiscreteDistribution,
+    model: D.DiscreteDistribution,
     data: torch.Tensor
 ) -> torch.Tensor:
     """Log-likelihood of a model.
@@ -42,7 +45,7 @@ def log_likelihood_model(
 
 
 def likelihood_model(
-    model: dist.DiscreteDistribution,
+    model: D.DiscreteDistribution,
     data: torch.Tensor
 ) -> torch.Tensor:
     """Likelihood of a model.
@@ -71,7 +74,7 @@ def log_likelihood_latent(
     z: torch.Tensor,
     data: torch.Tensor,
     generator: GeneratorP,
-    transform_out: t.Callable[[torch.Tensor], torch.Tensor],
+    transform_out: Callable[[torch.Tensor], torch.Tensor],
 ):
     """
     Log-likelihood of the latent variable z, given the data, the
@@ -104,7 +107,7 @@ def log_posterior(
     z: torch.Tensor,
     data: torch.Tensor,
     generator: GeneratorP,
-    transform_out: t.Callable[[torch.Tensor], torch.Tensor],
+    transform_out: Callable[[torch.Tensor], torch.Tensor],
 ):
     """
     Log-posterior of the latent variable z, given the data, the
@@ -146,9 +149,9 @@ class ExplicitPosteriorSampler[DistributionT](
     def fit(
         self,
         models: DiscreteWeightedModelSetP[DistributionT],
-        data: array_like_t,
+        data: ArrayLikeT,
         **kwargs,
-    ) -> t.Self:
+    ) -> Self:
         r"""
         Fit the posterior distribution.
 
@@ -191,7 +194,7 @@ class ExplicitPosteriorSampler[DistributionT](
 
 # noinspection PyAttributeOutsideInit
 class BaseLatentMCMCPosteriorSampler(
-    BaseGeneratorDistribSampler[dist.DistributionDraw]
+    BaseGeneratorDistribSampler[D.DistributionDraw]
 ):
     """
     Base class for MCMC posterior samplers. This class try to mirror
@@ -253,7 +256,7 @@ class BaseLatentMCMCPosteriorSampler(
         """
         return [[] for _ in range(n_walkers or self.n_walkers)]
 
-    def reset_chain(self) -> t.Self:
+    def reset_chain(self) -> Self:
         """
         Reset the chain.
 
@@ -263,7 +266,7 @@ class BaseLatentMCMCPosteriorSampler(
         self.n_steps = 0
         return self
 
-    def reset_samples(self) -> t.Self:
+    def reset_samples(self) -> Self:
         """
         Reset the samples cache.
 
@@ -273,15 +276,15 @@ class BaseLatentMCMCPosteriorSampler(
         return self
 
     # noinspection PyMethodOverriding
-    @t.override
+    @override
     def fit(
         self,
         generator: GeneratorP,
-        transform_out: t.Callable[[torch.Tensor], torch.Tensor],
-        noise_sampler: t.Callable[[int], torch.Tensor],
+        transform_out: Callable[[torch.Tensor], torch.Tensor],
+        noise_sampler: Callable[[int], torch.Tensor],
         data: torch.Tensor,
         **kwargs,
-    ) -> t.Self:
+    ) -> Self:
         super().fit(
             generator=generator,
             transform_out=transform_out,
@@ -327,8 +330,8 @@ class BaseLatentMCMCPosteriorSampler(
 
     def _get_hamiltorch_kwargs(self, **kwargs) -> dict:
         hamiltorch_kwargs = self._hamiltorch_kwargs.copy()
-        specific_kwargs: dict[str, t.Any] = dict(log_prob_func=self.log_prob,
-                                                 **kwargs)
+        specific_kwargs: dict[str, Any] = dict(log_prob_func=self.log_prob,
+                                               **kwargs)
         hamiltorch_kwargs.update(
             [(k, v) for k, v in specific_kwargs.items() if v is not None]
         )
@@ -343,9 +346,9 @@ class BaseLatentMCMCPosteriorSampler(
         initial_state: torch.Tensor = None,
         n_steps: int = None,
         burn: int = None,
-        seed: seed_t = None,
+        seed: SeedT = None,
         **kwargs,
-    ) -> t.Self:
+    ) -> Self:
         """
         Run the MCMC sampler.
 
@@ -467,7 +470,7 @@ class BaseLatentMCMCPosteriorSampler(
         self,
         thin: int = None,
         discard: int = 0
-    ) -> t.Self:
+    ) -> Self:
         """
         Shuffle the samples cache to avoid correlation between samples.
 
@@ -490,12 +493,12 @@ class BaseLatentMCMCPosteriorSampler(
         self.samples_cache.extend(to_extend)
         return self
 
-    @t.final
-    @t.override
+    @final
+    @override
     def _draw(
         self,
-        seed: seed_t = None
-    ) -> tuple[dist.DistributionDraw, torch.Tensor]:
+        seed: SeedT = None
+    ) -> tuple[D.DistributionDraw, torch.Tensor]:
         if not self.samples_cache:
             self.run(n_steps=50)
             self.shuffle_samples_cache()
@@ -504,16 +507,16 @@ class BaseLatentMCMCPosteriorSampler(
         sample = self._set_normal_dtype(sample)
 
         z_sampled = sample.reshape(1, -1, 1, 1)
-        distribution: dist.DistributionDraw = self.transform_noise(z_sampled)
+        distribution: D.DistributionDraw = self.transform_noise(z_sampled)
         return distribution, z_sampled
 
-    @t.final
-    @t.override
-    def _rvs(
+    @final
+    @override
+    def _sample(
         self,
         size: int = 1,
-        seed: seed_t = None
-    ) -> tuple[t.Sequence[dist.DistributionDraw], t.Sequence[torch.Tensor]]:
+        seed: SeedT = None
+    ) -> tuple[Sequence[D.DistributionDraw], Sequence[torch.Tensor]]:
         if len(self.samples_cache) < size:
             self.run(n_steps=size * 50)
             self.shuffle_samples_cache()
@@ -523,20 +526,20 @@ class BaseLatentMCMCPosteriorSampler(
         samples = self._set_normal_dtype(samples)
         samples = [sample.reshape(1, -1, 1, 1) for sample in samples]
 
-        samples_: list[dist.DistributionDraw] = [self.transform_noise(z_) for
-                                                 z_ in samples]
+        samples_: list[D.DistributionDraw] = [self.transform_noise(z_) for
+                                              z_ in samples]
 
         return samples_, samples
 
-    @t.final
-    @t.override
+    @final
+    @override
     def create_distribution(
         self,
         input_: torch.Tensor
-    ) -> dist.DistributionDraw:
-        return dist.DistributionDraw.from_grayscale_weights(input_.squeeze())
+    ) -> D.DistributionDraw:
+        return D.DistributionDraw.from_grayscale_weights(input_.squeeze())
 
-    @t.override
+    @override
     def _additional_repr_(self, sep: str) -> str:
         to_return = ""
 
@@ -622,7 +625,7 @@ class BaseLatentMCMCPosteriorSampler(
 
         return new
 
-    @t.override
+    @override
     def _getstate_half_(self, state):
         state = super()._getstate_half_(state)
         state["chains"] = self._set_half_dtype(self.chains)
@@ -630,14 +633,14 @@ class BaseLatentMCMCPosteriorSampler(
         return state
 
     @classmethod
-    @t.override
+    @override
     def _load_half_(
         cls,
-        new: t.Self,
-        device: torch.device,
-        dtype: torch.dtype
+        new: Self,
+        device_: torch.device,
+        dtype_: torch.dtype
     ) -> None:
-        super()._load_half_(new, device, dtype)
+        super()._load_half_(new, device_, dtype_)
         new.chains = new._set_normal_dtype(new.chains)
         new.samples_cache = new._set_normal_dtype(new.samples_cache)
 
@@ -677,7 +680,7 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
         self.chains: list[list[torch.Tensor]] = self._create_empty_chains(
             n_walkers)
 
-    @t.override
+    @override
     @timeit_to_total_time
     def run(
         self,
@@ -686,9 +689,9 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
         parallel: bool = None,
         n_workers: int = None,
         n_walkers: int = None,
-        seeds: t.Sequence[seed_t] = None,
+        seeds: Sequence[SeedT] = None,
         **kwargs,
-    ) -> t.Self:
+    ) -> Self:
         check_is_fitted(self,
                         ["generator_", "transform_out_",
                          "noise_sampler_", "data_"])
@@ -730,7 +733,7 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
 
         return self
 
-    @t.override
+    @override
     def get_chain(
         self,
         flat: bool = False,
@@ -747,7 +750,7 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
 
         return to_return
 
-    @t.override
+    @override
     def _additional_repr_(self, sep: str) -> str:
         to_return = super()._additional_repr_(sep)
 
