@@ -28,6 +28,7 @@ from . import utils
 from .. import protocols as P
 
 __all__ = [
+    "CallbackFn",
     "Runnable",
     "SGDW",
     "BaseSGDW",
@@ -94,6 +95,8 @@ class SGDW[DistributionT, PosWgtT](
         self.det_params = det_params
         self.iter_params = iter_params
 
+        self._callback: CallbackFn = lambda: None
+
     def _additional_repr_(
         self, sep: str, tab: str, n_tab: int, new_line: str
     ) -> str:
@@ -135,19 +138,18 @@ class SGDW[DistributionT, PosWgtT](
         return self.distr_sampler.device
 
     @property
-    @abc.abstractmethod
     def callback(self) -> CallbackFn:
         """
         Callback function to run at the end of each iteration.
         """
-        ...
+        return self._callback
 
     @callback.setter
     def callback(self, callback: CallbackFn) -> None:
         """
         Set the callback function to run at the end of each iteration.
         """
-        ...
+        self._callback = callback
 
     @abc.abstractmethod
     def first_sample(self) -> tuple[Seq[DistributionT], PosWgtT]:
@@ -304,9 +306,6 @@ class BaseSGDW[DistributionT, PosWgtT](
 
         super().__init__(distr_sampler, schd, det_params, iter_params)
 
-        # Callback
-        self._callback: CallbackFn = lambda: None
-
         # A value to pass to the device and dtype
         self._val = torch.tensor(1, dtype=self.dtype, device=self.device)
 
@@ -317,23 +316,10 @@ class BaseSGDW[DistributionT, PosWgtT](
         space = tab * n_tab
         to_return = super()._additional_repr_(sep, tab, n_tab, new_line)
         to_return += space + "distr_sampler=" + repr(self.distr_sampler) + sep
-        to_return += space + "det_params=" + repr(self.det_params) + sep
         to_return += space + "iter_params=" + repr(self.iter_params) + sep
+        to_return += space + "det_params=" + repr(self.det_params) + sep
 
         return to_return
-
-    @property
-    def callback(self) -> CallbackFn:
-        """
-        Callback function to run at the end of each iteration.
-
-        :return: The callback function.
-        """
-        return self._callback
-
-    @callback.setter
-    def callback(self, callback: CallbackFn) -> None:
-        self._callback = callback
 
     def _compute_wass_dist(
         self, pos_wgt_k: PosWgtT, pos_wgt_kp1: PosWgtT, gamma_k: float
