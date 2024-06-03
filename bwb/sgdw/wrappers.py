@@ -1,3 +1,7 @@
+"""
+This module contains the wrappers for the SGDW algorithm.
+"""
+# TODO: ANNOTATE THE METHODS
 import abc
 from copy import deepcopy
 from datetime import timedelta
@@ -16,7 +20,7 @@ __all__ = [
     "SGDWProjectedDecorator",
 ]
 
-log = logging.get_logger(__name__)
+_log = logging.get_logger(__name__)
 
 type ProjectorFn[PosWgtT] = Callable[[PosWgtT], PosWgtT]
 
@@ -133,13 +137,16 @@ class ReportProxy[DistributionT, PosWgtT](
         report_every: int = 10,
         len_bar: int = 5,
         include_dict: ReportOptions = None,
+        log=_log,
         level: int = logging.INFO,
     ) -> None:
         super().__init__(wrapee)
         self.report_every = report_every
         self.len_bar = len_bar
         self.include_dict = deepcopy(self.INCLUDE_OPTIONS)
-        self.include_dict.update(include_dict)
+        if include_dict is not None:
+            self.include_dict.update(include_dict)
+        self.log = log
         self.level = level
 
     @override
@@ -157,6 +164,8 @@ class ReportProxy[DistributionT, PosWgtT](
             logging.CRITICAL: "CRITICAL",
         }
         to_return += space + f"level={level.get(self.level, self.level)}" + sep
+        log_repr = f"'{self.log.name}': {level[self.log.level]}"
+        to_return += (space + f"log={log_repr}" + sep)
         return to_return
 
     def make_report(self) -> str:
@@ -215,7 +224,7 @@ class ReportProxy[DistributionT, PosWgtT](
         result = super().step_algorithm(k, pos_wgt_k)
 
         if self.is_report_iter():
-            log.log(self.level, self.make_report())
+            self.log.log(self.level, self.make_report())
 
         return result
 
@@ -351,7 +360,7 @@ class SGDWProjectedDecorator[DistributionT, PosWgtT](
         self,
         wrapee: SGDW[DistributionT, PosWgtT],
         projector: ProjectorFn[PosWgtT],
-        project_every: int = 1,
+        project_every: int | None = 1,
     ) -> None:
         super().__init__(wrapee)
         self.projector = projector
@@ -361,6 +370,8 @@ class SGDWProjectedDecorator[DistributionT, PosWgtT](
         """
         Check if the current iteration should be projected.
         """
+        if self.project_every is None:
+            return False
         k = self.iter_params.k
         proj_every = self.project_every
         return k % proj_every == proj_every - 1
@@ -389,5 +400,6 @@ class SGDWProjectedDecorator[DistributionT, PosWgtT](
 
     @override
     def create_barycenter(self, pos_wgt: PosWgtT) -> DistributionT:
-        pos_wgt = self.projector(pos_wgt)
+        if self.project_every is not None:
+            pos_wgt = self.projector(pos_wgt)
         return super().create_barycenter(pos_wgt)
