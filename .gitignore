@@ -164,3 +164,6 @@ fabric.properties
 */pickles/
 *.pkl
 *.pkl.gz
+
+# Ignore compiled files
+*.pt
