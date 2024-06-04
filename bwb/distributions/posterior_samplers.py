@@ -1,7 +1,7 @@
 import copy
 import random
 import warnings
-from typing import Any, Callable, final, override, Self, Sequence
+from typing import Any, Callable, final, override, Protocol, Self, Sequence
 
 import hamiltorch
 import torch
@@ -27,6 +27,7 @@ from bwb.utils import (
 _log = logging.get_logger(__name__)
 
 __all__ = [
+    "DistributionP",
     "ExplicitPosteriorSampler",
     "BaseLatentMCMCPosteriorSampler",
     "LatentMCMCPosteriorSampler",
@@ -34,8 +35,19 @@ __all__ = [
 ]
 
 
+class DistributionP(Protocol):
+    """
+    Protocol class for distributions.
+    """
+
+    def log_prob(self, value: torch.Tensor) -> torch.Tensor:
+        """
+        Log-probability of the distribution.
+        """
+
+
 def log_likelihood_model(
-    model: D.DiscreteDistribution,
+    model: DistributionP,
     data: torch.Tensor
 ) -> torch.Tensor:
     """Log-likelihood of a model.
@@ -48,7 +60,7 @@ def log_likelihood_model(
 
 
 def likelihood_model(
-    model: D.DiscreteDistribution,
+    model: DistributionP,
     data: torch.Tensor
 ) -> torch.Tensor:
     """Likelihood of a model.
