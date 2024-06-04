@@ -148,7 +148,7 @@ def plot_list_of_images(
     n_rows: int = 3, n_cols: int = 12, factor: float = 1.5,
     title=None, cmap: str = _CMAP_DEFAULT,
     labels: t.Optional[t.Sequence[str]] = None,
-) -> tuple[plt.Figure, np.ndarray[plt.Axes] | plt.Axes]:
+) -> tuple[plt.Figure, np.ndarray[plt.Axes]]:
     """
     Function that plots a list of images.
 
@@ -211,7 +211,7 @@ def plot_list_of_draws(
     n_rows: int = 4, n_cols=12, factor: float = 1.5,
     title=None, cmap: str = _CMAP_DEFAULT,
     labels: t.Optional[t.Sequence[str]] = None,
-) -> tuple[plt.Figure, np.ndarray[plt.Axes] | plt.Axes]:
+) -> tuple[plt.Figure, np.ndarray[plt.Axes]]:
     """
     Function that plots a list of DistributionDraws instances.
 
@@ -234,8 +234,9 @@ def plot_list_of_draws(
 
     """
 
-    list_of_images: list[PIL.Image.Image] = [draw.image for draw in
-                                             list_of_draws]
+    list_of_images: list[PIL.Image.Image] = [
+        draw.image for draw in list_of_draws[:n_rows * n_cols]
+    ]
     return plot_list_of_images(
         list_of_images=list_of_images,
         n_rows=n_rows, n_cols=n_cols, factor=factor,
