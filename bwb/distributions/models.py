@@ -96,7 +96,10 @@ class BaseDiscreteWeightedModelSet[DistributionT](
         pass
 
 
-class ModelDataset(BaseDiscreteModelsSet[DistributionDraw]):
+class ModelDataset(
+    BaseDiscreteModelsSet[DistributionDraw],
+    t.Iterable[DistributionDraw]
+):
     """
     An adapter class that adapts a ``torchvision.vision.VisionDataset``
     to a ``BaseDiscreteModelsSet``.
@@ -112,9 +115,11 @@ class ModelDataset(BaseDiscreteModelsSet[DistributionDraw]):
         self.device = device if device is not None else conf.device
         self.dtype = dtype if dtype is not None else conf.dtype
 
+    @t.override
     def __len__(self) -> int:
         return len(self.dataset)
 
+    @t.override
     def get(self, i: int, **kwargs) -> DistributionDraw:
         return DistributionDraw.from_grayscale_weights(
             self.dataset[i][0],
@@ -122,8 +127,14 @@ class ModelDataset(BaseDiscreteModelsSet[DistributionDraw]):
             dtype=self.dtype
         )
 
+    @t.override
     def __repr__(self) -> str:
         return (f"ModelDataset("
                 f"device={self.device}, "
                 f"dtype={self.dtype}, "
                 f"dataset={self.dataset})")
+
+    @t.override
+    def __iter__(self) -> t.Iterator[DistributionDraw]:
+        for i in range(len(self)):
+            yield self.get(i)
