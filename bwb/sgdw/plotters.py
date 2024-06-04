@@ -121,8 +121,8 @@ class PlotterComparison(Plotter[DistributionDraw, DistDrawPosWgtT]):
                 _log, ValueError
             )
         sgdw = self.sgdw
-        self.pos_wgt = W.LogPosWgtIterProxy(sgdw)
-        self.pos_wgt_samp = W.LogPosWgtSampledProxy(sgdw)
+        self.pos_wgt = sgdw = W.LogPosWgtIterProxy(sgdw)
+        self.pos_wgt_samp = sgdw = W.LogPosWgtSampledProxy(sgdw)
         self.sgdw = sgdw
 
     @final
