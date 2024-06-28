@@ -36,7 +36,8 @@ class Plotter[DistributionT, PosWgtT](
         n_cols=12,
         n_rows=2,
         factor=1.5,
-        cmap="binary"
+        cmap="binary",
+        **kwargs,
     ):
         # Classes
         self.sgdw = sgdw
@@ -47,6 +48,7 @@ class Plotter[DistributionT, PosWgtT](
         self.n_rows = n_rows
         self.factor = factor
         self.cmap = cmap
+        self.plot_kwargs = kwargs
 
         # Matplotlib objects
         self.fig = None
@@ -69,7 +71,8 @@ class Plotter[DistributionT, PosWgtT](
     @abc.abstractmethod
     def plot(
         self,
-        init: Optional[int] = None
+        init: Optional[int] = None,
+        **kwargs
     ) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
         """
         Plot the distributions.
@@ -88,7 +91,7 @@ class Plotter[DistributionT, PosWgtT](
             return None
 
         if self.k % self.plot_every == self.plot_every - 1:
-            self.fig, self.ax = self.plot()
+            self.fig, self.ax = self.plot(**self.plot_kwargs)
 
     @final
     @override
@@ -111,9 +114,10 @@ class PlotterComparison(Plotter[DistributionDraw, DistDrawPosWgtT]):
         n_cols=12,
         n_rows=1,
         factor=1.5,
-        cmap="binary"
+        cmap="binary",
+        **kwargs,
     ):
-        super().__init__(sgdw, plot_every, n_cols, n_rows, factor, cmap)
+        super().__init__(sgdw, plot_every, n_cols, n_rows, factor, cmap, **kwargs)
         if plot_every is not None and plot_every < n_rows * n_cols:
             logging.raise_error(
                 "'plot_every' should not be less than n_rows * n_cols."
@@ -130,7 +134,8 @@ class PlotterComparison(Plotter[DistributionDraw, DistDrawPosWgtT]):
     @logging.register_total_time_method(_log)
     def plot(
         self,
-        init: int = None
+        init: int = None,
+        **kwargs,
     ) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
 
         max_imgs = self.n_rows * self.n_cols
@@ -155,7 +160,7 @@ class PlotterComparison(Plotter[DistributionDraw, DistDrawPosWgtT]):
             subplot_kw={"xticks": [], "yticks": []}
         )
 
-        fig.suptitle("SGDW")
+        fig.suptitle(kwargs.get("title", "SGDW"))
 
         for i, j in product(range(self.n_rows), range(self.n_cols)):
             k = init + j + i * self.n_cols
@@ -198,9 +203,10 @@ class PlotterComparisonProjected(Plotter[DistributionDraw, DistDrawPosWgtT]):
         n_cols=12,
         n_rows=1,
         factor=1.5,
-        cmap="binary"
+        cmap="binary",
+        **kwargs,
     ):
-        super().__init__(sgdw, plot_every, n_cols, n_rows, factor, cmap)
+        super().__init__(sgdw, plot_every, n_cols, n_rows, factor, cmap, **kwargs)
         if plot_every is not None and plot_every < n_rows * n_cols:
             logging.raise_error(
                 "'plot_every' should not be less than n_rows * n_cols."
@@ -219,7 +225,8 @@ class PlotterComparisonProjected(Plotter[DistributionDraw, DistDrawPosWgtT]):
     @logging.register_total_time_method(_log)
     def plot(
         self,
-        init: Optional[int] = None
+        init: Optional[int] = None,
+        **kwargs,
     ) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
         create_distr = self.sgdw.create_distribution
         create_distr: Callable[[DistDrawPosWgtT], DistributionDraw]
@@ -241,12 +248,14 @@ class PlotterComparisonProjected(Plotter[DistributionDraw, DistDrawPosWgtT]):
 
         row, col = self.n_rows * 3, self.n_cols
 
+        title = kwargs.get("title", "SGDW")
+
         fig, ax = plt.subplots(
             row, col, figsize=(col * self.factor, row * self.factor),
             subplot_kw={"xticks": [], "yticks": []}
         )
 
-        fig.suptitle("SGDW")
+        fig.suptitle(kwargs.get("title", "SGDW"))
 
         for i, j in product(range(self.n_rows), range(self.n_cols)):
             k = init + j + i * self.n_cols
