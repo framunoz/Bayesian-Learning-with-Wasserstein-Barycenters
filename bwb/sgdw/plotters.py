@@ -72,12 +72,16 @@ class Plotter[DistributionT, PosWgtT](
     def plot(
         self,
         init: Optional[int] = None,
+        n_rows: Optional[int] = None,
+        n_cols: Optional[int] = None,
         **kwargs
     ) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
         """
         Plot the distributions.
 
         :param init: The initial step to plot.
+        :param n_rows: The number of rows.
+        :param n_cols: The number of columns.
         :return: The figure and the axes.
         """
         pass
@@ -135,10 +139,14 @@ class PlotterComparison(Plotter[DistributionDraw, DistDrawPosWgtT]):
     def plot(
         self,
         init: int = None,
+        n_rows: Optional[int] = None,
+        n_cols: Optional[int] = None,
         **kwargs,
     ) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
+        n_rows = self.n_rows if n_rows is None else n_rows
+        n_cols = self.n_cols if n_cols is None else n_cols
 
-        max_imgs = self.n_rows * self.n_cols
+        max_imgs = n_rows * n_cols
         max_k = self.k
         init = max_k - max_imgs + 1 if init is None else init
         if init < 0:
@@ -153,7 +161,7 @@ class PlotterComparison(Plotter[DistributionDraw, DistDrawPosWgtT]):
                 _log, ValueError
             )
 
-        row, col = self.n_rows * 2, self.n_cols
+        row, col = n_rows * 2, n_cols
 
         fig, ax = plt.subplots(
             row, col, figsize=(col * self.factor, row * self.factor),
@@ -162,8 +170,8 @@ class PlotterComparison(Plotter[DistributionDraw, DistDrawPosWgtT]):
 
         fig.suptitle(kwargs.get("title", "SGDW"))
 
-        for i, j in product(range(self.n_rows), range(self.n_cols)):
-            k = init + j + i * self.n_cols
+        for i, j in product(range(n_rows), range(n_cols)):
+            k = init + j + i * n_cols
             gamma_k = self.sgdw.schd.step_schedule(k)
 
             ax0, ax1 = ax[i * 2, j], ax[i * 2 + 1, j]
@@ -226,12 +234,17 @@ class PlotterComparisonProjected(Plotter[DistributionDraw, DistDrawPosWgtT]):
     def plot(
         self,
         init: Optional[int] = None,
+        n_rows: Optional[int] = None,
+        n_cols: Optional[int] = None,
         **kwargs,
     ) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
         create_distr = self.sgdw.create_distribution
         create_distr: Callable[[DistDrawPosWgtT], DistributionDraw]
 
-        max_imgs = self.n_rows * self.n_cols
+        n_rows = self.n_rows if n_rows is None else n_rows
+        n_cols = self.n_cols if n_cols is None else n_cols
+
+        max_imgs = n_rows * n_cols
         max_k = self.k
         init = max_k - max_imgs + 1 if init is None else init
         if init < 0:
@@ -246,9 +259,7 @@ class PlotterComparisonProjected(Plotter[DistributionDraw, DistDrawPosWgtT]):
                 _log, ValueError
             )
 
-        row, col = self.n_rows * 3, self.n_cols
-
-        title = kwargs.get("title", "SGDW")
+        row, col = n_rows * 3, n_cols
 
         fig, ax = plt.subplots(
             row, col, figsize=(col * self.factor, row * self.factor),
@@ -257,8 +268,8 @@ class PlotterComparisonProjected(Plotter[DistributionDraw, DistDrawPosWgtT]):
 
         fig.suptitle(kwargs.get("title", "SGDW"))
 
-        for i, j in product(range(self.n_rows), range(self.n_cols)):
-            k = init + j + i * self.n_cols
+        for i, j in product(range(n_rows), range(n_cols)):
+            k = init + j + i * n_cols
             gamma_k = self.sgdw.schd.step_schedule(k)
 
             ax0, ax1, ax2 = ax[i * 3, j], ax[i * 3 + 1, j], ax[i * 3 + 2, j]
