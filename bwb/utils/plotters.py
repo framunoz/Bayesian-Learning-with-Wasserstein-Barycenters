@@ -24,6 +24,8 @@ __all__ = [
 _log = logging.get_logger(__name__)
 
 _CMAP_DEFAULT = "binary_r"
+_CONTEXT_DEFAULT = "notebook"
+_SCALE_DEFAULT = 1.5
 
 
 # noinspection PyMissingOrEmptyDocstring,PyPropertyDefinition
@@ -94,6 +96,8 @@ def save_fig_with_path(
 def plot_image(
     image: PIL.Image.Image,
     title: str = "Image",
+    subplots_kw: dict = None,
+    sns_context_kw: dict = None,
     **kwargs,
 ) -> tuple[plt.Figure, plt.Axes]:
     """
@@ -103,6 +107,17 @@ def plot_image(
     :type image: PIL.Image.Image
     :param title: The title of the plot.
     :type title: str
+    :param subplots_kw: Optional arguments to pass to the
+        `matplotlib.pyplot.subplots
+        <https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.subplots.html>`_
+        function. For further information, please see the documentation
+        of that function.
+    :type subplots_kw: dict
+    :param sns_context_kw: Optional arguments to pass to the
+        `seaborn.set_context
+        <https://seaborn.pydata.org/generated/seaborn.set_context.html>`_
+        function. For further information, please see the documentation
+        of that function.
     :param kwargs: Optional arguments to pass to the
         `matplotlib.pyplot.imshow
         <https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.imshow.html>`_
@@ -112,11 +127,19 @@ def plot_image(
     """
     kwargs.setdefault("cmap", _CMAP_DEFAULT)
 
-    fig, ax = plt.subplots()
-    ax.imshow(image, **kwargs)
-    ax.set_title(title)
-    ax.axis("off")
-    plt.show()
+    subplots_kw = dict() if subplots_kw is None else subplots_kw
+    # subplots_kw.setdefault("figsize", (2, 2))
+
+    sns_context_kw = dict() if sns_context_kw is None else sns_context_kw
+    sns_context_kw.setdefault("context", _CONTEXT_DEFAULT)
+    sns_context_kw.setdefault("font_scale", _SCALE_DEFAULT)
+
+    with sns.plotting_context(**sns_context_kw):
+        fig, ax = plt.subplots(**subplots_kw)
+        ax.imshow(image, **kwargs)
+        ax.set_title(title)
+        ax.axis("off")
+        plt.show()
 
     return fig, ax
 
@@ -124,6 +147,8 @@ def plot_image(
 def plot_draw(
     draw: DistributionP,
     title: str = "Draw",
+    subplots_kw: dict = None,
+    sns_context_kw: dict = None,
     **kwargs,
 ) -> tuple[plt.Figure, plt.Axes]:
     """
@@ -133,6 +158,18 @@ def plot_draw(
     :type draw: DistributionDraw
     :param title: The title of the plot.
     :type title: str
+    :param subplots_kw: Optional arguments to pass to the
+        `matplotlib.pyplot.subplots
+        <https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.subplots.html>`_
+        function. For further information, please see the documentation
+        of that function.
+    :type subplots_kw: dict
+    :param sns_context_kw: Optional arguments to pass to the
+        `seaborn.set_context
+        <https://seaborn.pydata.org/generated/seaborn.set_context.html>`_
+        function. For further information, please see the documentation
+        of that function.
+    :type sns_context_kw: dict
     :param kwargs: Optional arguments to pass to the
         `matplotlib.pyplot.imshow
         <https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.imshow.html>`_
@@ -140,7 +177,9 @@ def plot_draw(
         of that function.
     :return: The figure and the axes of the plot.
     """
-    return plot_image(image=draw.image, title=title, **kwargs)
+    return plot_image(image=draw.image, title=title,
+                      sns_context_kw=sns_context_kw,
+                      subplots_kw=subplots_kw, **kwargs)
 
 
 def plot_list_of_images(
@@ -252,6 +291,8 @@ def plot_histogram_from_points(
     xlabel: str = None,
     ylabel: str = None,
     histplot_kwargs: t.Optional[dict] = None,
+    figure_kwargs: t.Optional[dict] = None,
+    sns_context_kw: t.Optional[dict] = None,
 ) -> tuple[plt.Figure, plt.Axes]:
     """
     Function that plots a histogram from a list of points.
@@ -269,6 +310,16 @@ def plot_histogram_from_points(
         <https://seaborn.pydata.org/generated/seaborn.histplot.html>`_
         function. For further information, please see the documentation
         of that function.
+    :param figure_kwargs: Optional arguments to pass to the
+        `matplotlib.pyplot.figure
+        <https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.figure.html>`_
+        function. For further information, please see the documentation
+        of that function.
+    :param sns_context_kw: Optional arguments to pass to the
+        `seaborn.set_context
+        <https://seaborn.pydata.org/generated/seaborn.set_context.html>`_
+        function. For further information, please see the documentation
+        of that function.
     :return: The return of the ``seaborn.histplot`` function.
     """
     # Instance the kwargs of the histplot and set default values.
@@ -276,6 +327,15 @@ def plot_histogram_from_points(
     histplot_kwargs.setdefault("bins", 100)
     histplot_kwargs.setdefault("cbar", True)
     histplot_kwargs.setdefault("binrange", ((0, shape[0]), (0, shape[1])))
+
+    # Instance the kwargs of the figure and set default values.
+    figure_kwargs = dict() if figure_kwargs is None else figure_kwargs
+    # figure_kwargs.setdefault("figsize", (2, 2))
+
+    # Instance the kwargs of the sns_context and set default values.
+    sns_context_kw = dict() if sns_context_kw is None else sns_context_kw
+    sns_context_kw.setdefault("context", _CONTEXT_DEFAULT)
+    sns_context_kw.setdefault("font_scale", _SCALE_DEFAULT)
 
     xlabel_ = "Y-Axis" if xlabel is None else xlabel
     ylabel_ = "X-Axis" if ylabel is None else ylabel
@@ -285,11 +345,13 @@ def plot_histogram_from_points(
         xlabel_ = "X-Axis" if xlabel is None else xlabel
         ylabel_ = "Y-Axis" if ylabel is None else ylabel
 
-    df = pd.DataFrame(data)
-    histplot_return = sns.histplot(data=df, x=0, y=1,
-                                   **histplot_kwargs)  # type: plt.Axes
-    plt.xlabel(xlabel_)
-    plt.ylabel(ylabel_)
-    plt.title(title)
+    with sns.plotting_context(**sns_context_kw):
+        plt.figure(**figure_kwargs)
+        df = pd.DataFrame(data)
+        histplot_return = sns.histplot(data=df, x=0, y=1,
+                                       **histplot_kwargs)  # type: plt.Axes
+        plt.xlabel(xlabel_)
+        plt.ylabel(ylabel_)
+        plt.title(title)
 
     return histplot_return.figure, histplot_return
