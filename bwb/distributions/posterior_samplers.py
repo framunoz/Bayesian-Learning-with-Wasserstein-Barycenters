@@ -258,6 +258,13 @@ class BaseLatentMCMCPosteriorSampler(
         # The autocorrelation time
         self._mean_autocorr_time = None  # not set yet
         self._autocorr_time = None  # not set yet
+        self._n_effective = None  # not set yet
+
+    def __len__(self) -> int:
+        """
+        The number of steps in every chain.
+        """
+        return sum(len(chain) for chain in self.chains)
 
     def _create_empty_chains(
         self,
@@ -279,6 +286,9 @@ class BaseLatentMCMCPosteriorSampler(
         """
         self.chains = self._create_empty_chains()
         self.n_steps = 0
+        self._mean_autocorr_time = None
+        self._autocorr_time = None
+        self._n_effective = None
         return self
 
     def reset_samples(self) -> Self:
@@ -459,6 +469,26 @@ class BaseLatentMCMCPosteriorSampler(
             return torch.tensor(0.0, dtype=self.dtype, device=self.device)
         return self._autocorr_time
 
+    @property
+    def n_effective(self) -> int:
+        """
+        Get the effective number of samples.
+        """
+        if self._n_effective is None:
+            logging.raise_warning(
+                "The effective number of samples is not set yet.",
+                _log, RuntimeWarning, stacklevel=2
+            )
+            return 0
+        return self._n_effective
+
+    @property
+    def n_cached_samples(self) -> int:
+        """
+        Get the number of cached samples.
+        """
+        return len(self.samples_cache)
+
     def get_autocorr_time(self, thin=1, discard=0, **kwargs) -> torch.Tensor:
         """
         This method is a copy of ``emcee``. Compute an estimate of the
@@ -479,6 +509,7 @@ class BaseLatentMCMCPosteriorSampler(
         autocorr_time = thin * integrated_time(chain, **kwargs)
         self._autocorr_time = autocorr_time
         self._mean_autocorr_time = torch.mean(autocorr_time)
+        self._n_effective = len(self) / self.mean_autocorr_time
         return autocorr_time
 
     def shuffle_samples_cache(
@@ -562,7 +593,7 @@ class BaseLatentMCMCPosteriorSampler(
             to_return += f"n_data={len(self.data_):_}" + sep
 
         if self.samples_cache:
-            to_return += f"n_cached_samples={len(self.samples_cache):_}" + sep
+            to_return += f"n_cached_samples={self.n_cached_samples:_}" + sep
 
         if self.n_steps:
             to_return += f"len_chain={len(self.chains[0]):_}" + sep
