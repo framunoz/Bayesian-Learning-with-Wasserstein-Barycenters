@@ -440,6 +440,8 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         >>> other_handler in log.handlers
         True
         """
+        handler.setFormatter(self.FORMATTER)
+
         if logger is not None:
             logger.addHandler(handler)
             return self
@@ -448,7 +450,9 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
             if handler not in logger.handlers:
                 logger.addHandler(handler)
 
-        self.HANDLERS.append(handler)
+        if handler not in self.HANDLERS:
+            self.HANDLERS.append(handler)
+
         return self
 
     def set_formatter(
@@ -720,24 +724,42 @@ def _time_fmt(seconds: float) -> str:
     >>> day = hour * 24
     >>> _time_fmt(day + hour + minute + pi)
     '1 day, 1:01'
+
+    Format the time in seconds to a string with milliseconds.
+
+    >>> pi_ms = pi * 1e-3
+    >>> _time_fmt(pi_ms)
+
+
     """
     dt = timedelta(seconds=seconds)
     dt_fmt = str(dt)
+
+    minute = 60
+    hour = minute * 60
 
     # Return in the format 'days, hours:min'
     if dt.days > 0:
         return dt_fmt[:-10]
 
     # Return in the format 'hours:min:sec'
-    if dt.seconds > 3600:
+    if dt.seconds > hour:
         return dt_fmt[:-7]
 
-    # Return in the format 'hours:min:sec.microsec (rounded)'
-    if dt.seconds > 60:
+    # Return in the format 'hours:min:sec.12'
+    if dt.seconds > minute:
         return dt_fmt[:-4]
 
-    # Return in the format 'hours:min:sec.microsec'
-    return dt_fmt
+    # Return in the format 'hours:min:sec.123456'
+    if dt.seconds > 1:
+        return dt_fmt
+
+    # Return in the format '{milliseconds} ms'
+    if dt.microseconds > 10_000:
+        return f"{dt.microseconds / 1_000:.0f} ms"
+
+    # Return in the format '{microseconds} µs'
+    return f"{dt.microseconds} µs"
 
 
 class register_total_time:
@@ -804,7 +826,7 @@ class register_total_time:
         self.toc = time.perf_counter()
 
     @property
-    def elapsed_time(self):
+    def elapsed_time(self) -> float:
         """
         The elapsed time between the start and the end of
         the block of code.
@@ -813,17 +835,17 @@ class register_total_time:
         """
         return self.toc - self.tic
 
-    def __enter__(self):
+    def __enter__(self) -> t.Self:
         self.tic = time.perf_counter()
         self.logger.log(self.level, "Starting the block of code...")
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.toc = time.perf_counter()
         dt_fmt = _time_fmt(self.elapsed_time)
         self.logger.log(self.level, f"The block of code takes {dt_fmt}")
 
-    def __call__(self, func):
+    def __call__[CallableT](self, func: CallableT) -> CallableT:
         """
         Decorator to register the total time it takes to execute a
         function, and shows it with the logger.

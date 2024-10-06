@@ -4,12 +4,28 @@ import typing as t
 import torch
 
 
-class HasDtypeDeviceP(t.Protocol):
+class HasDeviceDTypeP(t.Protocol):
     """
     A protocol for objects that have a dtype and a device.
     """
-    dtype: torch.dtype
-    device: torch.device
+
+    @property
+    def dtype(self) -> torch.dtype:
+        """
+        The dtype of the object.
+
+        :return: The dtype of the object.
+        """
+        ...
+
+    @property
+    def device(self) -> torch.device:
+        """
+        The device of the object.
+
+        :return: The device of the object.
+        """
+        ...
 
 
 class HasDeviceDType(metaclass=abc.ABCMeta):

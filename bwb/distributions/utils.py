@@ -1,9 +1,10 @@
 from math import prod
+from pathlib import Path
 
 import torch
 
 import bwb.logging_ as logging
-from ..config import config
+from bwb.config import config
 
 __all__ = [
     "grayscale_parser",
@@ -11,6 +12,11 @@ __all__ = [
 ]
 
 _log = logging.get_logger(__name__)
+
+_COMPILED_FUNC_PATH = Path(__file__).parent / "_compiled_funcs"
+_COMPILED_FUNC_PATH.mkdir(exist_ok=True, parents=True)
+_GRAYSCALE_PATH = _COMPILED_FUNC_PATH / "grayscale.pt"
+_PARTITION_PATH = _COMPILED_FUNC_PATH / "partition.pt"
 
 
 def __grayscale(
@@ -26,25 +32,29 @@ def __grayscale(
     return to_return
 
 
-# noinspection PyUnreachableCode
-_grayscale = torch.jit.script(
-    __grayscale,
-    example_inputs=[(
-        torch.rand((28, 28),
-                   dtype=torch.float32, device=config.device),  # to_return
-        torch.rand((784,),
-                   dtype=torch.float32, device=config.device),  # weights
-        torch.randint(0, 28, size=(784, 2),
-                      dtype=torch.int32, device=config.device),  # support
-    ), (
-        torch.rand((28, 28),
-                   dtype=torch.float64, device=config.device),  # to_return
-        torch.rand((784,),
-                   dtype=torch.float64, device=config.device),  # weights
-        torch.randint(0, 28, size=(784, 2),
-                      dtype=torch.int32, device=config.device),  # support
-    )]
-)
+if _GRAYSCALE_PATH.exists():
+    _grayscale = torch.jit.load(_GRAYSCALE_PATH)
+else:
+    # noinspection PyUnreachableCode
+    _grayscale = torch.jit.script(
+        __grayscale,
+        example_inputs=[(
+            torch.rand((28, 28),
+                       dtype=torch.float32, device=config.device),  # to_return
+            torch.rand((784,),
+                       dtype=torch.float32, device=config.device),  # weights
+            torch.randint(0, 28, size=(784, 2),
+                          dtype=torch.int32, device=config.device),  # support
+        ), (
+            torch.rand((28, 28),
+                       dtype=torch.float64, device=config.device),  # to_return
+            torch.rand((784,),
+                       dtype=torch.float64, device=config.device),  # weights
+            torch.randint(0, 28, size=(784, 2),
+                          dtype=torch.int32, device=config.device),  # support
+        )]
+    )
+    _grayscale.save(str(_GRAYSCALE_PATH), {})
 
 
 def grayscale_parser(
@@ -98,19 +108,27 @@ def __partition(
     return X_, mu_
 
 
-# noinspection PyUnreachableCode
-_partition = torch.jit.script(
-    __partition,
-    example_inputs=[(
-        torch.rand((784, 2), dtype=torch.float32, device=config.device),  # X
-        torch.rand((784,), dtype=torch.float32, device=config.device),  # mu
-        0.5,  # alpha
-    ), (
-        torch.rand((784, 2), dtype=torch.float64, device=config.device),  # X
-        torch.rand((784,), dtype=torch.float64, device=config.device),  # mu
-        0.5,  # alpha
-    )]
-)
+if _PARTITION_PATH.exists():
+    _partition = torch.jit.load(_PARTITION_PATH)
+else:
+    # noinspection PyUnreachableCode
+    _partition = torch.jit.script(
+        __partition,
+        example_inputs=[(
+            torch.rand((784, 2), dtype=torch.float32, device=config.device),
+            # X
+            torch.rand((784,), dtype=torch.float32, device=config.device),
+            # mu
+            0.5,  # alpha
+        ), (
+            torch.rand((784, 2), dtype=torch.float64, device=config.device),
+            # X
+            torch.rand((784,), dtype=torch.float64, device=config.device),
+            # mu
+            0.5,  # alpha
+        )]
+    )
+    _partition.save(str(_PARTITION_PATH), {})
 
 
 def partition(X: torch.Tensor, mu: torch.Tensor, alpha: float):

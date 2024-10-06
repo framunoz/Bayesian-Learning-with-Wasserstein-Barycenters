@@ -7,9 +7,9 @@ import typing as t
 import torch
 from torchvision.datasets import VisionDataset
 
-from .discrete_distribution import DistributionDraw
-from ..config import conf
-from ..utils.protocols import array_like_t
+from bwb.config import conf
+from bwb.distributions import DistributionDraw
+from bwb.utils import ArrayLikeT
 
 __all__ = [
     "DiscreteModelsSetP",
@@ -62,7 +62,7 @@ class DiscreteWeightedModelSetP[DistributionT](
 
     def compute_likelihood(
         self,
-        data: array_like_t = None,
+        data: ArrayLikeT = None,
         **kwargs
     ) -> torch.Tensor:
         """
@@ -84,7 +84,7 @@ class BaseDiscreteWeightedModelSet[DistributionT](
     @abc.abstractmethod
     def compute_likelihood(
         self,
-        data: array_like_t = None,
+        data: ArrayLikeT = None,
         **kwargs
     ) -> torch.Tensor:
         """
@@ -96,7 +96,10 @@ class BaseDiscreteWeightedModelSet[DistributionT](
         pass
 
 
-class ModelDataset(BaseDiscreteModelsSet[DistributionDraw]):
+class ModelDataset(
+    BaseDiscreteModelsSet[DistributionDraw],
+    t.Iterable[DistributionDraw]
+):
     """
     An adapter class that adapts a ``torchvision.vision.VisionDataset``
     to a ``BaseDiscreteModelsSet``.
@@ -112,9 +115,11 @@ class ModelDataset(BaseDiscreteModelsSet[DistributionDraw]):
         self.device = device if device is not None else conf.device
         self.dtype = dtype if dtype is not None else conf.dtype
 
+    @t.override
     def __len__(self) -> int:
         return len(self.dataset)
 
+    @t.override
     def get(self, i: int, **kwargs) -> DistributionDraw:
         return DistributionDraw.from_grayscale_weights(
             self.dataset[i][0],
@@ -122,8 +127,14 @@ class ModelDataset(BaseDiscreteModelsSet[DistributionDraw]):
             dtype=self.dtype
         )
 
+    @t.override
     def __repr__(self) -> str:
         return (f"ModelDataset("
                 f"device={self.device}, "
                 f"dtype={self.dtype}, "
                 f"dataset={self.dataset})")
+
+    @t.override
+    def __iter__(self) -> t.Iterator[DistributionDraw]:
+        for i in range(len(self)):
+            yield self.get(i)

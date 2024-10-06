@@ -4,8 +4,8 @@ Module that contains utility functions.
 import collections as c
 import functools
 import time
-import typing as t
 import warnings
+from typing import Sequence as Seq
 
 import ipyplot
 import numpy as np
@@ -13,8 +13,12 @@ import PIL.Image
 import torch
 
 import bwb.logging_ as logging
-from bwb.utils.protocols import (device_t, DiscreteDistribSamplerP, DrawP,
-                                 seed_t)
+from bwb.utils import (
+    DeviceT,
+    DiscreteDistribSamplerP,
+    DrawP,
+    SeedT,
+)
 
 __all__ = [
     "set_generator",
@@ -44,8 +48,8 @@ def timeit_to_total_time(method):
 
 
 def set_generator(
-    seed: seed_t = None,
-    device: device_t = "cpu"
+    seed: SeedT = None,
+    device: DeviceT = "cpu"
 ) -> torch.Generator:
     """
     Set the generator for the random number generator.
@@ -71,7 +75,7 @@ def set_generator(
 
 def freq_labels_dist_sampler(
     dist_sampler: DiscreteDistribSamplerP
-) -> t.Sequence[str]:
+) -> Seq[str]:
     """
     Function that returns the most common labels in the dist_sampler.
 
@@ -105,7 +109,7 @@ def normalised_samples_ordered_dict(posterior: DiscreteDistribSamplerP):
 
 
 # ================= DEPRECATED FUNCTIONS =================
-def plot_list_of_images(list_of_images: t.Sequence[PIL.Image.Image], **kwargs):
+def plot_list_of_images(list_of_images: Seq[PIL.Image.Image], **kwargs):
     """
     Function that plots a list of images.
 
@@ -127,7 +131,7 @@ def plot_list_of_images(list_of_images: t.Sequence[PIL.Image.Image], **kwargs):
         ipyplot.plot_images(list_of_images, **kwargs)
 
 
-def plot_list_of_draws(list_of_draws: t.Sequence[DrawP], **kwargs):
+def plot_list_of_draws(list_of_draws: Seq[DrawP], **kwargs):
     """
     Function that plots a list of DistributionDraws instances.
 
