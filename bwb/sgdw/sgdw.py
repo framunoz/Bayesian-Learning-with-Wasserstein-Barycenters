@@ -187,6 +187,7 @@ class SGDW[DistributionT, PosWgtT](
         """
         ...
 
+    @logging.register_total_time_method(_log)
     def compute_wass_dist(
         self, pos_wgt_k: PosWgtT, pos_wgt_kp1: PosWgtT, gamma_k: float
     ) -> float:
@@ -211,14 +212,15 @@ class SGDW[DistributionT, PosWgtT](
         pos_wgt_kp1 = self.update_pos_wgt(pos_wgt_k, lst_mu_k, gamma_k)
 
         # Step 4 (optional): Compute the Wasserstein distance
-        self.compute_wass_dist(pos_wgt_k, pos_wgt_kp1, gamma_k)
+        if self.iter_params.is_wass_dist_iter():
+            self.compute_wass_dist(pos_wgt_k, pos_wgt_kp1, gamma_k)
 
         return lst_mu_k, pos_wgt_kp1
 
     @abc.abstractmethod
     def get_pos_wgt(self, mu: DistributionT) -> PosWgtT:
         """
-        Get the position and weight from a distribution.
+        Get a representation of the position and weight from a distribution.
         """
         ...
 
@@ -283,6 +285,8 @@ class BaseSGDW[DistributionT, PosWgtT](
         Defaults to 100_000.
     :param max_time: The maximum time allowed for the algorithm to run.
         Defaults to infinity.
+    :param wass_dist_every: The number of iterations to compute the
+        Wasserstein distance. Defaults to 1.
 
     :raises TypeError: If ``learning_rate`` is not a callable or
         ``batch_size`` is not a callable or an integer.
@@ -298,10 +302,11 @@ class BaseSGDW[DistributionT, PosWgtT](
         tol: float = 1e-8,
         max_iter: int = 100_000,
         max_time: float = float("inf"),
+        wass_dist_every: int = 10,
     ):
         schd = utils.Schedule(step_scheduler, batch_size)
-        det_params = utils.DetentionParameters(tol, max_iter, max_time)
-        iter_params = utils.IterationParameters(det_params)
+        det_params = utils.DetentionParameters(tol, max_iter, max_time, wass_dist_every)
+        iter_params = utils.IterationParameters(det_params, length_ema=10)
 
         super().__init__(distr_sampler, schd, det_params, iter_params)
 
@@ -319,11 +324,6 @@ class BaseSGDW[DistributionT, PosWgtT](
         to_return += space + "det_params=" + repr(self.det_params) + sep
 
         return to_return
-
-    def _compute_wass_dist(
-        self, pos_wgt_k: PosWgtT, pos_wgt_kp1: PosWgtT, gamma_k: float
-    ) -> float:
-        return float("inf")
 
 
 # MARK: SGDW with distributions based in draws
@@ -346,8 +346,10 @@ class DistributionDrawSGDW(
         step_scheduler: utils.StepSchedulerArg,
         batch_size: utils.BatchSizeArg = 1,
         tol: float = 0,
-        max_iter: int = 100_000,
+        max_iter: int = 1_000,
         max_time: float = float("inf"),
+        wass_dist_every: int = 10,
+        solve_sample_kwargs: dict | None = None,
     ):
         super().__init__(
             distr_sampler=distr_sampler,
@@ -356,8 +358,12 @@ class DistributionDrawSGDW(
             tol=tol,
             max_iter=max_iter,
             max_time=max_time,
+            wass_dist_every=wass_dist_every,
         )
         self.conv_bar_kwargs = deepcopy(self._conv_bar_kwargs)
+        if solve_sample_kwargs is None:
+            solve_sample_kwargs = {}
+        self.solve_sample_kwargs = solve_sample_kwargs
 
     @final
     @override
@@ -450,6 +456,32 @@ class DistributionDrawSGDW(
         )
         return gs_weights_kp1
 
+    def _get_pos_wgt(self, pos_wgt: DistDrawPosWgt) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Get the position and weight from the grayscale weights.
+        """
+        dist = self.create_distribution(pos_wgt)
+        return dist.enumerate_nz_support_().to(self.dtype), dist.nz_probs
+
+    @final
+    @override
+    def _compute_wass_dist(
+        self,
+        pos_wgt_k: DistDrawPosWgt,
+        pos_wgt_kp1: DistDrawPosWgt,
+        gamma_k: float
+    ) -> float:
+        _log.debug(f"Computing Wasserstein distance")
+        # x_k: (n_k, 2), m_k: (n_k,)
+        x_k, m_k = self._get_pos_wgt(pos_wgt_k)
+        # x_kp1: (n_kp1, 2), m_kp1: (n_kp1,)
+        x_kp1, m_kp1 = self._get_pos_wgt(pos_wgt_kp1)
+        # Compute the Wasserstein distance
+        res: ot.utils.OTResult = ot.solve_sample(x_k, x_kp1, m_k, m_kp1, **self.solve_sample_kwargs)
+        wass_dist = res.value
+        _log.debug(f"Computed Wasserstein distance: {wass_dist}")
+        return wass_dist
+
 
 class ConvDistributionDrawSGDW(DistributionDrawSGDW):
     @final
@@ -528,6 +560,7 @@ class DiscreteDistributionSGDW(
         tol: float = 1e-8,
         max_iter: int = 100_000,
         max_time: float = float("inf"),
+        wass_dist_every: int = 1,
     ):
         super().__init__(
             distr_sampler=distr_sampler,
@@ -536,6 +569,7 @@ class DiscreteDistributionSGDW(
             tol=tol,
             max_iter=max_iter,
             max_time=max_time,
+            wass_dist_every=wass_dist_every,
         )
         self.transport = transport
         self.alpha = alpha

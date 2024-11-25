@@ -85,7 +85,7 @@ class Schedule:
     @step_schedule.setter
     def step_schedule(self, step_schd: StepSchedulerArg) -> None:
         # Check if step_schedule is callable or a float
-        if not callable(step_schd) and not isinstance(step_schd, float):
+        if not any([callable(step_schd), isinstance(step_schd, float)]):
             raise TypeError("step_schedule must be a callable or a float")
 
         # If step_schedule is a float, convert it to a callable
@@ -121,7 +121,7 @@ class Schedule:
     @batch_size.setter
     def batch_size(self, batch_size: BatchSizeArg) -> None:
         # Check if batch_size is callable or an integer
-        if not callable(batch_size) and not isinstance(batch_size, int):
+        if not any([callable(batch_size), isinstance(batch_size, int)]):
             raise TypeError("batch_size must be a callable or an int")
 
         # If batch_size is an integer, convert it to a callable
@@ -159,11 +159,13 @@ class DetentionParameters:
         self,
         tol: float = 1e-8,
         max_iter: int = 100_000,
-        max_time: float = float("inf")
+        max_time: float = float("inf"),
+        wass_dist_every: int = 1,
     ):
         self.tol = tol
         self.max_iter = max_iter
         self.max_time = max_time
+        self.wass_dist_every = wass_dist_every
 
     @property
     def tol(self) -> float:
@@ -211,6 +213,21 @@ class DetentionParameters:
             raise ValueError("max_time must be positive")
         self._max_time: float = float(max_time)
 
+    @property
+    def wass_dist_every(self) -> int:
+        """
+        The number of iterations to compute the Wasserstein distance.
+        """
+        return self._wass_dist_every
+
+    @wass_dist_every.setter
+    def wass_dist_every(self, value: int) -> None:
+        if not isinstance(value, num.Integral):
+            raise TypeError("wass_dist_every must be an integer")
+        if value <= 0:
+            raise ValueError("wass_dist_every must be positive")
+        self._wass_dist_every: int = value
+
     def __repr__(self) -> str:
         time_fmt = "∞"
         if self.max_time != float("inf"):
@@ -220,7 +237,8 @@ class DetentionParameters:
             "inf") else "∞"
 
         return (f"DetentionParameters(tol={self.tol:.2e}, "
-                f"max_iter={max_iter_fmt}, max_time={time_fmt})")
+                f"max_iter={max_iter_fmt}, max_time={time_fmt}, "
+                f"wass_dist_every={self.wass_dist_every})")
 
 
 class IterationParameters(Iterator[int]):
@@ -256,7 +274,7 @@ class IterationParameters(Iterator[int]):
     2
     """
 
-    def __init__(self, det_params: DetentionParameters):
+    def __init__(self, det_params: DetentionParameters, length_ema: int = 5):
         self.det_params = det_params
         """The detention parameters for the algorithm."""
         self.k = 0
@@ -271,6 +289,7 @@ class IterationParameters(Iterator[int]):
         """The time difference between tic and toc."""
         self.w_dist = float("inf")
         """The Wasserstein distance."""
+        self.length_ema = length_ema
 
     @property
     def total_time(self) -> float:
@@ -280,6 +299,38 @@ class IterationParameters(Iterator[int]):
         :return: The total time of the algorithm.
         """
         return self.toc - self.tic
+
+    @property
+    def length_ema(self) -> int:
+        """
+        The length of the Exponential Moving Average (EMA).
+        """
+        return self._length_ema
+
+    @length_ema.setter
+    def length_ema(self, value: int) -> None:
+        if not isinstance(value, num.Integral):
+            raise TypeError("length_ema must be an integer")
+        if value <= 0:
+            raise ValueError("length_ema must be positive")
+        self._length_ema: int = value
+        self._smooth = 2 / (self._length_ema + 1)
+
+    @property
+    def smooth(self) -> float:
+        """
+        The smoothing factor for the Exponential Moving Average (EMA).
+        """
+        return self._smooth
+
+    @smooth.setter
+    def smooth(self, value: float) -> None:
+        if not isinstance(value, num.Real):
+            raise TypeError("smooth must be a real number")
+        if value <= 0:
+            raise ValueError("smooth must be positive")
+        self._smooth: float = value
+        self._length_ema = int(2 / self._smooth - 1)
 
     def init_params(self) -> None:
         """
@@ -321,15 +372,33 @@ class IterationParameters(Iterator[int]):
         self.toc = time.time()
         self.diff_t = self.toc - self.tic_
 
+    def is_wass_dist_iter(self) -> bool:
+        """
+        Determines if the Wasserstein distance should be computed.
+
+        :return: True if the Wasserstein distance should be computed,
+            False otherwise.
+        """
+        return (self.k % self.det_params.wass_dist_every == 0
+                and self.k > 0)
+
     def update_wass_dist(self, wass_dist: float) -> float:
         """
-        Update the Wasserstein distance.
+        Update the Wasserstein distance. This method uses the Exponential
+        Moving Average (EMA) to update the Wasserstein distance.
 
         :param wass_dist: The Wasserstein distance.
         :return: The Wasserstein distance.
         """
-        self.w_dist = wass_dist
-        return wass_dist
+        last_w_dist = self.w_dist
+        if last_w_dist == float("inf"):
+            self.w_dist = wass_dist
+            return wass_dist
+        # Use EMA to update the Wasserstein distance
+        smooth = self.smooth
+        self.w_dist = smooth * last_w_dist + (1 - smooth) * wass_dist
+        _log.debug(f"EMA: {last_w_dist:.6f} -> {self.w_dist:.6f}")
+        return self.w_dist
 
     def detention_criteria(self) -> bool:
         """
@@ -337,18 +406,22 @@ class IterationParameters(Iterator[int]):
 
         :return: True if the detention criteria is met, False otherwise.
         """
-        return (
-            # Reaches maximum iteration
-            self.k >= self.det_params.max_iter
-            # Reaches maximum time
-            or self.total_time >= self.det_params.max_time
-            # Achieves convergence in distance
-            or self.w_dist < self.det_params.tol
-        )
+        # Reaches maximum iteration
+        if self.k >= self.det_params.max_iter:
+            _log.debug(f"Reached maximum iteration: {self.k}")
+            return True
+        # Reaches maximum time
+        if self.total_time >= self.det_params.max_time:
+            _log.debug(f"Reached maximum time: {self.total_time}")
+            return True
+        # Achieves convergence in distance
+        if self.w_dist < self.det_params.tol:
+            _log.debug(f"Reached convergence in distance: {self.w_dist}")
+            return True
+        return False
 
     def __repr__(self) -> str:
-        w_dist_fmt = f"{self.w_dist:.6f}" if self.w_dist != float(
-            "inf") else "∞"
+        w_dist_fmt = f"{self.w_dist:.6f}" if self.w_dist != float("inf") else "∞"
         time_fmt = str(timedelta(seconds=self.total_time))[:-4]
         return (f"IterationParameters(k={self.k:_}, w_dist={w_dist_fmt}, "
                 f"t={time_fmt}, Δt={self.diff_t * 1000:.2f} [ms])")
