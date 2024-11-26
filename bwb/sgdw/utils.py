@@ -396,8 +396,8 @@ class IterationParameters(Iterator[int]):
             return wass_dist
         # Use EMA to update the Wasserstein distance
         smooth = self.smooth
-        self.w_dist = smooth * last_w_dist + (1 - smooth) * wass_dist
-        _log.debug(f"EMA: {last_w_dist:.6f} -> {self.w_dist:.6f}")
+        self.w_dist = (1 - smooth) * last_w_dist + smooth * wass_dist
+        _log.debug(f"s: {smooth:.2f}, (1 - s) * {last_w_dist:.4f} + s * {wass_dist:.4f} -> {self.w_dist:.4f}")
         return self.w_dist
 
     def detention_criteria(self) -> bool:

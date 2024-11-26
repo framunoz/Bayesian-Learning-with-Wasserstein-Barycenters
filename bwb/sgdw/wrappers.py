@@ -85,6 +85,12 @@ class SGDWBaseWrapper[DistributionT, PosWgtT](SGDW[DistributionT, PosWgtT]):
         return self.wrapee._compute_wass_dist(pos_wgt_k, pos_wgt_kp1, gamma_k)
 
     @override
+    def update_wass_dist(
+        self, wass_dist: float
+    ) -> float:
+        return self.wrapee.update_wass_dist(wass_dist)
+
+    @override
     def step_algorithm(
         self,
         k: int,
@@ -103,6 +109,50 @@ class SGDWBaseWrapper[DistributionT, PosWgtT](SGDW[DistributionT, PosWgtT]):
     @override
     def create_barycenter(self, pos_wgt: PosWgtT) -> DistributionT:
         return self.wrapee.create_barycenter(pos_wgt)
+
+
+class LogWassDistProxy[DistributionT, PosWgtT](
+    SGDWBaseWrapper[DistributionT, PosWgtT]
+):
+    """
+    Proxy class for the SGDW algorithm to log the Wasserstein distance
+    at each iteration of the algorithm.
+    """
+
+    def __init__(self, wrapee: SGDW[DistributionT, PosWgtT]) -> None:
+        super().__init__(wrapee)
+        self.wass_dist_lst: list[float] = []
+        self.wass_dist_smoothed_lst: list[float] = []
+        self.iterations_lst: list[int] = []
+
+    @override
+    def _additional_repr_(
+        self, sep: str, tab: str, n_tab: int, new_line: str
+    ) -> str:
+        space = tab * n_tab
+        to_return = super()._additional_repr_(sep, tab, n_tab, new_line)
+        to_return += space + f"len_wass_dist={len(self.wass_dist_lst)}" + sep
+        return to_return
+
+    @override
+    def update_wass_dist(
+        self, wass_dist: float
+    ) -> float:
+        wass_dist_smoothed = super().update_wass_dist(wass_dist)
+        self.wass_dist_lst.append(wass_dist)
+        self.wass_dist_smoothed_lst.append(wass_dist_smoothed)
+        self.iterations_lst.append(self.iter_params.k)
+        return wass_dist_smoothed
+
+    def __getitem__(self, item) -> float:
+        return self.wass_dist_lst[item]
+
+    def get_lists(self) -> tuple[list[int], list[float], list[float]]:
+        """
+        Get the lists of iterations, Wasserstein distances and smoothed
+        Wasserstein distances.
+        """
+        return self.iterations_lst, self.wass_dist_lst, self.wass_dist_smoothed_lst
 
 
 class ReportOptions(TypedDict, total=False):
@@ -126,7 +176,7 @@ class ReportProxy[DistributionT, PosWgtT](
     """
     INCLUDE_OPTIONS = ReportOptions(
         iter=True,
-        w_dist=False,
+        w_dist=True,
         step_schd=True,
         total_time=True,
         dt=False,
@@ -236,6 +286,10 @@ class BaseLogProxy[DistributionT, PosWgtT, RegisterValueT](
     SGDWBaseWrapper[DistributionT, PosWgtT],
     metaclass=abc.ABCMeta,
 ):
+    """
+    Base class for the SGDW algorithm to log relevant information
+    at each iteration of the algorithm.
+    """
 
     def __init__(self, wrapee: SGDW[DistributionT, PosWgtT]) -> None:
         super().__init__(wrapee)

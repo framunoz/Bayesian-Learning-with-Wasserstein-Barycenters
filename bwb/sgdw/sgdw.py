@@ -187,14 +187,12 @@ class SGDW[DistributionT, PosWgtT](
         """
         ...
 
-    @logging.register_total_time_method(_log)
-    def compute_wass_dist(
-        self, pos_wgt_k: PosWgtT, pos_wgt_kp1: PosWgtT, gamma_k: float
+    def update_wass_dist(
+        self, wass_dist: float
     ) -> float:
         """
-        Compute the Wasserstein distance between two positions and weights.
+        Update the Wasserstein distance.
         """
-        wass_dist = self._compute_wass_dist(pos_wgt_k, pos_wgt_kp1, gamma_k)
         return self.iter_params.update_wass_dist(wass_dist)
 
     def step_algorithm(
@@ -210,10 +208,6 @@ class SGDW[DistributionT, PosWgtT](
         # Step 3: Compute the distribution of mu_{k+1}
         gamma_k = self.schd.step_schedule(k)
         pos_wgt_kp1 = self.update_pos_wgt(pos_wgt_k, lst_mu_k, gamma_k)
-
-        # Step 4 (optional): Compute the Wasserstein distance
-        if self.iter_params.is_wass_dist_iter():
-            self.compute_wass_dist(pos_wgt_k, pos_wgt_kp1, gamma_k)
 
         return lst_mu_k, pos_wgt_kp1
 
@@ -249,7 +243,16 @@ class SGDW[DistributionT, PosWgtT](
         #   iterable class :class:`IterationParameters`
         for k in self.iter_params:
             # Run a step of the algorithm
-            _, pos_wgt_k = self.step_algorithm(k, pos_wgt_k)
+            _, pos_wgt_kp1 = self.step_algorithm(k, pos_wgt_k)
+
+            # Step 4 (optional): Compute the Wasserstein distance
+            if self.iter_params.is_wass_dist_iter():
+                gamma_k = self.schd.step_schedule(k)
+                wass_dist = self._compute_wass_dist(pos_wgt_k, pos_wgt_kp1, gamma_k)
+                self.update_wass_dist(wass_dist)
+
+            # Update the position and weight
+            pos_wgt_k = pos_wgt_kp1
 
             # Callback to do extra instructions at the end of each iteration
             self.callback()
@@ -306,7 +309,7 @@ class BaseSGDW[DistributionT, PosWgtT](
     ):
         schd = utils.Schedule(step_scheduler, batch_size)
         det_params = utils.DetentionParameters(tol, max_iter, max_time, wass_dist_every)
-        iter_params = utils.IterationParameters(det_params, length_ema=10)
+        iter_params = utils.IterationParameters(det_params, length_ema=5)
 
         super().__init__(distr_sampler, schd, det_params, iter_params)
 
@@ -465,13 +468,13 @@ class DistributionDrawSGDW(
 
     @final
     @override
+    @logging.register_total_time_method(_log)
     def _compute_wass_dist(
         self,
         pos_wgt_k: DistDrawPosWgt,
         pos_wgt_kp1: DistDrawPosWgt,
         gamma_k: float
     ) -> float:
-        _log.debug(f"Computing Wasserstein distance")
         # x_k: (n_k, 2), m_k: (n_k,)
         x_k, m_k = self._get_pos_wgt(pos_wgt_k)
         # x_kp1: (n_kp1, 2), m_kp1: (n_kp1,)
@@ -479,7 +482,6 @@ class DistributionDrawSGDW(
         # Compute the Wasserstein distance
         res: ot.utils.OTResult = ot.solve_sample(x_k, x_kp1, m_k, m_kp1, **self.solve_sample_kwargs)
         wass_dist = res.value
-        _log.debug(f"Computed Wasserstein distance: {wass_dist}")
         return wass_dist
 
 
