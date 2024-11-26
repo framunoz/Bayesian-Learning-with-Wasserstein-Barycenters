@@ -19,7 +19,6 @@ from torch import linalg as LA
 import bwb.distributions as D
 import bwb.distributions.utils as D_utils
 import bwb.logging_ as logging
-import bwb.pot.transports as tpt
 from bwb import protocols as P
 from bwb.sgdw import utils
 
@@ -61,6 +60,25 @@ _convolutional_methods = {
 
 _log = logging.get_logger(__name__)
 _bar = "=" * 5
+
+
+def _transport_source(xt: torch.Tensor, plan: torch.Tensor):
+    """
+    Transport the source to the target. This is done by computing the
+    barycentric mapping and then computing the transported source.
+    Code from: `ot.da.BaseTransport.transform <https://pythonot.github.io/_modules/ot/da.html#BaseTransport.transform>`_.
+
+    :param xt: target distribution.
+    :param plan: transport plan.
+    :return: transported source.
+    """
+    nx = ot.backend.TorchBackend()
+    # perform standard barycentric mapping
+    transp = plan / nx.sum(plan, axis=1)[:, None]
+    # set nan values to 0
+    transp = nx.nan_to_num(transp, nan=0, posinf=0, neginf=0)
+    # compute transported source
+    return nx.dot(transp, xt)
 
 
 class Runnable[DistributionT](metaclass=abc.ABCMeta):
@@ -356,8 +374,8 @@ class DistributionDrawSGDW(
     Class for Stochastic Gradient Descent in Wasserstein Space with
     distributions based in draws.
 
-    :param distr_sampler: The distribution sampler. It must be an instance
-        of :class:`DistributionSamplerP`.
+    :param distr_sampler: The distribution sampler. It must be an
+        instance of :class:`DistributionSamplerP`.
     :param step_scheduler: The step scheduler. It must be a callable
         function that takes an integer argument :math:`k` and returns
         the learning rate :math:`\gamma_k` for iteration :math:`k`.
@@ -366,14 +384,16 @@ class DistributionDrawSGDW(
         barycenter. It can be a string with the values ``"conv"`` or
         ``"debiased"``. Alternatively, it can be a callable function.
         If it is a callable function, it must have the signature
-        ``(A: torch.Tensor, weights: torch.Tensor, **conv_bar_kwargs) -> torch.Tensor.``
-    :param conv_bar_kwargs: Additional keyword arguments for the convolutional
-        strategy. Defaults is an empty dictionary. For further information,
-        see `ot.bregman.convolution_barycenter2d <https://pythonot.github.io/gen_modules/ot.bregman.html#ot.bregman.convolutional_barycenter2d>`_.
-    :param batch_size: The batch size. It must be a callable function that
-        takes an integer argument :math:`k` and returns the batch size
-        :math:`S_k` for iteration :math:`k`. Alternatively, it can be a
-        constant integer value. Defaults to 1.
+        ``(A: torch.Tensor, weights: torch.Tensor, **conv_bar_kwargs)
+        -> torch.Tensor.``
+    :param conv_bar_kwargs: Additional keyword arguments for the
+        convolutional strategy. Defaults is an empty dictionary. For
+        further information, see `ot.bregman.convolution_barycenter2d
+        <https://pythonot.github.io/gen_modules/ot.bregman.html#ot.bregman.convolutional_barycenter2d>`_.
+    :param batch_size: The batch size. It must be a callable function
+        that takes an integer argument :math:`k` and returns the batch
+        size :math:`S_k` for iteration :math:`k`. Alternatively, it can
+        be a constant integer value. Defaults to 1.
     :param tol: The tolerance value for convergence. Defaults to 0.
     :param max_iter: The maximum number of iterations. Defaults to 1_000.
     :param max_time: The maximum time allowed for the algorithm to run.
@@ -381,8 +401,9 @@ class DistributionDrawSGDW(
     :param wass_dist_every: The number of iterations to compute the
         Wasserstein distance. Defaults to 10.
     :param solve_sample_kwargs: Additional keyword arguments for the
-        solver of the sample. Defaults is an empty dictionary. For further
-        information, see `ot.solve_sample <https://pythonot.github.io/all.html#ot.solve_sample>`_.
+        function ``ot.solve_sample``. Defaults is an empty dictionary.
+        For further information, see `ot.solve_sample
+        <https://pythonot.github.io/all.html#ot.solve_sample>`_.
     """
 
     def __init__(
@@ -481,23 +502,49 @@ class DistributionDrawSGDW(
         return wass_dist
 
 
-# TODO: Lo mismo aquí, hacer que el transporte se pueda escoger
-#  cambiando parámetros. Por ejemplo, usando la funcionalidad general de ot.
 # MARK: SGDW with discrete distributions
+@final
 class DiscreteDistributionSGDW(
     BaseSGDW[D.DiscreteDistribution, DiscretePosWgt]
 ):
+    r"""
+    Class for Stochastic Gradient Descent in Wasserstein Space with
+    discrete distributions.
+
+    :param distr_sampler: The distribution sampler. It must be an
+        instance of :class:`DistributionSamplerP`.
+    :param step_scheduler: The step scheduler. It must be a callable
+        function that takes an integer argument :math:`k` and returns
+        the learning rate :math:`\gamma_k` for iteration :math:`k`.
+        Alternatively, it can be a constant float value.
+    :param batch_size: The batch size. It must be a callable function
+        that takes an integer argument :math:`k` and returns the batch
+        size :math:`S_k` for iteration :math:`k`. Alternatively, it can
+        be a constant integer value. Defaults to 1.
+    :param alpha: The value of the partition parameter. Defaults to 1.
+    :param tol: The tolerance value for convergence. Defaults to 1e-8.
+    :param max_iter: The maximum number of iterations. Defaults to
+        1_000.
+    :param max_time: The maximum time allowed for the algorithm to run.
+        Defaults to infinity.
+    :param wass_dist_every: The number of iterations to compute the
+        Wasserstein distance. Defaults to 1.
+    :param solve_sample_kwargs: Additional keyword arguments for the
+        function ``ot.solve_sample``. Defaults is an empty dictionary.
+        For further information, see `ot.solve_sample
+        <https://pythonot.github.io/all.html#ot.solve_sample>`_.
+    """
     def __init__(
         self,
-        transport: tpt.BaseTransport,
         distr_sampler: DistributionSamplerP[D.DiscreteDistribution],
         step_scheduler: utils.StepSchedulerArg,
         batch_size: utils.BatchSizeArg = 1,
         alpha: float = 1.0,
         tol: float = 1e-8,
-        max_iter: int = 100_000,
+        max_iter: int = 1_000,
         max_time: float = float("inf"),
         wass_dist_every: int = 1,
+        solve_sample_kwargs: dict | None = None,
     ):
         super().__init__(
             distr_sampler=distr_sampler,
@@ -508,11 +555,10 @@ class DiscreteDistributionSGDW(
             max_time=max_time,
             wass_dist_every=wass_dist_every,
         )
-        self.transport = transport
         self.alpha = alpha
         self.include_w_dist = True
+        self.solve_sample_kwargs: dict = solve_sample_kwargs if solve_sample_kwargs is not None else {}
 
-    @final
     @override
     def create_distribution(
         self, pos_wgt: DiscretePosWgt
@@ -520,12 +566,10 @@ class DiscreteDistributionSGDW(
         X_k, m = pos_wgt
         return D.DiscreteDistribution(support=X_k, weights=m)
 
-    @final
     @override
     def get_pos_wgt(self, mu: D.DiscreteDistribution) -> DiscretePosWgt:
-        return mu.enumerate_nz_support_(), mu.nz_probs
+        return mu.enumerate_nz_support_().to(self._val), mu.nz_probs.to(self._val)
 
-    @final
     @override
     def first_sample(
         self,
@@ -537,7 +581,6 @@ class DiscreteDistributionSGDW(
         X_k, m = X_k.to(self._val), m.to(self._val)
         return [mu_0], (X_k, m)
 
-    @final
     @override
     def update_pos_wgt(
         self,
@@ -552,16 +595,14 @@ class DiscreteDistributionSGDW(
         S_k = len(lst_mu_k)
         for mu_i_k in lst_mu_k:
             X_i_k, m_i_k = self.get_pos_wgt(mu_i_k)
-            X_i_k, m_i_k = X_i_k.to(self._val), m_i_k.to(self._val)
             m_i_k /= torch.sum(m_i_k)
-            self.transport.fit(Xs=X_k, mu_s=m, Xt=X_i_k, mu_t=m_i_k)
-            T_X_k += self.transport.transform(X_k)
+            res: ot.utils.OTResult = ot.solve_sample(X_k, X_i_k, m, m_i_k, **self.solve_sample_kwargs)
+            T_X_k += _transport_source(X_i_k, res.plan)
         T_X_k /= S_k
         # noinspection PyTypeChecker
         X_kp1: torch.Tensor = (1 - gamma_k) * X_k + gamma_k * T_X_k
         return X_kp1, m
 
-    @final
     @override
     def _compute_wass_dist(
         self,
@@ -572,6 +613,5 @@ class DiscreteDistributionSGDW(
         X_k, _ = pos_wgt_k
         X_kp1, m = pos_wgt_kp1
         diff = X_k - X_kp1
-        w_dist = float((gamma_k ** 2)
-                       * torch.sum(m * LA.norm(diff, dim=1) ** 2))
+        w_dist = float((gamma_k ** 2) * torch.sum(m * LA.norm(diff, dim=1) ** 2))
         return w_dist
