@@ -29,6 +29,7 @@ __all__ = [
     "BaseSGDW",
     "DistributionDrawSGDW",
     "DiscreteDistributionSGDW",
+    "_convolutional_methods",
 ]
 
 type DiscretePosWgt = tuple[torch.Tensor, torch.Tensor]
@@ -36,6 +37,9 @@ type DistDrawPosWgt = torch.Tensor
 type CallbackFn = Callable[[], None]
 type ConvolutionalFn = Callable[..., torch.Tensor]
 type ConvolutionalArg = Literal["conv", "debiased"] | ConvolutionalFn
+
+_log = logging.get_logger(__name__)
+_bar = "=" * 5
 
 _convolutional_methods = {
     "conv":     partial(
@@ -58,8 +62,18 @@ _convolutional_methods = {
     ),
 }
 
-_log = logging.get_logger(__name__)
-_bar = "=" * 5
+
+def _get_convolutional_function(conv_bar_strategy: ConvolutionalArg) -> ConvolutionalFn:
+    """
+    Get the convolutional function from the convolutional strategy.
+    """
+    if isinstance(conv_bar_strategy, str):
+        if conv_bar_strategy not in ["conv", "debiased"]:
+            raise ValueError(f"Unknown convolutional strategy '{conv_bar_strategy}'.")
+        return _convolutional_methods[conv_bar_strategy]
+    elif callable(conv_bar_strategy):
+        return conv_bar_strategy
+    raise TypeError("The convolutional strategy must be a string or a callable.")
 
 
 def _transport_source(xt: torch.Tensor, plan: torch.Tensor):
@@ -428,17 +442,7 @@ class DistributionDrawSGDW(
             max_time=max_time,
             wass_dist_every=wass_dist_every,
         )
-        # Check the correct type of conv_bar_strategy
-        if isinstance(conv_bar_strategy, str):
-            if conv_bar_strategy not in ["conv", "debiased"]:
-                raise ValueError(f"Unknown convolutional strategy '{conv_bar_strategy}'.")
-            conv_bar_strategy_: ConvolutionalFn = _convolutional_methods[conv_bar_strategy]
-        elif callable(conv_bar_strategy):
-            conv_bar_strategy_: ConvolutionalFn = conv_bar_strategy
-        else:
-            raise TypeError("The convolutional strategy must be a string or a callable.")
-
-        self.conv_bar_strategy: ConvolutionalFn = conv_bar_strategy_
+        self.conv_bar_strategy: ConvolutionalFn = _get_convolutional_function(conv_bar_strategy)
         self.conv_bar_kwargs: dict = deepcopy(conv_bar_kwargs) if conv_bar_kwargs is not None else {}
         self.solve_sample_kwargs: dict = solve_sample_kwargs if solve_sample_kwargs is not None else {}
 

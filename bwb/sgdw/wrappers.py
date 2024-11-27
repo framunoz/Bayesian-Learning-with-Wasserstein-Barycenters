@@ -5,10 +5,16 @@ This module contains the wrappers for the SGDW algorithm.
 import abc
 from copy import deepcopy
 from datetime import timedelta
-from typing import (Callable, override, Sequence as Seq, TypedDict)
+from typing import (Callable, Literal, override, Sequence as Seq, TypedDict)
+
+import torch
 
 import bwb.logging_ as logging
-from bwb.sgdw.sgdw import CallbackFn, SGDW
+from bwb.sgdw.sgdw import (
+    CallbackFn,
+    SGDW,
+    _convolutional_methods,
+)
 
 __all__ = [
     "ProjectorFn",
@@ -23,6 +29,8 @@ __all__ = [
 _log = logging.get_logger(__name__)
 
 type ProjectorFn[PosWgtT] = Callable[[PosWgtT], PosWgtT]
+type InterpStrategyFn[PosWgtT] = Callable[[PosWgtT, PosWgtT, float], PosWgtT]
+type InterpStrategyArg[PosWgtT] = Literal["geodesic", "linear"] | InterpStrategyFn[PosWgtT]
 
 
 class SGDWBaseWrapper[DistributionT, PosWgtT](SGDW[DistributionT, PosWgtT]):
@@ -404,6 +412,42 @@ class LogDistrSampledProxy[DistributionT, PosWgtT](
         return lst_mu
 
 
+def interpolate_geodesic(
+    pos_wgt_s: torch.Tensor, pos_wgt_t: torch.Tensor,
+    t_interpolation: float,
+) -> torch.Tensor:
+    """
+    Interpolate the position and weights of two distributions using
+    the (Wasserstein) geodesic interpolation.
+    """
+    debiased_conv = _convolutional_methods["debiased"]
+    dtype, device = pos_wgt_s.dtype, pos_wgt_s.device
+    return debiased_conv(
+        A=torch.stack([pos_wgt_s, pos_wgt_t]),
+        weights=torch.tensor(
+            [t_interpolation, 1 - t_interpolation],
+            dtype=dtype, device=device
+        ),
+    )
+
+
+def interpolate_linear(
+    pos_wgt_s: torch.Tensor, pos_wgt_t: torch.Tensor,
+    t_interpolation: float,
+) -> torch.Tensor:
+    """
+    Interpolate the position and weights of two distributions using
+    the linear interpolation.
+    """
+    return t_interpolation * pos_wgt_s + (1 - t_interpolation) * pos_wgt_t
+
+
+_interpolation_strategies: dict[str, InterpStrategyFn[torch.Tensor]] = {
+    "geodesic": interpolate_geodesic,
+    "linear": interpolate_linear,
+}
+
+
 class SGDWProjectedDecorator[DistributionT, PosWgtT](
     SGDWBaseWrapper[DistributionT, PosWgtT]
 ):
@@ -418,10 +462,30 @@ class SGDWProjectedDecorator[DistributionT, PosWgtT](
         wrapee: SGDW[DistributionT, PosWgtT],
         projector: ProjectorFn[PosWgtT],
         project_every: int | None = 1,
+        step_schd = None,
+        interp_strategy: InterpStrategyArg | None = None,
     ) -> None:
         super().__init__(wrapee)
         self.projector = projector
         self.project_every = project_every
+        self.step_schd = step_schd if step_schd is not None else wrapee.schd.step_schedule
+
+        # Define the interpolation strategy
+        self._interp_strategy = interp_strategy
+        if isinstance(interp_strategy, str):
+            if interp_strategy not in _interpolation_strategies:
+                raise ValueError(
+                    f"Interpolation strategy '{interp_strategy}' not found."
+                )
+            interp_strategy_: InterpStrategyFn = _interpolation_strategies[interp_strategy]
+        elif callable(interp_strategy) or interp_strategy is None:
+            interp_strategy_: InterpStrategyFn | None = interp_strategy
+        else:
+            raise TypeError(
+                f"Interpolation strategy should be a string, a callable or None."
+                f" Currently: {type(interp_strategy) = }"
+            )
+        self.interp_strategy: InterpStrategyFn | None = interp_strategy_
 
     def is_proj_iter(self) -> bool:
         """
@@ -440,6 +504,8 @@ class SGDWProjectedDecorator[DistributionT, PosWgtT](
         space = tab * n_tab
         to_return = super()._additional_repr_(sep, tab, n_tab, new_line)
         to_return += space + f"project_every={self.project_every}" + sep
+        if self._interp_strategy is not None:
+            to_return += space + f"interp_strategy={self._interp_strategy}" + sep
         return to_return
 
     @override
@@ -451,7 +517,13 @@ class SGDWProjectedDecorator[DistributionT, PosWgtT](
         lst_mu_kp1, pos_wgt_kp1 = super().step_algorithm(k, pos_wgt_k)
 
         if self.is_proj_iter():
-            pos_wgt_kp1 = self.projector(pos_wgt_kp1)
+            pos_wgt_kp1_ = self.projector(pos_wgt_kp1)
+
+            # Case when the interpolation strategy is defined
+            if self.interp_strategy is not None:
+                pos_wgt_kp1_ = self.interp_strategy(pos_wgt_kp1, pos_wgt_kp1_, self.step_schd(k))
+
+            pos_wgt_kp1 = pos_wgt_kp1_
 
         return lst_mu_kp1, pos_wgt_kp1
 

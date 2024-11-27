@@ -212,6 +212,7 @@ class PlotterComparisonProjected(Plotter[DistributionDraw, DistDrawPosWgtT]):
         n_rows=1,
         factor=1.5,
         cmap="binary",
+        proj_kwargs: Optional[dict] = None,
         **kwargs,
     ):
         super().__init__(sgdw, plot_every, n_cols, n_rows, factor, cmap, **kwargs)
@@ -224,7 +225,8 @@ class PlotterComparisonProjected(Plotter[DistributionDraw, DistDrawPosWgtT]):
         sgdw = self.sgdw
         self.pos_wgt_samp = sgdw = W.LogPosWgtSampledProxy(sgdw)
         self.pos_wgt = sgdw = W.LogPosWgtIterProxy(sgdw)
-        sgdw = W.SGDWProjectedDecorator(sgdw, projector, proj_every)
+        proj_kwargs_: dict = proj_kwargs if proj_kwargs is not None else {}
+        self.sgdw_proj = sgdw = W.SGDWProjectedDecorator(sgdw, projector, proj_every, **proj_kwargs_)
         self.pos_wgt_proj = sgdw = W.LogPosWgtIterProxy(sgdw)
         self.sgdw = sgdw
 
