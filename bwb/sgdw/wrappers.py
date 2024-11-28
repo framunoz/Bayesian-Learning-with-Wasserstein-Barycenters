@@ -43,7 +43,9 @@ class SGDWBaseWrapper[DistributionT, PosWgtT](SGDW[DistributionT, PosWgtT]):
             wrapee.distr_sampler,
             wrapee.schd,
             wrapee.det_params,
-            wrapee.iter_params
+            wrapee.iter_params,
+            wrapee.callback,
+            wrapee.dict_log,
         )
         self.wrapee = wrapee
 
@@ -59,15 +61,6 @@ class SGDWBaseWrapper[DistributionT, PosWgtT](SGDW[DistributionT, PosWgtT]):
         if to_return.endswith(sep):
             to_return = to_return[:-len(sep)]
         return to_return
-
-    @override
-    @property
-    def callback(self) -> CallbackFn:
-        return self.wrapee.callback
-
-    @callback.setter
-    def callback(self, value: CallbackFn) -> None:
-        self.wrapee.callback = value
 
     @override
     def first_sample(self) -> tuple[Seq[DistributionT], PosWgtT]:
@@ -483,8 +476,8 @@ class SGDWProjectedDecorator[DistributionT, PosWgtT](
         wrapee: SGDW[DistributionT, PosWgtT],
         projector: ProjectorFn[PosWgtT],
         project_every: int | None = 1,
-        interp_step_schd = None,
         interp_strategy: InterpStrategyArg | None = None,
+        interp_step_schd = None,
     ) -> None:
         super().__init__(wrapee)
         self.projector = projector
@@ -505,11 +498,13 @@ class SGDWProjectedDecorator[DistributionT, PosWgtT](
 
         if self.is_proj_iter():
             pos_wgt_kp1_ = self.projector(pos_wgt_kp1)
+            self.dict_log["pos_wgt_proj"] = pos_wgt_kp1_
 
             # Case when the interpolation strategy is defined
             if self.interp_strategy is not None:
                 step_k: float = self.interp_step_schd(k)
                 pos_wgt_kp1_ = self.interp_strategy(pos_wgt_kp1, pos_wgt_kp1_, step_k)
+                self.dict_log["pos_wgt_proj_interp"] = pos_wgt_kp1_
 
             pos_wgt_kp1 = pos_wgt_kp1_
 

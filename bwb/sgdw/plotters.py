@@ -87,7 +87,7 @@ class Plotter[DistributionT, PosWgtT](
         pass
 
     @final
-    def callback(self) -> None:
+    def callback(self, x: dict) -> None:
         """
         Callback function to plot the distributions.
         """

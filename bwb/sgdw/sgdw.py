@@ -34,7 +34,7 @@ __all__ = [
 
 type DiscretePosWgt = tuple[torch.Tensor, torch.Tensor]
 type DistDrawPosWgt = torch.Tensor
-type CallbackFn = Callable[[], None]
+type CallbackFn = Callable[[dict], None]
 type ConvolutionalFn = Callable[..., torch.Tensor]
 type ConvolutionalArg = Literal["conv", "debiased"] | ConvolutionalFn
 
@@ -160,13 +160,16 @@ class SGDW[DistributionT, PosWgtT](
         schd: utils.Schedule,
         det_params: utils.DetentionParameters,
         iter_params: utils.IterationParameters,
+        callback: CallbackFn,
+        dict_log: dict,
     ):
         self.distr_sampler = distr_sampler
         self.schd = schd
         self.det_params = det_params
         self.iter_params = iter_params
 
-        self._callback: CallbackFn = lambda: None
+        self.callback: CallbackFn = callback
+        self.dict_log: dict = dict_log
 
     @final
     @override
@@ -175,18 +178,12 @@ class SGDW[DistributionT, PosWgtT](
         Run the algorithm.
         """
         _, pos_wgt_k = self.init_algorithm()
-        # Idea de la implementación:
-        # _, pos_wgt_k, dict_log = self.init_algorithm()
-        # self.callback(dict_log)
 
         # The logic of the detention criteria and update are in the
         #   iterable class :class:`IterationParameters`
         for k in self.iter_params:
             # Run a step of the algorithm
             _, pos_wgt_kp1 = self.step_algorithm(k, pos_wgt_k)
-            # Idea de la implementación:
-            # _, pos_wgt_kp1, dict_log = self.step_algorithm(k, pos_wgt_k)
-            # self.callback(dict_log)
 
             # Step 4 (optional): Compute the Wasserstein distance
             if self.iter_params.is_wass_dist_iter():
@@ -198,11 +195,25 @@ class SGDW[DistributionT, PosWgtT](
             pos_wgt_k = pos_wgt_kp1
 
             # Callback to do extra instructions at the end of each iteration
-            self.callback()
+            self.callback(self.dict_log)
+            # Clear the dictionary log
+            self.dict_log.clear()
 
         barycenter = self.create_barycenter(pos_wgt_k)
 
         return barycenter
+
+    def init_algorithm(self) -> tuple[Seq[DistributionT], PosWgtT]:
+        """
+        Initialize the algorithm.
+        """
+        # Step 1: Sampling a mu_0
+        lst_mu_0, pos_wgt_0 = self.first_sample()
+
+        self.dict_log["lst_mu"] = lst_mu_0
+        self.dict_log["pos_wgt"] = pos_wgt_0
+
+        return lst_mu_0, pos_wgt_0
 
     def step_algorithm(
         self, k: int, pos_wgt_k: PosWgtT
@@ -218,7 +229,25 @@ class SGDW[DistributionT, PosWgtT](
         gamma_k = self.schd.step_schedule(k)
         pos_wgt_kp1 = self.update_pos_wgt(pos_wgt_k, lst_mu_k, gamma_k)
 
+        self.dict_log["lst_mu"] = lst_mu_k
+        self.dict_log["pos_wgt"] = pos_wgt_kp1
+        self.dict_log["k"] = k
+        self.dict_log["gamma_k"] = gamma_k
+
         return lst_mu_k, pos_wgt_kp1
+
+    def update_wass_dist(
+        self, wass_dist: float
+    ) -> float:
+        """
+        Update the Wasserstein distance.
+        """
+        wass_dist_smooth = self.iter_params.update_wass_dist(wass_dist)
+
+        self.dict_log["wass_dist"] = wass_dist
+        self.dict_log["wass_dist_smooth"] = wass_dist_smooth
+
+        return wass_dist_smooth
 
     def _additional_repr_(
         self, sep: str, tab: str, n_tab: int, new_line: str
@@ -260,35 +289,12 @@ class SGDW[DistributionT, PosWgtT](
     def device(self) -> torch.device:
         return self.distr_sampler.device
 
-    @property
-    def callback(self) -> CallbackFn:
-        """
-        Callback function to run at the end of each iteration.
-        """
-        return self._callback
-
-    @callback.setter
-    def callback(self, callback: CallbackFn) -> None:
-        """
-        Set the callback function to run at the end of each iteration.
-        """
-        self._callback = callback
-
     @abc.abstractmethod
     def first_sample(self) -> tuple[Seq[DistributionT], PosWgtT]:
         """
         Draw the first sample from the distribution sampler.
         """
         ...
-
-    def init_algorithm(self) -> tuple[Seq[DistributionT], PosWgtT]:
-        """
-        Initialize the algorithm.
-        """
-        # Step 1: Sampling a mu_0
-        lst_mu_0, pos_wgt_0 = self.first_sample()
-
-        return lst_mu_0, pos_wgt_0
 
     @abc.abstractmethod
     def update_pos_wgt(
@@ -310,14 +316,6 @@ class SGDW[DistributionT, PosWgtT](
         Compute the Wasserstein distance between two positions and weights.
         """
         ...
-
-    def update_wass_dist(
-        self, wass_dist: float
-    ) -> float:
-        """
-        Update the Wasserstein distance.
-        """
-        return self.iter_params.update_wass_dist(wass_dist)
 
     @abc.abstractmethod
     def get_pos_wgt(self, mu: DistributionT) -> PosWgtT:
@@ -385,12 +383,20 @@ class BaseSGDW[DistributionT, PosWgtT](
         max_iter: int,
         max_time: float,
         wass_dist_every: int,
+        callback: CallbackFn,
     ):
         schd = utils.Schedule(step_scheduler, batch_size)
         det_params = utils.DetentionParameters(tol, min_iter, max_iter, max_time, wass_dist_every)
         iter_params = utils.IterationParameters(det_params, length_ema=5)
 
-        super().__init__(distr_sampler, schd, det_params, iter_params)
+        super().__init__(
+            distr_sampler,
+            schd,
+            det_params,
+            iter_params,
+            callback,
+            {},
+        )
 
         # A value to pass to the device and dtype
         self._val = torch.tensor(1, dtype=self.dtype, device=self.device)
@@ -461,6 +467,7 @@ class DistributionDrawSGDW(
         max_iter: int = 1_000,
         max_time: float = float("inf"),
         wass_dist_every: int = 10,
+        callback: CallbackFn = lambda x: None,
         solve_sample_kwargs: dict | None = None,
     ):
         super().__init__(
@@ -472,6 +479,7 @@ class DistributionDrawSGDW(
             max_iter,
             max_time,
             wass_dist_every,
+            callback,
         )
         self.conv_bar_strategy: ConvolutionalFn = _get_convolutional_function(conv_bar_strategy)
         self.conv_bar_kwargs: dict = deepcopy(conv_bar_kwargs) if conv_bar_kwargs is not None else {}
@@ -568,6 +576,7 @@ class DiscreteDistributionSGDW(
         max_iter: int = 1_000,
         max_time: float = float("inf"),
         wass_dist_every: int = 1,
+        callback: CallbackFn = lambda x: None,
         solve_sample_kwargs: dict | None = None,
     ):
         super().__init__(
@@ -579,6 +588,7 @@ class DiscreteDistributionSGDW(
             max_iter,
             max_time,
             wass_dist_every,
+            callback,
         )
         self.alpha = alpha
         self.include_w_dist = True
