@@ -4,6 +4,7 @@ Models for discrete distributions.
 import typing as t
 import warnings
 
+import ot.utils
 import torch
 # noinspection PyPackageRequirements
 import torch.distributions
@@ -18,6 +19,7 @@ from bwb.utils import shape_validation
 
 __all__ = [
     "DistributionP",
+    "wass_distance",
     "DiscreteDistribution",
     "DistributionDraw",
 ]
@@ -74,6 +76,40 @@ class DistributionP(t.Protocol):
     def enumerate_nz_support_(self, expand=True) -> torch.Tensor:
         """Enumerate non-zero support using the original support."""
         ...
+
+
+def wass_distance(
+    p: DistributionP,
+    q: DistributionP,
+    **solve_sample_kwargs,
+):
+    r"""
+    Compute the Wasserstein distance between two distributions using
+    the function `ot.solve_sample
+    <https://pythonot.github.io/all.html#ot.solve_sample>`_ from the
+    package Python Optimal Transport (POT).
+
+    :param p: The first distribution.
+    :param q: The second distribution.
+    :param solve_sample_kwargs: Additional keyword arguments for the
+        function ``ot.solve_sample``. Defaults is an empty dictionary.
+        For further information, see `ot.solve_sample
+        <https://pythonot.github.io/all.html#ot.solve_sample>`_.
+    :return: The Wasserstein distance between the two distributions.
+    """
+    def get_pos_wgt(d: DistributionP) -> tuple[torch.Tensor, torch.Tensor]:
+        """Get the position and weights of the distribution."""
+        return d.enumerate_nz_support_().to(d.dtype), d.nz_probs
+
+    x_p, w_p = get_pos_wgt(p)
+    x_q, w_q = get_pos_wgt(q)
+
+    res: ot.utils.OTResult = ot.solve_sample(
+        x_p, x_q, w_p, w_q,
+        **solve_sample_kwargs
+    )
+
+    return res.value
 
 
 # noinspection PyAbstractClass

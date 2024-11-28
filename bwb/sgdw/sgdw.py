@@ -68,7 +68,7 @@ def _get_convolutional_function(conv_bar_strategy: ConvolutionalArg) -> Convolut
     Get the convolutional function from the convolutional strategy.
     """
     if isinstance(conv_bar_strategy, str):
-        if conv_bar_strategy not in ["conv", "debiased"]:
+        if conv_bar_strategy not in _convolutional_methods:
             raise ValueError(f"Unknown convolutional strategy '{conv_bar_strategy}'.")
         return _convolutional_methods[conv_bar_strategy]
     elif callable(conv_bar_strategy):
@@ -77,10 +77,17 @@ def _get_convolutional_function(conv_bar_strategy: ConvolutionalArg) -> Convolut
 
 
 def _transport_source(xt: torch.Tensor, plan: torch.Tensor):
-    """
+    r"""
     Transport the source to the target. This is done by computing the
     barycentric mapping and then computing the transported source.
-    Code from: `ot.da.BaseTransport.transform <https://pythonot.github.io/_modules/ot/da.html#BaseTransport.transform>`_.
+    Code from: `ot.da.BaseTransport.transform
+    <https://pythonot.github.io/_modules/ot/da.html#BaseTransport.transform>`_.
+
+    This function use the following equation:
+    .. math::
+        T_{\pi}(x) = \frac{\int y \pi_x(dy)}{\int \pi_x(dy)}
+
+    where :math:`\pi_x(dy) = \int \pi(dx, dy)`
 
     :param xt: target distribution.
     :param plan: transport plan.
@@ -122,6 +129,21 @@ class DistributionSamplerP[DistributionT](P.HasDeviceDTypeP, Protocol):
         """
 
 
+# TODO: Hacer que el callback acepte como argumento información
+#  relevante de la iteración. Por ejemplo, para el sgdw es relevante
+#  la lista de distribuciones muestreadas y la posición y peso de la
+#  última iteración. Lo que se podría hacer, es crear un diccionario en
+#  donde se guarden los valores relevantes de la iteración, se retorne
+#  este diccionario a las funciones init_algorithm y step_algorithm,
+#  y se pase este diccionario al callback. De esta forma, el callback
+#  tendrá toda la información relevante de la iteración. Esto podría
+#  reducir significativamente la cantidad de código desarrollado,
+#  además de dejarlo mucho más limpio,
+#  quitando a la mayoría de loggers que hay en el módulo wrappers,
+#  además de simplificar los wrappers del módulo plotters.
+# TODO: Se podría simplificar las funciones init_algorithm y
+#  first_sample. El método first_sample se podría eliminar y en su
+#  lugar se podría hacer que init_algorithm devuelva un diccionario
 class SGDW[DistributionT, PosWgtT](
     Runnable[DistributionT],
     P.HasDeviceDType,
@@ -145,6 +167,58 @@ class SGDW[DistributionT, PosWgtT](
         self.iter_params = iter_params
 
         self._callback: CallbackFn = lambda: None
+
+    @final
+    @override
+    def run(self) -> DistributionT:
+        """
+        Run the algorithm.
+        """
+        _, pos_wgt_k = self.init_algorithm()
+        # Idea de la implementación:
+        # _, pos_wgt_k, dict_log = self.init_algorithm()
+        # self.callback(dict_log)
+
+        # The logic of the detention criteria and update are in the
+        #   iterable class :class:`IterationParameters`
+        for k in self.iter_params:
+            # Run a step of the algorithm
+            _, pos_wgt_kp1 = self.step_algorithm(k, pos_wgt_k)
+            # Idea de la implementación:
+            # _, pos_wgt_kp1, dict_log = self.step_algorithm(k, pos_wgt_k)
+            # self.callback(dict_log)
+
+            # Step 4 (optional): Compute the Wasserstein distance
+            if self.iter_params.is_wass_dist_iter():
+                gamma_k = self.schd.step_schedule(k)
+                wass_dist = self._compute_wass_dist(pos_wgt_k, pos_wgt_kp1, gamma_k)
+                self.update_wass_dist(wass_dist)
+
+            # Update the position and weight
+            pos_wgt_k = pos_wgt_kp1
+
+            # Callback to do extra instructions at the end of each iteration
+            self.callback()
+
+        barycenter = self.create_barycenter(pos_wgt_k)
+
+        return barycenter
+
+    def step_algorithm(
+        self, k: int, pos_wgt_k: PosWgtT
+    ) -> tuple[Seq[DistributionT], PosWgtT]:
+        """
+        Run a step of the algorithm.
+        """
+        # Step 2: Draw S_k samples from the distribution sampler
+        S_k = self.schd.batch_size(k)
+        lst_mu_k = self.distr_sampler.sample(S_k)
+
+        # Step 3: Compute the distribution of mu_{k+1}
+        gamma_k = self.schd.step_schedule(k)
+        pos_wgt_kp1 = self.update_pos_wgt(pos_wgt_k, lst_mu_k, gamma_k)
+
+        return lst_mu_k, pos_wgt_kp1
 
     def _additional_repr_(
         self, sep: str, tab: str, n_tab: int, new_line: str
@@ -245,22 +319,6 @@ class SGDW[DistributionT, PosWgtT](
         """
         return self.iter_params.update_wass_dist(wass_dist)
 
-    def step_algorithm(
-        self, k: int, pos_wgt_k: PosWgtT
-    ) -> tuple[Seq[DistributionT], PosWgtT]:
-        """
-        Run a step of the algorithm.
-        """
-        # Step 2: Draw S_k samples from the distribution sampler
-        S_k = self.schd.batch_size(k)
-        lst_mu_k = self.distr_sampler.sample(S_k)
-
-        # Step 3: Compute the distribution of mu_{k+1}
-        gamma_k = self.schd.step_schedule(k)
-        pos_wgt_kp1 = self.update_pos_wgt(pos_wgt_k, lst_mu_k, gamma_k)
-
-        return lst_mu_k, pos_wgt_kp1
-
     @abc.abstractmethod
     def get_pos_wgt(self, mu: DistributionT) -> PosWgtT:
         """
@@ -269,7 +327,7 @@ class SGDW[DistributionT, PosWgtT](
         ...
 
     @abc.abstractmethod
-    def create_distribution(self, pos_wgt: PosWgtT) -> DistributionT:
+    def as_distribution(self, pos_wgt: PosWgtT) -> DistributionT:
         """
         Create a distribution from the position and weight.
         """
@@ -279,37 +337,7 @@ class SGDW[DistributionT, PosWgtT](
         """
         Create the barycenter from the position and weight.
         """
-        return self.create_distribution(pos_wgt)
-
-    @final
-    @override
-    def run(self) -> DistributionT:
-        """
-        Run the algorithm.
-        """
-        _, pos_wgt_k = self.init_algorithm()
-
-        # The logic of the detention criteria and update are in the
-        #   iterable class :class:`IterationParameters`
-        for k in self.iter_params:
-            # Run a step of the algorithm
-            _, pos_wgt_kp1 = self.step_algorithm(k, pos_wgt_k)
-
-            # Step 4 (optional): Compute the Wasserstein distance
-            if self.iter_params.is_wass_dist_iter():
-                gamma_k = self.schd.step_schedule(k)
-                wass_dist = self._compute_wass_dist(pos_wgt_k, pos_wgt_kp1, gamma_k)
-                self.update_wass_dist(wass_dist)
-
-            # Update the position and weight
-            pos_wgt_k = pos_wgt_kp1
-
-            # Callback to do extra instructions at the end of each iteration
-            self.callback()
-
-        barycenter = self.create_barycenter(pos_wgt_k)
-
-        return barycenter
+        return self.as_distribution(pos_wgt)
 
 
 # MARK: BaseSGDW Class
@@ -351,14 +379,15 @@ class BaseSGDW[DistributionT, PosWgtT](
         self,
         distr_sampler: DistributionSamplerP[DistributionT],
         step_scheduler: utils.StepSchedulerArg,
-        batch_size: utils.BatchSizeArg = 1,
-        tol: float = 1e-8,
-        max_iter: int = 100_000,
-        max_time: float = float("inf"),
-        wass_dist_every: int = 10,
+        batch_size: utils.BatchSizeArg,
+        tol: float,
+        min_iter: int,
+        max_iter: int,
+        max_time: float,
+        wass_dist_every: int,
     ):
         schd = utils.Schedule(step_scheduler, batch_size)
-        det_params = utils.DetentionParameters(tol, max_iter, max_time, wass_dist_every)
+        det_params = utils.DetentionParameters(tol, min_iter, max_iter, max_time, wass_dist_every)
         iter_params = utils.IterationParameters(det_params, length_ema=5)
 
         super().__init__(distr_sampler, schd, det_params, iter_params)
@@ -424,30 +453,32 @@ class DistributionDrawSGDW(
         self,
         distr_sampler: DistributionSamplerP[D.DistributionDraw],
         step_scheduler: utils.StepSchedulerArg,
+        batch_size: utils.BatchSizeArg = 1,
         conv_bar_strategy: ConvolutionalArg = "debiased",
         conv_bar_kwargs: dict | None = None,
-        batch_size: utils.BatchSizeArg = 1,
         tol: float = 0,
+        min_iter: int = 0,
         max_iter: int = 1_000,
         max_time: float = float("inf"),
         wass_dist_every: int = 10,
         solve_sample_kwargs: dict | None = None,
     ):
         super().__init__(
-            distr_sampler=distr_sampler,
-            step_scheduler=step_scheduler,
-            batch_size=batch_size,
-            tol=tol,
-            max_iter=max_iter,
-            max_time=max_time,
-            wass_dist_every=wass_dist_every,
+            distr_sampler,
+            step_scheduler,
+            batch_size,
+            tol,
+            min_iter,
+            max_iter,
+            max_time,
+            wass_dist_every,
         )
         self.conv_bar_strategy: ConvolutionalFn = _get_convolutional_function(conv_bar_strategy)
         self.conv_bar_kwargs: dict = deepcopy(conv_bar_kwargs) if conv_bar_kwargs is not None else {}
         self.solve_sample_kwargs: dict = solve_sample_kwargs if solve_sample_kwargs is not None else {}
 
     @override
-    def create_distribution(
+    def as_distribution(
         self,
         pos_wgt: DistDrawPosWgt
     ) -> D.DistributionDraw:
@@ -481,13 +512,6 @@ class DistributionDrawSGDW(
         )
         return gs_weights_kp1
 
-    def _get_pos_wgt(self, pos_wgt: DistDrawPosWgt) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Get the position and weight from the grayscale weights.
-        """
-        dist = self.create_distribution(pos_wgt)
-        return dist.enumerate_nz_support_().to(self.dtype), dist.nz_probs
-
     @override
     @logging.register_total_time_method(_log)
     def _compute_wass_dist(
@@ -496,14 +520,9 @@ class DistributionDrawSGDW(
         pos_wgt_kp1: DistDrawPosWgt,
         gamma_k: float
     ) -> float:
-        # x_k: (n_k, 2), m_k: (n_k,)
-        x_k, m_k = self._get_pos_wgt(pos_wgt_k)
-        # x_kp1: (n_kp1, 2), m_kp1: (n_kp1,)
-        x_kp1, m_kp1 = self._get_pos_wgt(pos_wgt_kp1)
-        # Compute the Wasserstein distance
-        res: ot.utils.OTResult = ot.solve_sample(x_k, x_kp1, m_k, m_kp1, **self.solve_sample_kwargs)
-        wass_dist = res.value
-        return wass_dist
+        return D.wass_distance(self.as_distribution(pos_wgt_k),
+                               self.as_distribution(pos_wgt_kp1),
+                               **self.solve_sample_kwargs)
 
 
 # MARK: SGDW with discrete distributions
@@ -544,27 +563,29 @@ class DiscreteDistributionSGDW(
         step_scheduler: utils.StepSchedulerArg,
         batch_size: utils.BatchSizeArg = 1,
         alpha: float = 1.0,
-        tol: float = 1e-8,
+        tol: float = 1e-3,
+        min_iter: int = 0,
         max_iter: int = 1_000,
         max_time: float = float("inf"),
         wass_dist_every: int = 1,
         solve_sample_kwargs: dict | None = None,
     ):
         super().__init__(
-            distr_sampler=distr_sampler,
-            step_scheduler=step_scheduler,
-            batch_size=batch_size,
-            tol=tol,
-            max_iter=max_iter,
-            max_time=max_time,
-            wass_dist_every=wass_dist_every,
+            distr_sampler,
+            step_scheduler,
+            batch_size,
+            tol,
+            min_iter,
+            max_iter,
+            max_time,
+            wass_dist_every,
         )
         self.alpha = alpha
         self.include_w_dist = True
         self.solve_sample_kwargs: dict = solve_sample_kwargs if solve_sample_kwargs is not None else {}
 
     @override
-    def create_distribution(
+    def as_distribution(
         self, pos_wgt: DiscretePosWgt
     ) -> D.DiscreteDistribution:
         X_k, m = pos_wgt

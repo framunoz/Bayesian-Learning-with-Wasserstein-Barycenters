@@ -3,6 +3,7 @@ This module contains utility functions and classes for the algorithm.
 """
 import numbers as num
 import time
+import warnings
 from datetime import timedelta
 from typing import Callable, Iterator
 
@@ -158,11 +159,13 @@ class DetentionParameters:
     def __init__(
         self,
         tol: float = 1e-8,
+        min_iter: int = 0,
         max_iter: int = 100_000,
         max_time: float = float("inf"),
         wass_dist_every: int = 1,
     ):
         self.tol = tol
+        self.min_iter = min_iter
         self.max_iter = max_iter
         self.max_time = max_time
         self.wass_dist_every = wass_dist_every
@@ -181,6 +184,21 @@ class DetentionParameters:
         if tol < 0:
             raise ValueError("tol must be non-negative")
         self._tol: float = float(tol)
+
+    @property
+    def min_iter(self) -> int:
+        """
+        The minimum number of iterations.
+        """
+        return self._min_iter
+
+    @min_iter.setter
+    def min_iter(self, value: int) -> None:
+        if not isinstance(value, num.Integral):
+            raise TypeError("min_iter must be an integer")
+        if value < 0:
+            raise ValueError("min_iter must be non-negative")
+        self._min_iter: int = value
 
     @property
     def max_iter(self) -> int:
@@ -224,8 +242,8 @@ class DetentionParameters:
     def wass_dist_every(self, value: int) -> None:
         if not isinstance(value, num.Integral):
             raise TypeError("wass_dist_every must be an integer")
-        if value <= 0:
-            raise ValueError("wass_dist_every must be positive")
+        if value < 0:
+            raise ValueError("wass_dist_every must be non-negative")
         self._wass_dist_every: int = value
 
     def __repr__(self) -> str:
@@ -237,6 +255,7 @@ class DetentionParameters:
             "inf") else "∞"
 
         return (f"DetentionParameters(tol={self.tol:.2e}, "
+                f"min_iter={self.min_iter:_}, "
                 f"max_iter={max_iter_fmt}, max_time={time_fmt}, "
                 f"wass_dist_every={self.wass_dist_every})")
 
@@ -406,17 +425,36 @@ class IterationParameters(Iterator[int]):
 
         :return: True if the detention criteria is met, False otherwise.
         """
-        # Reaches maximum iteration
-        if self.k >= self.det_params.max_iter:
-            _log.debug(f"Reached maximum iteration: {self.k}")
-            return True
-        # Reaches maximum time
-        if self.total_time >= self.det_params.max_time:
-            _log.debug(f"Reached maximum time: {self.total_time}")
-            return True
+        # Needs at least the minimum number of iterations
+        if self.k < self.det_params.min_iter:
+            return False
         # Achieves convergence in distance
         if self.w_dist < self.det_params.tol:
             _log.debug(f"Reached convergence in distance: {self.w_dist}")
+            return True
+        # Reaches maximum time
+        if self.total_time >= self.det_params.max_time:
+            if self.det_params.tol != 0:
+                warnings.warn(
+                    "The algorithm did not converge in distance "
+                    f"({self.w_dist:.6e}) within the maximum time "
+                    f"({self.total_time:.2f} seconds).",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+            _log.debug(f"Reached maximum time: {self.total_time}")
+            return True
+        # Reaches maximum iteration
+        if self.k >= self.det_params.max_iter:
+            if self.det_params.tol != 0:
+                warnings.warn(
+                    "The algorithm did not converge in distance "
+                    f"({self.w_dist:.6e}) within the maximum iteration "
+                    f"({self.k}).",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+            _log.debug(f"Reached maximum iteration: {self.k}")
             return True
         return False
 

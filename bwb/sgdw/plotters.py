@@ -59,7 +59,7 @@ class Plotter[DistributionT, PosWgtT](
         """
         Create a distribution from the position and weight.
         """
-        return self.sgdw.create_distribution
+        return self.sgdw.as_distribution
 
     @property
     def k(self) -> int:
@@ -240,7 +240,7 @@ class PlotterComparisonProjected(Plotter[DistributionDraw, DistDrawPosWgtT]):
         n_cols: Optional[int] = None,
         **kwargs,
     ) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
-        create_distr = self.sgdw.create_distribution
+        create_distr = self.sgdw.as_distribution
         create_distr: Callable[[DistDrawPosWgtT], DistributionDraw]
 
         n_rows = self.n_rows if n_rows is None else n_rows

@@ -111,8 +111,8 @@ class SGDWBaseWrapper[DistributionT, PosWgtT](SGDW[DistributionT, PosWgtT]):
         return self.wrapee.get_pos_wgt(mu)
 
     @override
-    def create_distribution(self, pos_wgt: PosWgtT) -> DistributionT:
-        return self.wrapee.create_distribution(pos_wgt)
+    def as_distribution(self, pos_wgt: PosWgtT) -> DistributionT:
+        return self.wrapee.as_distribution(pos_wgt)
 
     @override
     def create_barycenter(self, pos_wgt: PosWgtT) -> DistributionT:
@@ -374,7 +374,7 @@ class LogDistrIterProxy[DistributionT, PosWgtT](
         lst_mu: Seq[DistributionT],
         pos_wgt: PosWgtT,
     ) -> DistributionT:
-        return self.create_distribution(pos_wgt)
+        return self.as_distribution(pos_wgt)
 
 
 class LogPosWgtSampledProxy[DistributionT, PosWgtT](
@@ -448,6 +448,27 @@ _interpolation_strategies: dict[str, InterpStrategyFn[torch.Tensor]] = {
 }
 
 
+def _get_interp_strategy(
+    interp_strategy: InterpStrategyArg | None
+) -> InterpStrategyFn | None:
+    """
+    Get the interpolation strategy from the argument.
+    """
+    if isinstance(interp_strategy, str):
+        if interp_strategy not in _interpolation_strategies:
+            raise ValueError(
+                f"Interpolation strategy '{interp_strategy}' not found. "
+                f"Please choose from: {list(_interpolation_strategies.keys())}."
+            )
+        return _interpolation_strategies[interp_strategy]
+    elif callable(interp_strategy) or interp_strategy is None:
+        return interp_strategy
+    raise TypeError(
+        f"Interpolation strategy should be a string, a callable or None."
+        f" Currently: {type(interp_strategy) = }"
+    )
+
+
 class SGDWProjectedDecorator[DistributionT, PosWgtT](
     SGDWBaseWrapper[DistributionT, PosWgtT]
 ):
@@ -462,30 +483,43 @@ class SGDWProjectedDecorator[DistributionT, PosWgtT](
         wrapee: SGDW[DistributionT, PosWgtT],
         projector: ProjectorFn[PosWgtT],
         project_every: int | None = 1,
-        step_schd = None,
+        interp_step_schd = None,
         interp_strategy: InterpStrategyArg | None = None,
     ) -> None:
         super().__init__(wrapee)
         self.projector = projector
         self.project_every = project_every
-        self.step_schd = step_schd if step_schd is not None else wrapee.schd.step_schedule
+        self.interp_step_schd = interp_step_schd if interp_step_schd is not None else wrapee.schd.step_schedule
 
         # Define the interpolation strategy
         self._interp_strategy = interp_strategy
-        if isinstance(interp_strategy, str):
-            if interp_strategy not in _interpolation_strategies:
-                raise ValueError(
-                    f"Interpolation strategy '{interp_strategy}' not found."
-                )
-            interp_strategy_: InterpStrategyFn = _interpolation_strategies[interp_strategy]
-        elif callable(interp_strategy) or interp_strategy is None:
-            interp_strategy_: InterpStrategyFn | None = interp_strategy
-        else:
-            raise TypeError(
-                f"Interpolation strategy should be a string, a callable or None."
-                f" Currently: {type(interp_strategy) = }"
-            )
-        self.interp_strategy: InterpStrategyFn | None = interp_strategy_
+        self.interp_strategy: InterpStrategyFn | None = _get_interp_strategy(interp_strategy)
+
+    @override
+    def step_algorithm(
+        self,
+        k: int,
+        pos_wgt_k: PosWgtT
+    ) -> tuple[Seq[DistributionT], PosWgtT]:
+        lst_mu_kp1, pos_wgt_kp1 = super().step_algorithm(k, pos_wgt_k)
+
+        if self.is_proj_iter():
+            pos_wgt_kp1_ = self.projector(pos_wgt_kp1)
+
+            # Case when the interpolation strategy is defined
+            if self.interp_strategy is not None:
+                step_k: float = self.interp_step_schd(k)
+                pos_wgt_kp1_ = self.interp_strategy(pos_wgt_kp1, pos_wgt_kp1_, step_k)
+
+            pos_wgt_kp1 = pos_wgt_kp1_
+
+        return lst_mu_kp1, pos_wgt_kp1
+
+    @override
+    def create_barycenter(self, pos_wgt: PosWgtT) -> DistributionT:
+        if self.project_every is not None:
+            pos_wgt = self.projector(pos_wgt)
+        return super().create_barycenter(pos_wgt)
 
     def is_proj_iter(self) -> bool:
         """
@@ -505,30 +539,8 @@ class SGDWProjectedDecorator[DistributionT, PosWgtT](
         to_return = super()._additional_repr_(sep, tab, n_tab, new_line)
         to_return += space + f"project_every={self.project_every}" + sep
         if self._interp_strategy is not None:
-            to_return += space + f"interp_strategy={self._interp_strategy}" + sep
+            interp_strategy: str = str(self._interp_strategy)
+            if callable(self._interp_strategy):
+                interp_strategy: str = self._interp_strategy.__name__
+            to_return += space + f"interp_strategy={interp_strategy}" + sep
         return to_return
-
-    @override
-    def step_algorithm(
-        self,
-        k: int,
-        pos_wgt_k: PosWgtT
-    ) -> tuple[Seq[DistributionT], PosWgtT]:
-        lst_mu_kp1, pos_wgt_kp1 = super().step_algorithm(k, pos_wgt_k)
-
-        if self.is_proj_iter():
-            pos_wgt_kp1_ = self.projector(pos_wgt_kp1)
-
-            # Case when the interpolation strategy is defined
-            if self.interp_strategy is not None:
-                pos_wgt_kp1_ = self.interp_strategy(pos_wgt_kp1, pos_wgt_kp1_, self.step_schd(k))
-
-            pos_wgt_kp1 = pos_wgt_kp1_
-
-        return lst_mu_kp1, pos_wgt_kp1
-
-    @override
-    def create_barycenter(self, pos_wgt: PosWgtT) -> DistributionT:
-        if self.project_every is not None:
-            pos_wgt = self.projector(pos_wgt)
-        return super().create_barycenter(pos_wgt)
