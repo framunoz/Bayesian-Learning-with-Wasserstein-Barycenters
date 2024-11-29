@@ -251,8 +251,7 @@ class DetentionParameters:
         if self.max_time != float("inf"):
             max_time = self.max_time
             time_fmt = str(timedelta(seconds=max_time))[:-4]
-        max_iter_fmt = f"{self.max_iter:_}" if self.max_iter != float(
-            "inf") else "∞"
+        max_iter_fmt = f"{self.max_iter:_}" if self.max_iter != float("inf") else "∞"
 
         return (f"DetentionParameters(tol={self.tol:.2e}, "
                 f"min_iter={self.min_iter:_}, "
@@ -274,20 +273,6 @@ class IterationParameters(Iterator[int]):
     >>> iter_params = IterationParameters(det_params)
     >>> for k in iter_params:
     ...     print(k)
-    0
-    1
-    2
-
-    The code above is equivalent to the following code:
-
-    >>> det_params = DetentionParameters(max_iter=3)
-    >>> iter_params = IterationParameters(det_params)
-    >>> iter_params.init_params()
-    >>> iter_params.update_iteration()
-    >>> while not iter_params.detention_criteria():
-    ...     iter_params.start_iteration()
-    ...     print(iter_params.k)
-    ...     iter_params.update_iteration()
     0
     1
     2
@@ -351,45 +336,31 @@ class IterationParameters(Iterator[int]):
         self._smooth: float = value
         self._length_ema = int(2 / self._smooth - 1)
 
-    def init_params(self) -> None:
-        """
-        Initializes the iteration metrics.
-
-        This method sets the initial values for the iteration metrics
-        used in the class.
-        """
-        self.k = -1
+    def __iter__(self) -> Iterator[int]:
+        # Initialize the iteration parameters
+        self.k = 0  # In the beginning, the iteration number is incremented
         self.tic = time.time()
         self.tic_ = time.time()
         self.toc = time.time()
         self.diff_t = 0
         self.w_dist = float("inf")
+        return self
 
-    def start_iteration(self) -> None:
-        """
-        Start the iteration.
-
-        This method starts the iteration and sets the start time of the
-        iteration to the current time.
-        """
-        self.tic_ = time.time()
-
-    def update_iteration(self) -> None:
-        """
-        Update the iteration metrics.
-
-        This method updates the iteration metrics used in the class.
-        It updates the following attributes:
-        - k: The iteration number (incremented by 1).
-        - tic_: The start time of the iteration (set to the current time).
-        - toc: The end time of the iteration (set to the current time).
-        - diff_t: The time difference between tic_ and toc.
-
-        :return: None
-        """
-        self.k += 1
+    def __next__(self) -> int:
+        # At the beginning of the iteration, update the iteration metrics
         self.toc = time.time()
         self.diff_t = self.toc - self.tic_
+
+        # If the detention criteria is met, raise StopIteration
+        if self.detention_criteria():
+            raise StopIteration
+
+        # Start the timer for the next iteration
+        self.tic_ = time.time()
+        self.k += 1
+
+        # Return the iteration number
+        return self.k
 
     def is_wass_dist_iter(self) -> bool:
         """
@@ -416,7 +387,7 @@ class IterationParameters(Iterator[int]):
         # Use EMA to update the Wasserstein distance
         smooth = self.smooth
         self.w_dist = (1 - smooth) * last_w_dist + smooth * wass_dist
-        _log.debug(f"s: {smooth:.2f}, (1 - s) * {last_w_dist:.4f} + s * {wass_dist:.4f} -> {self.w_dist:.4f}")
+        _log.debug(f"s: {smooth:.2f}, (1 - s) * {last_w_dist:.4f} + s * {wass_dist:.4f} => {self.w_dist:.4f}")
         return self.w_dist
 
     def detention_criteria(self) -> bool:
@@ -428,10 +399,12 @@ class IterationParameters(Iterator[int]):
         # Needs at least the minimum number of iterations
         if self.k < self.det_params.min_iter:
             return False
+
         # Achieves convergence in distance
         if self.w_dist < self.det_params.tol:
             _log.debug(f"Reached convergence in distance: {self.w_dist}")
             return True
+
         # Reaches maximum time
         if self.total_time >= self.det_params.max_time:
             if self.det_params.tol != 0:
@@ -444,6 +417,7 @@ class IterationParameters(Iterator[int]):
                 )
             _log.debug(f"Reached maximum time: {self.total_time}")
             return True
+
         # Reaches maximum iteration
         if self.k >= self.det_params.max_iter:
             if self.det_params.tol != 0:
@@ -456,6 +430,7 @@ class IterationParameters(Iterator[int]):
                 )
             _log.debug(f"Reached maximum iteration: {self.k}")
             return True
+
         return False
 
     def __repr__(self) -> str:
@@ -463,21 +438,3 @@ class IterationParameters(Iterator[int]):
         time_fmt = str(timedelta(seconds=self.total_time))[:-4]
         return (f"IterationParameters(k={self.k:_}, w_dist={w_dist_fmt}, "
                 f"t={time_fmt}, Δt={self.diff_t * 1000:.2f} [ms])")
-
-    def __iter__(self) -> Iterator[int]:
-        self.init_params()
-        return self
-
-    def __next__(self) -> int:
-        # At the beginning of the iteration, update the iteration metrics
-        self.update_iteration()
-
-        # If the detention criteria is met, raise StopIteration
-        if self.detention_criteria():
-            raise StopIteration
-
-        # Start the timer for the next iteration
-        self.start_iteration()
-
-        # Return the iteration number
-        return self.k
