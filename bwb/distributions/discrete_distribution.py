@@ -250,7 +250,8 @@ class DistributionDraw(DiscreteDistribution):
 
         # Get the shape information
         self.shape = shape_validation(shape, n_dim=2)
-        self._grayscale = None  # For the cache of the grayscale
+        # For the cache of the grayscale image
+        self._grayscale = None
         # For the cache of the grayscale weights
         self._grayscale_weights = None
 
@@ -328,8 +329,8 @@ class DistributionDraw(DiscreteDistribution):
         dtype: torch.dtype = None,
     ) -> t.Self:
         """Build an instance from the grayscale weights."""
-        device = grayscale_weights.device if device is None else device
-        dtype = grayscale_weights.dtype if dtype is None else dtype
+        device = device if device is not None else grayscale_weights.device
+        dtype = dtype if dtype is not None else grayscale_weights.dtype
 
         # Save the grayscales for create images
         grayscale_weights: torch.Tensor = torch.as_tensor(
@@ -345,7 +346,8 @@ class DistributionDraw(DiscreteDistribution):
             msg="The 'grayscale_weights' tensor must have dimension {n_dim}.",
         )
 
-        grayscale_weights /= torch.sum(grayscale_weights)
+        if not torch.allclose(grayscale_weights.sum(), torch.tensor(1.0)):
+            grayscale_weights /= torch.sum(grayscale_weights)
         weights = grayscale_weights.reshape((-1,))
 
         to_return = cls(weights=weights, shape=shape,
@@ -377,7 +379,7 @@ class DistributionDraw(DiscreteDistribution):
         grayscale: torch.Tensor = torch.as_tensor(
             grayscale,
             dtype=torch.uint8,  # Use uint8 for images
-            device=device
+            device=device,
         ).squeeze()
 
         # Get the shape information
@@ -415,14 +417,14 @@ class DistributionDraw(DiscreteDistribution):
             self._grayscale = torch.as_tensor(
                 grayscale, dtype=torch.uint8, device=self.device
             )
+            return self._grayscale
 
-        else:
-            weights = self.weights
-            support = self.original_support
-            # Compute the grayscale
-            self._grayscale = grayscale_parser(
-                self.shape, weights, support,
-            )
+        weights = self.weights
+        support = self.original_support
+        # Compute the grayscale
+        self._grayscale = grayscale_parser(
+            self.shape, weights, support,
+        )
 
         return self._grayscale
 
