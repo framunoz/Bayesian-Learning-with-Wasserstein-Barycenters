@@ -449,7 +449,7 @@ class DistributionDrawSGDW(
         Defaults to infinity.
     :param wass_dist_every: The number of iterations to compute the
         Wasserstein distance. Defaults to 10.
-    :param solve_sample_kwargs: Additional keyword arguments for the
+    :param wass_dist_kwargs: Additional keyword arguments for the
         function ``ot.solve_sample``. Defaults is an empty dictionary.
         For further information, see `ot.solve_sample
         <https://pythonot.github.io/all.html#ot.solve_sample>`_.
@@ -468,7 +468,7 @@ class DistributionDrawSGDW(
         max_time: float = float("inf"),
         wass_dist_every: int = 10,
         callback: CallbackFn = lambda x: None,
-        solve_sample_kwargs: dict | None = None,
+        wass_dist_kwargs: dict | None = None,
     ):
         super().__init__(
             distr_sampler,
@@ -483,7 +483,7 @@ class DistributionDrawSGDW(
         )
         self.conv_bar_strategy: ConvolutionalFn = _get_convolutional_function(conv_bar_strategy)
         self.conv_bar_kwargs: dict = deepcopy(conv_bar_kwargs) if conv_bar_kwargs is not None else {}
-        self.solve_sample_kwargs: dict = solve_sample_kwargs if solve_sample_kwargs is not None else {}
+        self.wass_dist_kwargs: dict = wass_dist_kwargs if wass_dist_kwargs is not None else {}
 
     @override
     def as_distribution(
@@ -500,7 +500,7 @@ class DistributionDrawSGDW(
     def first_sample(
         self,
     ) -> tuple[Seq[D.DistributionDraw], DistDrawPosWgt]:
-        mu_0, = self.distr_sampler.sample(1)  # type: D.DistributionDraw,
+        mu_0: D.DistributionDraw = self.distr_sampler.sample(1)[0]
         return [mu_0], mu_0.grayscale_weights
 
     @override
@@ -530,7 +530,7 @@ class DistributionDrawSGDW(
     ) -> float:
         return D.wass_distance(self.as_distribution(pos_wgt_k),
                                self.as_distribution(pos_wgt_kp1),
-                               **self.solve_sample_kwargs)
+                               **self.wass_dist_kwargs)
 
 
 # MARK: SGDW with discrete distributions
