@@ -107,9 +107,10 @@ def distribution_sampler(gen):
 
 
 def test_sgdw_initialization(distribution_sampler) -> None:
-    sgdw_instance = sgdw.ConvDistributionDrawSGDW(
+    sgdw_instance = sgdw.DistributionDrawSGDW(
         distribution_sampler,
-        utils.step_scheduler()
+        utils.step_scheduler(),
+        conv_bar_strategy="conv",
     )
     assert sgdw_instance is not None
     assert sgdw_instance.iter_params.k == 0
@@ -119,10 +120,11 @@ def test_sgdw_initialization(distribution_sampler) -> None:
 
 
 def test_sgdw_init_algorithm(distribution_sampler) -> None:
-    sgdw_instance = sgdw.ConvDistributionDrawSGDW(
+    sgdw_instance = sgdw.DistributionDrawSGDW(
         distribution_sampler,
         utils.step_scheduler(),
-        5,
+        batch_size=5,
+        conv_bar_strategy="conv",
     )
     lst_mu_0, pos_wgt_0 = sgdw_instance.init_algorithm()
 
@@ -137,10 +139,11 @@ def test_sgdw_init_algorithm(distribution_sampler) -> None:
 
 
 def test_sgdw_step_algorithm(distribution_sampler) -> None:
-    sgdw_instance = sgdw.ConvDistributionDrawSGDW(
+    sgdw_instance = sgdw.DistributionDrawSGDW(
         distribution_sampler,
         utils.step_scheduler(),
-        5,
+        batch_size=5,
+        conv_bar_strategy="conv",
     )
     lst_mu_0, pos_wgt_0 = sgdw_instance.init_algorithm()
     lst_mu_1, pos_wgt_1 = sgdw_instance.step_algorithm(1, pos_wgt_0)
@@ -156,10 +159,11 @@ def test_sgdw_step_algorithm(distribution_sampler) -> None:
 
 
 def test_sgdw_run(distribution_sampler) -> None:
-    sgdw_instance = sgdw.ConvDistributionDrawSGDW(
+    sgdw_instance = sgdw.DistributionDrawSGDW(
         distribution_sampler,
         utils.step_scheduler(b=1),
-        5,
+        batch_size=5,
+        conv_bar_strategy="conv",
         max_iter=10,
     )
     result = sgdw_instance.run()
