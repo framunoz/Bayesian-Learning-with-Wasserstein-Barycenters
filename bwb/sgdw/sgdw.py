@@ -1,13 +1,15 @@
 """
 Module for Stochastic Gradient Descent Algorithms in Wasserstein Space.
 """
+
 import abc
 from copy import deepcopy
 from functools import partial
 from typing import (
     Callable,
     final,
-    Literal, override,
+    Literal,
+    override,
     Protocol,
     Sequence as Seq,
 )
@@ -42,7 +44,7 @@ _log = logging.get_logger(__name__)
 _bar = "=" * 5
 
 _convolutional_methods = {
-    "conv":     partial(
+    "conv": partial(
         ot.bregman.convolutional_barycenter2d,
         reg=3e-3,
         method="sinkhorn",
@@ -63,17 +65,21 @@ _convolutional_methods = {
 }
 
 
-def _get_convolutional_function(conv_bar_strategy: ConvolutionalArg) -> ConvolutionalFn:
+def _get_conv_function(conv_bar_strategy: ConvolutionalArg) -> ConvolutionalFn:
     """
     Get the convolutional function from the convolutional strategy.
     """
     if isinstance(conv_bar_strategy, str):
         if conv_bar_strategy not in _convolutional_methods:
-            raise ValueError(f"Unknown convolutional strategy '{conv_bar_strategy}'.")
+            raise ValueError(
+                f"Unknown convolutional strategy '{conv_bar_strategy}'."
+            )
         return _convolutional_methods[conv_bar_strategy]
     elif callable(conv_bar_strategy):
         return conv_bar_strategy
-    raise TypeError("The convolutional strategy must be a string or a callable.")
+    raise TypeError(
+        "The convolutional strategy must be a string or a callable."
+    )
 
 
 def _transport_source(xt: torch.Tensor, plan: torch.Tensor):
@@ -145,9 +151,7 @@ class DistributionSamplerP[DistributionT](P.HasDeviceDTypeP, Protocol):
 #  first_sample. El método first_sample se podría eliminar y en su
 #  lugar se podría hacer que init_algorithm devuelva un diccionario
 class SGDW[DistributionT, PosWgtT](
-    Runnable[DistributionT],
-    P.HasDeviceDType,
-    metaclass=abc.ABCMeta
+    Runnable[DistributionT], P.HasDeviceDType, metaclass=abc.ABCMeta
 ):
     r"""
     Base class that works as interface for the Stochastic Gradient Descent
@@ -188,7 +192,9 @@ class SGDW[DistributionT, PosWgtT](
             # Step 4 (optional): Compute the Wasserstein distance
             if self.iter_params.is_wass_dist_iter():
                 gamma_k = self.schd.step_schedule(k)
-                wass_dist = self._compute_wass_dist(pos_wgt_k, pos_wgt_kp1, gamma_k)
+                wass_dist = self._compute_wass_dist(
+                    pos_wgt_k, pos_wgt_kp1, gamma_k
+                )
                 self.update_wass_dist(wass_dist)
 
             # Update the position and weight
@@ -236,9 +242,7 @@ class SGDW[DistributionT, PosWgtT](
 
         return lst_mu_k, pos_wgt_kp1
 
-    def update_wass_dist(
-        self, wass_dist: float
-    ) -> float:
+    def update_wass_dist(self, wass_dist: float) -> float:
         """
         Update the Wasserstein distance.
         """
@@ -266,7 +270,7 @@ class SGDW[DistributionT, PosWgtT](
         if add_repr:
             to_return += new_line + add_repr
         if to_return.endswith(sep):
-            to_return = to_return[:-len(sep)]
+            to_return = to_return[: -len(sep)]
 
         return to_return
 
@@ -341,8 +345,7 @@ class SGDW[DistributionT, PosWgtT](
 # MARK: BaseSGDW Class
 # noinspection PyMethodOverriding
 class BaseSGDW[DistributionT, PosWgtT](
-    SGDW[DistributionT, PosWgtT],
-    metaclass=abc.ABCMeta
+    SGDW[DistributionT, PosWgtT], metaclass=abc.ABCMeta
 ):
     r"""
     Base class for Stochastic Gradient Descent in Wasserstein Space.
@@ -386,7 +389,9 @@ class BaseSGDW[DistributionT, PosWgtT](
         callback: CallbackFn,
     ):
         schd = utils.Schedule(step_scheduler, batch_size)
-        det_params = utils.DetentionParameters(tol, min_iter, max_iter, max_time, wass_dist_every)
+        det_params = utils.DetentionParameters(
+            tol, min_iter, max_iter, max_time, wass_dist_every
+        )
         iter_params = utils.IterationParameters(det_params, length_ema=5)
 
         super().__init__(
@@ -481,15 +486,18 @@ class DistributionDrawSGDW(
             wass_dist_every,
             callback,
         )
-        self.conv_bar_strategy: ConvolutionalFn = _get_convolutional_function(conv_bar_strategy)
-        self.conv_bar_kwargs: dict = deepcopy(conv_bar_kwargs) if conv_bar_kwargs is not None else {}
-        self.wass_dist_kwargs: dict = wass_dist_kwargs if wass_dist_kwargs is not None else {}
+        self.conv_bar_strategy: ConvolutionalFn = _get_conv_function(
+            conv_bar_strategy
+        )
+        self.conv_bar_kwargs: dict = (
+            deepcopy(conv_bar_kwargs) if conv_bar_kwargs is not None else {}
+        )
+        self.wass_dist_kwargs: dict = (
+            wass_dist_kwargs if wass_dist_kwargs is not None else {}
+        )
 
     @override
-    def as_distribution(
-        self,
-        pos_wgt: DistDrawPosWgt
-    ) -> D.DistributionDraw:
+    def as_distribution(self, pos_wgt: DistDrawPosWgt) -> D.DistributionDraw:
         return D.DistributionDraw.from_grayscale_weights(pos_wgt)
 
     @override
@@ -497,9 +505,7 @@ class DistributionDrawSGDW(
         return mu.grayscale_weights
 
     @override
-    def first_sample(
-        self,
-    ) -> tuple[Seq[D.DistributionDraw], DistDrawPosWgt]:
+    def first_sample(self) -> tuple[Seq[D.DistributionDraw], DistDrawPosWgt]:
         mu_0: D.DistributionDraw = self.distr_sampler.sample(1)[0]
         return [mu_0], mu_0.grayscale_weights
 
@@ -508,14 +514,18 @@ class DistributionDrawSGDW(
         self,
         pos_wgt_k: DistDrawPosWgt,
         lst_mu_k: Seq[D.DistributionDraw],
-        gamma_k: float
+        gamma_k: float,
     ) -> DistDrawPosWgt:
         S_k = len(lst_mu_k)
-        gs_weights_lst_k = [pos_wgt_k] + [mu_k.grayscale_weights for mu_k in lst_mu_k]
+        gs_weights_lst_k = (
+            [pos_wgt_k] + [mu_k.grayscale_weights for mu_k in lst_mu_k]
+        )  # fmt: skip
         lst_gamma_g = [1 - gamma_k] + [gamma_k / S_k] * S_k
         gs_weights_kp1 = self.conv_bar_strategy(
             A=torch.stack(gs_weights_lst_k),
-            weights=torch.as_tensor(lst_gamma_g, dtype=self.dtype, device=self.device),
+            weights=torch.as_tensor(
+                lst_gamma_g, dtype=self.dtype, device=self.device
+            ),
             **self.conv_bar_kwargs,
         )
         return gs_weights_kp1
@@ -526,11 +536,13 @@ class DistributionDrawSGDW(
         self,
         pos_wgt_k: DistDrawPosWgt,
         pos_wgt_kp1: DistDrawPosWgt,
-        gamma_k: float
+        gamma_k: float,
     ) -> float:
-        return D.wass_distance(self.as_distribution(pos_wgt_k),
-                               self.as_distribution(pos_wgt_kp1),
-                               **self.wass_dist_kwargs)
+        return D.wass_distance(
+            self.as_distribution(pos_wgt_k),
+            self.as_distribution(pos_wgt_kp1),
+            **self.wass_dist_kwargs,
+        )
 
 
 # MARK: SGDW with discrete distributions
@@ -565,6 +577,7 @@ class DiscreteDistributionSGDW(
         For further information, see `ot.solve_sample
         <https://pythonot.github.io/all.html#ot.solve_sample>`_.
     """
+
     def __init__(
         self,
         distr_sampler: DistributionSamplerP[D.DiscreteDistribution],
@@ -592,7 +605,9 @@ class DiscreteDistributionSGDW(
         )
         self.alpha = alpha
         self.include_w_dist = True
-        self.solve_sample_kwargs: dict = solve_sample_kwargs if solve_sample_kwargs is not None else {}
+        self.solve_sample_kwargs: dict = (
+            solve_sample_kwargs if solve_sample_kwargs is not None else {}
+        )
 
     @override
     def as_distribution(
@@ -603,7 +618,10 @@ class DiscreteDistributionSGDW(
 
     @override
     def get_pos_wgt(self, mu: D.DiscreteDistribution) -> DiscretePosWgt:
-        return mu.enumerate_nz_support_().to(self._val), mu.nz_probs.to(self._val)
+        return (
+            mu.enumerate_nz_support_().to(self._val),
+            mu.nz_probs.to(self._val),
+        )
 
     @override
     def first_sample(
@@ -631,7 +649,9 @@ class DiscreteDistributionSGDW(
         for mu_i_k in lst_mu_k:
             X_i_k, m_i_k = self.get_pos_wgt(mu_i_k)
             m_i_k /= torch.sum(m_i_k)
-            res: ot.utils.OTResult = ot.solve_sample(X_k, X_i_k, m, m_i_k, **self.solve_sample_kwargs)
+            res: ot.utils.OTResult = ot.solve_sample(
+                X_k, X_i_k, m, m_i_k, **self.solve_sample_kwargs
+            )
             T_X_k += _transport_source(X_i_k, res.plan)
         T_X_k /= S_k
         # noinspection PyTypeChecker
@@ -643,10 +663,10 @@ class DiscreteDistributionSGDW(
         self,
         pos_wgt_k: DiscretePosWgt,
         pos_wgt_kp1: DiscretePosWgt,
-        gamma_k: float
+        gamma_k: float,
     ):
         X_k, _ = pos_wgt_k
         X_kp1, m = pos_wgt_kp1
         diff = X_k - X_kp1
-        w_dist = float((gamma_k ** 2) * torch.sum(m * LA.norm(diff, dim=1) ** 2))
+        w_dist = float((gamma_k**2) * torch.sum(m * LA.norm(diff, dim=1) ** 2))
         return w_dist

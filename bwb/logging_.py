@@ -174,7 +174,7 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         self,
         name: str,
         level: int = None,
-        handlers: list[logging.Handler] = None
+        handlers: list[logging.Handler] = None,
     ) -> logging.Logger:
         """
         Gets the logger by its name. Additionally, attach the handlers
@@ -327,8 +327,9 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         return self
 
     def __repr__(self):
-        return (f"LoggerConfiguration(LEVEL={self.LEVEL}, "
-                f"HANDLERS={self.HANDLERS})")
+        return (
+            f"LoggerConfiguration(LEVEL={self.LEVEL}, HANDLERS={self.HANDLERS})"
+        )
 
     def remove_all_handlers(self, logger: logging.Logger = None) -> t.Self:
         """
@@ -391,9 +392,7 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         return self
 
     def add_handler(
-        self,
-        handler: logging.Handler,
-        logger: logging.Logger = None
+        self, handler: logging.Handler, logger: logging.Logger = None
     ) -> t.Self:
         """
         Add a handler to the logger. If the logger is None, add the
@@ -522,7 +521,7 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         warning_category: t.Type[Warning] = None,
         stacklevel: int = 1,
         level: int = WARNING,
-        **kwargs
+        **kwargs,
     ) -> None:
         """
         Raise a warning with the logger and raise a warning with the
@@ -585,7 +584,7 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         logger: logging.Logger,
         error_category: t.Type[Exception],
         level: int = ERROR,
-        **kwargs
+        **kwargs,
     ) -> None:
         """
         Raise an error with the logger and raise an error with
@@ -651,7 +650,7 @@ log_config = LoggerConfiguration()
 def get_logger(
     name: str,
     level: int = log_config.LEVEL,
-    handlers: list[logging.Handler] = None
+    handlers: list[logging.Handler] = None,
 ) -> logging.Logger:
     return log_config.get_logger(name, level, handlers)
 
@@ -668,10 +667,11 @@ def raise_warning(
     warning_category: t.Type[Warning] = None,
     stacklevel: int = 1,
     level: int = WARNING,
-    **kwargs
+    **kwargs,
 ) -> None:
-    log_config.raise_warning(msg, logger, warning_category, stacklevel, level,
-                             **kwargs)
+    log_config.raise_warning(
+        msg, logger, warning_category, stacklevel, level, **kwargs
+    )
 
 
 # noinspection PyMissingOrEmptyDocstring
@@ -680,7 +680,7 @@ def raise_error(
     logger: logging.Logger,
     error_category: t.Type[Exception],
     level: int = ERROR,
-    **kwargs
+    **kwargs,
 ) -> None:
     log_config.raise_error(msg, logger, error_category, level, **kwargs)
 
@@ -862,8 +862,7 @@ class register_total_time:
             toc = time.perf_counter()
             dt_fmt = _time_fmt(toc - tic)
             self.logger.log(
-                self.level,
-                f"The function '{func.__name__}' takes {dt_fmt}"
+                self.level, f"The function '{func.__name__}' takes {dt_fmt}"
             )
             return result
 
@@ -871,8 +870,7 @@ class register_total_time:
 
 
 def register_total_time_function(
-    logger: logging.Logger,
-    level: int = logging.DEBUG
+    logger: logging.Logger, level: int = logging.DEBUG
 ):
     """
     Wrapper that records the total time it takes to execute a function,
@@ -922,8 +920,7 @@ def register_total_time_function(
 
 
 def register_total_time_method(
-    logger: logging.Logger,
-    level: int = logging.DEBUG
+    logger: logging.Logger, level: int = logging.DEBUG
 ):
     """
     Wrapper that records the total time it takes to execute a method,
@@ -965,8 +962,8 @@ def register_total_time_method(
             self: object = args[0]
             logger.log(
                 level,
-                f"Using the method "
-                f"'{self.__class__.__name__}.{method.__name__}'..."
+                "Using the method "
+                f"'{self.__class__.__name__}.{method.__name__}'...",
             )
             tic = time.perf_counter()
             result = method(*args, **kwargs)
@@ -974,8 +971,8 @@ def register_total_time_method(
             dt_fmt = _time_fmt(toc - tic)
             logger.log(
                 level,
-                f"The method "
-                f"'{self.__class__.__name__}.{method.__name__}' takes {dt_fmt}"
+                "The method "
+                f"'{self.__class__.__name__}.{method.__name__}' takes {dt_fmt}",
             )
             return result
 
@@ -1027,7 +1024,7 @@ def register_init_method(logger: logging.Logger, level: int = logging.DEBUG):
             logger.log(
                 level,
                 f"Using the method '{method_name}' "
-                f"in the class '{class_name}'."
+                f"in the class '{class_name}'.",
             )
             # Compute the result
             result = method(*args, **kwargs)

@@ -2,6 +2,7 @@
 This module provides functions to estimate the autocorrelation time of
 a time series.
 """
+
 import torch
 
 import bwb.logging_ as logging

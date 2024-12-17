@@ -1,6 +1,7 @@
 """
 Module that contains functions to plot images and histograms.
 """
+
 import typing as t
 import warnings
 from pathlib import Path
@@ -31,8 +32,7 @@ _SCALE_DEFAULT = 1.5
 # noinspection PyMissingOrEmptyDocstring,PyPropertyDefinition
 class DistributionP(t.Protocol):
     @property
-    def image(self) -> PIL.Image.Image:
-        ...
+    def image(self) -> PIL.Image.Image: ...
 
 
 def save_fig(
@@ -177,15 +177,22 @@ def plot_draw(
         of that function.
     :return: The figure and the axes of the plot.
     """
-    return plot_image(image=draw.image, title=title,
-                      sns_context_kw=sns_context_kw,
-                      subplots_kw=subplots_kw, **kwargs)
+    return plot_image(
+        image=draw.image,
+        title=title,
+        sns_context_kw=sns_context_kw,
+        subplots_kw=subplots_kw,
+        **kwargs,
+    )
 
 
 def plot_list_of_images(
     list_of_images: t.Sequence[PIL.Image.Image],
-    n_rows: int = 3, n_cols: int = 12, factor: float = 1.5,
-    title=None, cmap: str = _CMAP_DEFAULT,
+    n_rows: int = 3,
+    n_cols: int = 12,
+    factor: float = 1.5,
+    title=None,
+    cmap: str = _CMAP_DEFAULT,
     labels: t.Optional[t.Sequence[str]] = None,
 ) -> tuple[plt.Figure, np.ndarray[plt.Axes]]:
     """
@@ -211,8 +218,10 @@ def plot_list_of_images(
 
     n_images = len(list_of_images)
     if n_images < n_rows * n_cols:
-        msg = ("The number of images is less than the number of rows "
-               "times the number of columns.")
+        msg = (
+            "The number of images is less than the number of rows "
+            "times the number of columns."
+        )
         _log.warning(msg)
         warnings.warn(msg, UserWarning, stacklevel=2)
     n_images = min(n_images, n_rows * n_cols)
@@ -226,8 +235,10 @@ def plot_list_of_images(
         warnings.warn(msg, UserWarning, stacklevel=2)
 
     fig, axs = plt.subplots(
-        n_rows, n_cols, figsize=(n_cols * factor, n_rows * factor),
-        subplot_kw={"xticks": [], "yticks": []}
+        n_rows,
+        n_cols,
+        figsize=(n_cols * factor, n_rows * factor),
+        subplot_kw={"xticks": [], "yticks": []},
     )  # type: plt.Figure, np.ndarray[plt.Axes]
 
     fig.suptitle(title, fontsize=16)
@@ -247,8 +258,11 @@ def plot_list_of_images(
 
 def plot_list_of_draws(
     list_of_draws: t.Sequence[DistributionP],
-    n_rows: int = 4, n_cols=12, factor: float = 1.5,
-    title=None, cmap: str = _CMAP_DEFAULT,
+    n_rows: int = 4,
+    n_cols=12,
+    factor: float = 1.5,
+    title=None,
+    cmap: str = _CMAP_DEFAULT,
     labels: t.Optional[t.Sequence[str]] = None,
 ) -> tuple[plt.Figure, np.ndarray[plt.Axes]]:
     """
@@ -274,12 +288,16 @@ def plot_list_of_draws(
     """
 
     list_of_images: list[PIL.Image.Image] = [
-        draw.image for draw in list_of_draws[:n_rows * n_cols]
+        draw.image for draw in list_of_draws[: n_rows * n_cols]
     ]
     return plot_list_of_images(
         list_of_images=list_of_images,
-        n_rows=n_rows, n_cols=n_cols, factor=factor,
-        title=title, cmap=cmap, labels=labels
+        n_rows=n_rows,
+        n_cols=n_cols,
+        factor=factor,
+        title=title,
+        cmap=cmap,
+        labels=labels,
     )
 
 
@@ -348,8 +366,9 @@ def plot_histogram_from_points(
     with sns.plotting_context(**sns_context_kw):
         plt.figure(**figure_kwargs)
         df = pd.DataFrame(data)
-        histplot_return = sns.histplot(data=df, x=0, y=1,
-                                       **histplot_kwargs)  # type: plt.Axes
+        histplot_return = sns.histplot(
+            data=df, x=0, y=1, **histplot_kwargs
+        )  # type: plt.Axes
         plt.xlabel(xlabel_)
         plt.ylabel(ylabel_)
         plt.title(title)

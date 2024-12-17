@@ -1,6 +1,7 @@
 """
 This module contains utility functions and classes for the algorithm.
 """
+
 import numbers as num
 import time
 import warnings
@@ -29,10 +30,7 @@ type BatchSizeArg = int | BatchSizeFn
 
 
 def step_scheduler(
-    *,
-    a: float = 1,
-    b: float = 0,
-    c: float = 1
+    *, a: float = 1, b: float = 0, c: float = 1
 ) -> StepSchedulerFn:
     r"""
     This function returns a step scheduler with parameters :math:`a`,
@@ -209,8 +207,7 @@ class DetentionParameters:
 
     @max_iter.setter
     def max_iter(self, max_iter: int):
-        if not (isinstance(max_iter, num.Integral)
-                or max_iter == float("inf")):
+        if not (isinstance(max_iter, num.Integral) or max_iter == float("inf")):
             raise TypeError("max_iter must be an integer or infinity")
         if max_iter <= 0:
             raise ValueError("max_iter must be positive")
@@ -251,12 +248,16 @@ class DetentionParameters:
         if self.max_time != float("inf"):
             max_time = self.max_time
             time_fmt = str(timedelta(seconds=max_time))[:-4]
-        max_iter_fmt = f"{self.max_iter:_}" if self.max_iter != float("inf") else "∞"
+        max_iter_fmt = (
+            f"{self.max_iter:_}" if self.max_iter != float("inf") else "∞"
+        )
 
-        return (f"DetentionParameters(tol={self.tol:.2e}, "
-                f"min_iter={self.min_iter:_}, "
-                f"max_iter={max_iter_fmt}, max_time={time_fmt}, "
-                f"wass_dist_every={self.wass_dist_every})")
+        return (
+            f"DetentionParameters(tol={self.tol:.2e}, "
+            f"min_iter={self.min_iter:_}, "
+            f"max_iter={max_iter_fmt}, max_time={time_fmt}, "
+            f"wass_dist_every={self.wass_dist_every})"
+        )
 
 
 class IterationParameters(Iterator[int]):
@@ -369,8 +370,7 @@ class IterationParameters(Iterator[int]):
         :return: True if the Wasserstein distance should be computed,
             False otherwise.
         """
-        return (self.k % self.det_params.wass_dist_every == 0
-                and self.k > 0)
+        return self.k % self.det_params.wass_dist_every == 0 and self.k > 0
 
     def update_wass_dist(self, wass_dist: float) -> float:
         """
@@ -387,7 +387,10 @@ class IterationParameters(Iterator[int]):
         # Use EMA to update the Wasserstein distance
         smooth = self.smooth
         self.w_dist = (1 - smooth) * last_w_dist + smooth * wass_dist
-        _log.debug(f"s: {smooth:.2f}, (1 - s) * {last_w_dist:.4f} + s * {wass_dist:.4f} => {self.w_dist:.4f}")
+        _log.debug(
+            f"s: {smooth:.2f}, (1 - s) * {last_w_dist:.4f} + s *"
+            f" {wass_dist:.4f} => {self.w_dist:.4f}"
+        )
         return self.w_dist
 
     def detention_criteria(self) -> bool:
@@ -434,7 +437,11 @@ class IterationParameters(Iterator[int]):
         return False
 
     def __repr__(self) -> str:
-        w_dist_fmt = f"{self.w_dist:.6f}" if self.w_dist != float("inf") else "∞"
+        w_dist_fmt = (
+            f"{self.w_dist:.6f}" if self.w_dist != float("inf") else "∞"
+        )
         time_fmt = str(timedelta(seconds=self.total_time))[:-4]
-        return (f"IterationParameters(k={self.k:_}, w_dist={w_dist_fmt}, "
-                f"t={time_fmt}, Δt={self.diff_t * 1000:.2f} [ms])")
+        return (
+            f"IterationParameters(k={self.k:_}, w_dist={w_dist_fmt}, "
+            f"t={time_fmt}, Δt={self.diff_t * 1000:.2f} [ms])"
+        )

@@ -1,6 +1,7 @@
 """
 This module contains the base classes and protocols for the models.
 """
+
 import abc
 import typing as t
 
@@ -61,9 +62,7 @@ class DiscreteWeightedModelSetP[DistributionT](
     """
 
     def compute_likelihood(
-        self,
-        data: ArrayLikeT = None,
-        **kwargs
+        self, data: ArrayLikeT = None, **kwargs
     ) -> torch.Tensor:
         """
         Compute the probabilities of the data given the models.
@@ -83,9 +82,7 @@ class BaseDiscreteWeightedModelSet[DistributionT](
 
     @abc.abstractmethod
     def compute_likelihood(
-        self,
-        data: ArrayLikeT = None,
-        **kwargs
+        self, data: ArrayLikeT = None, **kwargs
     ) -> torch.Tensor:
         """
         Compute the probabilities of the data given the models.
@@ -97,8 +94,7 @@ class BaseDiscreteWeightedModelSet[DistributionT](
 
 
 class ModelDataset(
-    BaseDiscreteModelsSet[DistributionDraw],
-    t.Iterable[DistributionDraw]
+    BaseDiscreteModelsSet[DistributionDraw], t.Iterable[DistributionDraw]
 ):
     """
     An adapter class that adapts a ``torchvision.vision.VisionDataset``
@@ -122,17 +118,17 @@ class ModelDataset(
     @t.override
     def get(self, i: int, **kwargs) -> DistributionDraw:
         return DistributionDraw.from_grayscale_weights(
-            self.dataset[i][0],
-            device=self.device,
-            dtype=self.dtype
+            self.dataset[i][0], device=self.device, dtype=self.dtype
         )
 
     @t.override
     def __repr__(self) -> str:
-        return (f"ModelDataset("
-                f"device={self.device}, "
-                f"dtype={self.dtype}, "
-                f"dataset={self.dataset})")
+        return (
+            "ModelDataset("
+            f"device={self.device}, "
+            f"dtype={self.dtype}, "
+            f"dataset={self.dataset})"
+        )
 
     @t.override
     def __iter__(self) -> t.Iterator[DistributionDraw]:

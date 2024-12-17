@@ -2,6 +2,7 @@
 configuration class and some helper functions to change the
 configuration. The configuration is a singleton, so it is shared across
 the whole library."""
+
 import threading
 import typing as t
 import warnings
@@ -48,6 +49,7 @@ class Config(metaclass=_SingletonMeta):
     Configuration class for the library. This class is a singleton, so
     it is shared across the whole library.
     """
+
     # The dtype selected by default
     dtype = torch.float32
 
@@ -83,7 +85,7 @@ class Config(metaclass=_SingletonMeta):
         faster on GPUs, but has reduced precision and may more often
         cause numerical instability. Only recommended on GPUs.
         """
-        if cls.device.type == 'cpu':
+        if cls.device.type == "cpu":
             msg = "WARNING: half precision not recommend on CPU"
             _log.warning(msg)
             warnings.warn(msg, UserWarning, stacklevel=2)
@@ -115,9 +117,9 @@ class Config(metaclass=_SingletonMeta):
         CPU, you can use a specific CPU by setting `n`.
         """
         if n is None:
-            cls.device = torch.device('cpu')
+            cls.device = torch.device("cpu")
         else:
-            cls.device = torch.device('cpu', n)
+            cls.device = torch.device("cpu", n)
 
     @classmethod
     def use_gpu(cls, n: t.Optional[int] = None):
@@ -145,9 +147,9 @@ class Config(metaclass=_SingletonMeta):
                 _log.error(msg)
                 raise CudaNotAvailableError(msg, n)
 
-            cls.device = torch.device('cuda', n)
+            cls.device = torch.device("cuda", n)
 
-        cls.device = torch.device('cuda', torch.cuda.current_device())
+        cls.device = torch.device("cuda", torch.cuda.current_device())
 
     @classmethod
     def print_gpu_information(cls):
@@ -162,13 +164,16 @@ class Config(metaclass=_SingletonMeta):
 
         print("CUDA is available:")
         current = None
-        if cls.device.type == 'cuda':
+        if cls.device.type == "cuda":
             current = cls.device.index
         for n in range(torch.cuda.device_count()):
             print(
-                "%2d  %s%s" % (
-                    n, torch.cuda.get_device_name(n),
-                    " (selected)" if n == current else "")
+                "%2d  %s%s"
+                % (
+                    n,
+                    torch.cuda.get_device_name(n),
+                    " (selected)" if n == current else "",
+                )
             )
 
     @classmethod

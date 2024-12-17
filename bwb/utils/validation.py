@@ -48,7 +48,8 @@ def check_is_fitted(estimator, attributes=None, *, msg=None, all_or_any=all):
         fitted = all_or_any([hasattr(estimator, attr) for attr in attributes])
     else:
         fitted = [
-            v for v in vars(estimator)
+            v
+            for v in vars(estimator)
             if v.endswith("_") and not v.startswith("__")
         ]
 
@@ -57,9 +58,7 @@ def check_is_fitted(estimator, attributes=None, *, msg=None, all_or_any=all):
 
 
 def shape_validation(
-    shape,
-    n_dim=2,
-    msg="The shape must have dimension {n_dim}."
+    shape, n_dim=2, msg="The shape must have dimension {n_dim}."
 ) -> torch.Size:
     """
     Function that validates the shape of the tensor.

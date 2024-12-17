@@ -38,21 +38,36 @@ else:
     # noinspection PyUnreachableCode
     _grayscale = torch.jit.script(
         __grayscale,
-        example_inputs=[(
-            torch.rand((28, 28),
-                       dtype=torch.float32, device=config.device),  # to_return
-            torch.rand((784,),
-                       dtype=torch.float32, device=config.device),  # weights
-            torch.randint(0, 28, size=(784, 2),
-                          dtype=torch.int32, device=config.device),  # support
-        ), (
-            torch.rand((28, 28),
-                       dtype=torch.float64, device=config.device),  # to_return
-            torch.rand((784,),
-                       dtype=torch.float64, device=config.device),  # weights
-            torch.randint(0, 28, size=(784, 2),
-                          dtype=torch.int32, device=config.device),  # support
-        )]
+        example_inputs=[
+            (
+                # to_return
+                torch.rand((28, 28), dtype=torch.float32, device=config.device),
+                # weights
+                torch.rand((784,), dtype=torch.float32, device=config.device),
+                # support
+                torch.randint(
+                    0,
+                    28,
+                    size=(784, 2),
+                    dtype=torch.int32,
+                    device=config.device,
+                ),
+            ),
+            (
+                # to_return
+                torch.rand((28, 28), dtype=torch.float64, device=config.device),
+                # weights
+                torch.rand((784,), dtype=torch.float64, device=config.device),
+                # support
+                torch.randint(
+                    0,
+                    28,
+                    size=(784, 2),
+                    dtype=torch.int32,
+                    device=config.device,
+                ),
+            ),
+        ],
     )
     _grayscale.save(str(_GRAYSCALE_PATH), {})
 
@@ -73,7 +88,8 @@ def grayscale_parser(
     if prod(shape) != support.shape[0]:
         logging.raise_error(
             "The shape of the image must be equal to the number of samples",
-            _log, ValueError
+            _log,
+            ValueError,
         )
     device = weights.device
     dtype = weights.dtype
@@ -114,19 +130,22 @@ else:
     # noinspection PyUnreachableCode
     _partition = torch.jit.script(
         __partition,
-        example_inputs=[(
-            torch.rand((784, 2), dtype=torch.float32, device=config.device),
-            # X
-            torch.rand((784,), dtype=torch.float32, device=config.device),
-            # mu
-            0.5,  # alpha
-        ), (
-            torch.rand((784, 2), dtype=torch.float64, device=config.device),
-            # X
-            torch.rand((784,), dtype=torch.float64, device=config.device),
-            # mu
-            0.5,  # alpha
-        )]
+        example_inputs=[
+            (
+                # X
+                torch.rand((784, 2), dtype=torch.float32, device=config.device),
+                # mu
+                torch.rand((784,), dtype=torch.float32, device=config.device),
+                0.5,  # alpha
+            ),
+            (
+                # X
+                torch.rand((784, 2), dtype=torch.float64, device=config.device),
+                # mu
+                torch.rand((784,), dtype=torch.float64, device=config.device),
+                0.5,  # alpha
+            ),
+        ],
     )
     _partition.save(str(_PARTITION_PATH), {})
 
@@ -142,22 +161,20 @@ def partition(X: torch.Tensor, mu: torch.Tensor, alpha: float):
     """
     if mu.dtype not in [torch.float32, torch.float64]:
         logging.raise_error(
-            "The mu tensor must be of type float32 or float64",
-            _log, ValueError
+            "The mu tensor must be of type float32 or float64", _log, ValueError
         )
 
     alpha = torch.tensor(alpha)
 
     if alpha <= 0:
         logging.raise_error(
-            "The alpha parameter must be greater than 0",
-            _log, ValueError
+            "The alpha parameter must be greater than 0", _log, ValueError
         )
 
     if _log.level <= logging.INFO:
-        n_times = torch.ceil(
-            alpha * mu / torch.min(mu)
-        ).to(torch.int).to(mu.device)
+        n_times = (
+            torch.ceil(alpha * mu / torch.min(mu)).to(torch.int).to(mu.device)
+        )
         _log.debug(f"Number of times to repeat each sample: {n_times}")
         n_rows = int(torch.sum(n_times))
         _log.info(f"Number of rows in the new X: {n_rows}")

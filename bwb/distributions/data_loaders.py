@@ -1,6 +1,7 @@
 """
 This module contains the classes that are used to load the data.
 """
+
 import abc
 import time
 import typing as t
@@ -48,16 +49,17 @@ class BaseDistributionDataLoader[DistributionT](
             torch.isclose(probs_tensor_sum, torch.ones_like(probs_tensor_sum))
         ).all():
             raise ValueError(
-                "The sum over the dim 1 of the tensor "
-                "probs_tensor must all be 1."
+                "The sum over the dim 1 of the tensor probs_tensor "
+                "must all be 1."
             )
 
         # Set the tensor of log-probabilities
         self.logits_tensor = torch.log(self.probs_tensor + config.eps)
 
         # And define the dictionary to wrap
-        self._models: dict[int, DistributionT] = {i: None
-                                                  for i in range(_n_probs)}
+        self._models: dict[int, DistributionT] = {
+            i: None for i in range(_n_probs)
+        }
 
         toc = time.time()
         _log.debug(f"Δt={toc - tic:.2f} [seg]")
@@ -99,15 +101,15 @@ class BaseDistributionDataLoader[DistributionT](
 
 
 class DiscreteDistributionDataLoader(
-    BaseDistributionDataLoader[dist.DiscreteDistribution]):
+    BaseDistributionDataLoader[dist.DiscreteDistribution]
+):
     """
     DataLoader for the
     :py:class:`bwb.distributions.discrete_distributions.DiscreteDistributions`.
     """
 
     def _create_distribution_instance(
-        self,
-        index: int
+        self, index: int
     ) -> dist.DiscreteDistribution:
         return dist.DiscreteDistribution(self.probs_tensor[index])
 
@@ -173,7 +175,8 @@ class DistributionDrawDataLoader(
         _log.debug(f"Δt={toc - tic:.2f} [seg]")
 
         super(DistributionDrawDataLoader, self).__init__(
-            probs_tensor=probs_tensor)
+            probs_tensor=probs_tensor
+        )
 
     def _create_distribution_instance(self, index) -> dist.DistributionDraw:
         weights = self.transform(self.probs_tensor[index])

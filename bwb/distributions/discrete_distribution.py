@@ -1,12 +1,12 @@
 """
 Models for discrete distributions.
 """
+
 import typing as t
 import warnings
 
 import ot.utils
 import torch
-# noinspection PyPackageRequirements
 import torch.distributions
 import torchvision.transforms.functional as F
 from PIL import Image
@@ -97,6 +97,7 @@ def wass_distance(
         <https://pythonot.github.io/all.html#ot.solve_sample>`_.
     :return: The Wasserstein distance between the two distributions.
     """
+
     def get_pos_wgt(d: DistributionP) -> tuple[torch.Tensor, torch.Tensor]:
         """Get the position and weights of the distribution."""
         return d.enumerate_nz_support_().to(d.dtype), d.nz_probs
@@ -105,8 +106,7 @@ def wass_distance(
     x_q, w_q = get_pos_wgt(q)
 
     res: ot.utils.OTResult = ot.solve_sample(
-        x_p, x_q, w_p, w_q,
-        **solve_sample_kwargs
+        x_p, x_q, w_p, w_q, **solve_sample_kwargs
     )
 
     return res.value
@@ -160,7 +160,7 @@ class DiscreteDistribution(torch.distributions.Categorical, HasDeviceDType):
         if (
             support is not None
             and len(self.weights) != len(self._original_support)
-        ):
+        ):  # fmt: skip
             raise ValueError(
                 "The sizes of weights and support does not coincide:"
                 f" {len(self.weights)} != {len(self._original_support)}"
@@ -232,7 +232,7 @@ class DistributionDraw(DiscreteDistribution):
         shape: SizeT,
         support: torch.Tensor = None,
         device: torch.device = None,
-        dtype: torch.dtype = None
+        dtype: torch.dtype = None,
     ) -> None:
         """
         Initializer.
@@ -256,10 +256,7 @@ class DistributionDraw(DiscreteDistribution):
         self._grayscale_weights = None
 
         super(DistributionDraw, self).__init__(
-            weights=weights,
-            support=support,
-            dtype=dtype,
-            device=device
+            weights=weights, support=support, dtype=dtype, device=device
         )
 
     @property
@@ -267,9 +264,9 @@ class DistributionDraw(DiscreteDistribution):
         """Original support."""
         if self._original_support is None:
             n, m = self.shape
-            index = torch.arange(n * m,
-                                 device=self.device,
-                                 dtype=torch.int64).reshape(-1, 1)
+            index = torch.arange(
+                n * m, device=self.device, dtype=torch.int64
+            ).reshape(-1, 1)
             self._original_support = torch.cat((index // m, index % m), 1)
 
         return self._original_support
@@ -297,7 +294,8 @@ class DistributionDraw(DiscreteDistribution):
         """
         warnings.warn(
             "This method is deprecated, use the constructor instead.",
-            DeprecationWarning, stacklevel=2
+            DeprecationWarning,
+            stacklevel=2,
         )
         return cls(weights, shape, device=device, dtype=dtype)
 
@@ -318,7 +316,7 @@ class DistributionDraw(DiscreteDistribution):
             weights=dd.weights,
             shape=shape,
             device=device,
-            dtype=dtype
+            dtype=dtype,
         )
 
     @classmethod
@@ -350,8 +348,9 @@ class DistributionDraw(DiscreteDistribution):
             grayscale_weights /= torch.sum(grayscale_weights)
         weights = grayscale_weights.reshape((-1,))
 
-        to_return = cls(weights=weights, shape=shape,
-                        device=device, dtype=dtype)
+        to_return = cls(
+            weights=weights, shape=shape, device=device, dtype=dtype
+        )
 
         to_return._grayscale_weights = grayscale_weights
 
@@ -394,8 +393,9 @@ class DistributionDraw(DiscreteDistribution):
         grayscale_weights /= torch.sum(grayscale_weights)
         weights = grayscale_weights.reshape((-1,)).to(dtype)
 
-        to_return = cls(weights=weights, shape=shape,
-                        device=device, dtype=dtype)
+        to_return = cls(
+            weights=weights, shape=shape, device=device, dtype=dtype
+        )
 
         to_return._grayscale = grayscale
         to_return._grayscale_weights = grayscale_weights.to(dtype)
@@ -412,8 +412,7 @@ class DistributionDraw(DiscreteDistribution):
         if self._grayscale_weights is not None:
             grayscale = torch.clone(self._grayscale_weights)
             grayscale /= grayscale.max()
-            grayscale *= torch.tensor(255,
-                                      dtype=self.dtype, device=self.device)
+            grayscale *= torch.tensor(255, dtype=self.dtype, device=self.device)
             self._grayscale = torch.as_tensor(
                 grayscale, dtype=torch.uint8, device=self.device
             )
@@ -423,7 +422,9 @@ class DistributionDraw(DiscreteDistribution):
         support = self.original_support
         # Compute the grayscale
         self._grayscale = grayscale_parser(
-            self.shape, weights, support,
+            self.shape,
+            weights,
+            support,
         )
 
         return self._grayscale
@@ -460,7 +461,7 @@ class DistributionDraw(DiscreteDistribution):
         to_return += f"dtype={self.dtype}), "
 
         if to_return.endswith(", "):
-            to_return = to_return[:-len(", ")]
+            to_return = to_return[: -len(", ")]
 
         to_return += ")"
 

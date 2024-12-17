@@ -3,6 +3,7 @@ Module to plot the steps of the SGDW algorithm. This module defines
 many classes that wrap the SGDW algorithm and plot the steps at
 a specific iteration.
 """
+
 import abc
 from itertools import product
 from typing import Callable, final, Optional, override
@@ -22,8 +23,7 @@ type DistDrawPosWgtT = torch.Tensor
 
 
 class Plotter[DistributionT, PosWgtT](
-    Runnable[DistributionT],
-    metaclass=abc.ABCMeta
+    Runnable[DistributionT], metaclass=abc.ABCMeta
 ):
     fig: Optional[plt.Figure]
     ax: Optional[plt.Axes]
@@ -74,7 +74,7 @@ class Plotter[DistributionT, PosWgtT](
         init: Optional[int] = None,
         n_rows: Optional[int] = None,
         n_cols: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ) -> tuple[plt.Figure, plt.Axes | np.ndarray[plt.Axes]]:
         """
         Plot the distributions.
@@ -121,12 +121,15 @@ class PlotterComparison(Plotter[DistributionDraw, DistDrawPosWgtT]):
         cmap="binary",
         **kwargs,
     ):
-        super().__init__(sgdw, plot_every, n_cols, n_rows, factor, cmap, **kwargs)
+        super().__init__(
+            sgdw, plot_every, n_cols, n_rows, factor, cmap, **kwargs
+        )
         if plot_every is not None and plot_every < n_rows * n_cols:
             logging.raise_error(
                 "'plot_every' should not be less than n_rows * n_cols."
                 f" Currently: {plot_every = } < {n_rows * n_cols = }",
-                _log, ValueError
+                _log,
+                ValueError,
             )
         sgdw = self.sgdw
         self.pos_wgt = sgdw = W.LogPosWgtIterProxy(sgdw)
@@ -152,20 +155,24 @@ class PlotterComparison(Plotter[DistributionDraw, DistDrawPosWgtT]):
         if init < 0:
             logging.raise_error(
                 f"init should be greater than 0. Currently: {init = }",
-                _log, ValueError
+                _log,
+                ValueError,
             )
         if init > max_k - max_imgs + 1:
             logging.raise_error(
                 f"init should be less than {max_k - max_imgs + 1}. "
                 f"Currently: {init = }",
-                _log, ValueError
+                _log,
+                ValueError,
             )
 
         row, col = n_rows * 2, n_cols
 
         fig, ax = plt.subplots(
-            row, col, figsize=(col * self.factor, row * self.factor),
-            subplot_kw={"xticks": [], "yticks": []}
+            row,
+            col,
+            figsize=(col * self.factor, row * self.factor),
+            subplot_kw={"xticks": [], "yticks": []},
         )
 
         fig.suptitle(kwargs.get("title", "SGDW"))
@@ -184,9 +191,10 @@ class PlotterComparison(Plotter[DistributionDraw, DistDrawPosWgtT]):
             # Plot the sample
             fig_sample = self.create_distr(self.pos_wgt_samp[k][0])
             ax0.imshow(fig_sample.image, cmap=self.cmap)
-            ax0.set_title(f"$k={k}$\n"
-                          + f"$\\gamma_k={gamma_k * 100:.1f}\\%$",
-                          size="x-small")
+            ax0.set_title(
+                f"$k={k}$\n" + f"$\\gamma_k={gamma_k * 100:.1f}\\%$",
+                size="x-small",
+            )
 
             # Plot the step
             fig_step = self.create_distr(self.pos_wgt[k])
@@ -206,7 +214,8 @@ class PlotterComparisonProjected(Plotter[DistributionDraw, DistDrawPosWgtT]):
         self,
         sgdw: SGDW[DistributionDraw, DistDrawPosWgtT],
         projector: W.ProjectorFn[DistDrawPosWgtT],
-        proj_every: int = 1, *,
+        proj_every: int = 1,
+        *,
         plot_every: Optional[int] = None,
         n_cols=12,
         n_rows=1,
@@ -215,18 +224,23 @@ class PlotterComparisonProjected(Plotter[DistributionDraw, DistDrawPosWgtT]):
         proj_kwargs: Optional[dict] = None,
         **kwargs,
     ):
-        super().__init__(sgdw, plot_every, n_cols, n_rows, factor, cmap, **kwargs)
+        super().__init__(
+            sgdw, plot_every, n_cols, n_rows, factor, cmap, **kwargs
+        )
         if plot_every is not None and plot_every < n_rows * n_cols:
             logging.raise_error(
                 "'plot_every' should not be less than n_rows * n_cols."
                 f" Currently: {plot_every = } < {n_rows * n_cols = }",
-                _log, ValueError
+                _log,
+                ValueError,
             )
         sgdw = self.sgdw
         self.pos_wgt_samp = sgdw = W.LogPosWgtSampledProxy(sgdw)
         self.pos_wgt = sgdw = W.LogPosWgtIterProxy(sgdw)
         proj_kwargs_: dict = proj_kwargs if proj_kwargs is not None else {}
-        self.sgdw_proj = sgdw = W.SGDWProjectedDecorator(sgdw, projector, proj_every, **proj_kwargs_)
+        self.sgdw_proj = sgdw = W.SGDWProjectedDecorator(
+            sgdw, projector, proj_every, **proj_kwargs_
+        )
         self.pos_wgt_proj = sgdw = W.LogPosWgtIterProxy(sgdw)
         self.sgdw = sgdw
 
@@ -252,20 +266,24 @@ class PlotterComparisonProjected(Plotter[DistributionDraw, DistDrawPosWgtT]):
         if init < 0:
             logging.raise_error(
                 f"init should be greater than 0. Currently: {init = }",
-                _log, ValueError
+                _log,
+                ValueError,
             )
         if init > max_k - max_imgs + 1:
             logging.raise_error(
                 f"init should be less than {max_k - max_imgs + 1}. "
                 f"Currently: {init = }",
-                _log, ValueError
+                _log,
+                ValueError,
             )
 
         row, col = n_rows * 3, n_cols
 
         fig, ax = plt.subplots(
-            row, col, figsize=(col * self.factor, row * self.factor),
-            subplot_kw={"xticks": [], "yticks": []}
+            row,
+            col,
+            figsize=(col * self.factor, row * self.factor),
+            subplot_kw={"xticks": [], "yticks": []},
         )
 
         fig.suptitle(kwargs.get("title", "SGDW"))
@@ -285,9 +303,10 @@ class PlotterComparisonProjected(Plotter[DistributionDraw, DistDrawPosWgtT]):
             # Plot the sample
             fig_sample = create_distr(self.pos_wgt_samp[k][0])
             ax0.imshow(fig_sample.image, cmap=self.cmap)
-            ax0.set_title(f"$k={k}$\n"
-                          + f"$\\gamma_k={gamma_k * 100:.1f}\\%$",
-                          size="x-small")
+            ax0.set_title(
+                f"$k={k}$\n" + f"$\\gamma_k={gamma_k * 100:.1f}\\%$",
+                size="x-small",
+            )
 
             # Plot the step
             fig_step = create_distr(self.pos_wgt[k])

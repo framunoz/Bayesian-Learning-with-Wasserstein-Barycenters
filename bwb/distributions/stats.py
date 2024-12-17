@@ -58,8 +58,10 @@ def _cached_function_results() -> Callable:
         # noinspection PyMissingTypeHints,PyMissingOrEmptyDocstring
         @functools.wraps(func)
         def wrapped(*args, **kwargs):
-            key = (tuple(id(a) for a in args),
-                   tuple((k, id(v)) for k, v in kwargs.items()))
+            key = (
+                tuple(id(a) for a in args),
+                tuple((k, id(v)) for k, v in kwargs.items()),
+            )
             if key not in cache:
                 cache[key] = func(*args, **kwargs)
             return cache[key]
@@ -78,8 +80,7 @@ def _log_like(
     """
     Compute the log-likelihood of the models.
     """
-    return [float(ps.log_likelihood_model(d, data))
-            for d in distributions]
+    return [float(ps.log_likelihood_model(d, data)) for d in distributions]
 
 
 @logging.register_total_time(_log)
@@ -134,9 +135,11 @@ def plot_log_like_models(
     log_likes = _log_like(sorted_distr, data)
     fig_ax = utils.plot_list_of_draws(
         list_of_draws=sorted_distr,
-        labels=[r"$i={}$ $\ell = {:.2f}$".format(i, log_like)
-                for i, log_like in enumerate(log_likes)],
-        **kwargs
+        labels=[
+            r"$i={}$ $\ell = {:.2f}$".format(i, log_like)
+            for i, log_like in enumerate(log_likes)
+        ],
+        **kwargs,
     )
     return fig_ax, sorted_distr
 
@@ -189,7 +192,7 @@ def find_set_quantile(
     return sorted_distr[:idx]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from random import random
 
     _log = logging.get_logger(__name__, logging.DEBUG)

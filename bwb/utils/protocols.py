@@ -26,6 +26,7 @@ class DiscreteDistribSamplerP(Protocol):
     """
     Protocol for the distribution sampler.
     """
+
     samples_counter: c.Counter[int]
 
 
@@ -34,4 +35,5 @@ class DrawP(Protocol):
     """
     Protocol for the draw.
     """
+
     image: PIL.Image.Image

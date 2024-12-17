@@ -1,11 +1,12 @@
 """
 This module contains the wrappers for the SGDW algorithm.
 """
+
 # TODO: ANNOTATE THE METHODS
 import abc
 from copy import deepcopy
 from datetime import timedelta
-from typing import (Callable, Literal, override, Sequence as Seq, TypedDict)
+from typing import Callable, Literal, override, Sequence as Seq, TypedDict
 
 import torch
 
@@ -30,7 +31,8 @@ _log = logging.get_logger(__name__)
 
 type ProjectorFn[PosWgtT] = Callable[[PosWgtT], PosWgtT]
 type InterpStrategyFn[PosWgtT] = Callable[[PosWgtT, PosWgtT, float], PosWgtT]
-type InterpStrategyArg[PosWgtT] = Literal["geodesic", "linear"] | InterpStrategyFn[PosWgtT]
+type InterpStrategyLit = Literal["geodesic", "linear"]
+type InterpStrategyArg[PosWgtT] = InterpStrategyLit | InterpStrategyFn[PosWgtT]
 
 
 class SGDWBaseWrapper[DistributionT, PosWgtT](SGDW[DistributionT, PosWgtT]):
@@ -59,7 +61,7 @@ class SGDWBaseWrapper[DistributionT, PosWgtT](SGDW[DistributionT, PosWgtT]):
         if add_repr:
             to_return += new_line + add_repr
         if to_return.endswith(sep):
-            to_return = to_return[:-len(sep)]
+            to_return = to_return[: -len(sep)]
         return to_return
 
     @override
@@ -86,16 +88,12 @@ class SGDWBaseWrapper[DistributionT, PosWgtT](SGDW[DistributionT, PosWgtT]):
         return self.wrapee._compute_wass_dist(pos_wgt_k, pos_wgt_kp1, gamma_k)
 
     @override
-    def update_wass_dist(
-        self, wass_dist: float
-    ) -> float:
+    def update_wass_dist(self, wass_dist: float) -> float:
         return self.wrapee.update_wass_dist(wass_dist)
 
     @override
     def step_algorithm(
-        self,
-        k: int,
-        pos_wgt_k: PosWgtT
+        self, k: int, pos_wgt_k: PosWgtT
     ) -> tuple[Seq[DistributionT], PosWgtT]:
         return self.wrapee.step_algorithm(k, pos_wgt_k)
 
@@ -136,9 +134,7 @@ class LogWassDistProxy[DistributionT, PosWgtT](
         return to_return
 
     @override
-    def update_wass_dist(
-        self, wass_dist: float
-    ) -> float:
+    def update_wass_dist(self, wass_dist: float) -> float:
         wass_dist_smoothed = super().update_wass_dist(wass_dist)
         self.wass_dist_lst.append(wass_dist)
         self.wass_dist_smoothed_lst.append(wass_dist_smoothed)
@@ -153,13 +149,18 @@ class LogWassDistProxy[DistributionT, PosWgtT](
         Get the lists of iterations, Wasserstein distances and smoothed
         Wasserstein distances.
         """
-        return self.iterations_lst, self.wass_dist_lst, self.wass_dist_smoothed_lst
+        return (
+            self.iterations_lst,
+            self.wass_dist_lst,
+            self.wass_dist_smoothed_lst,
+        )
 
 
 class ReportOptions(TypedDict, total=False):
     """
     This class contains the report options for the algorithm.
     """
+
     iter: bool
     w_dist: bool
     step_schd: bool
@@ -175,6 +176,7 @@ class ReportProxy[DistributionT, PosWgtT](
     Proxy class for the SGDW algorithm to report relevant iteration
     information.
     """
+
     INCLUDE_OPTIONS = ReportOptions(
         iter=True,
         w_dist=True,
@@ -187,7 +189,8 @@ class ReportProxy[DistributionT, PosWgtT](
 
     def __init__(
         self,
-        wrapee: SGDW[DistributionT, PosWgtT], *,
+        wrapee: SGDW[DistributionT, PosWgtT],
+        *,
         report_every: int = 10,
         len_bar: int = 5,
         include_dict: ReportOptions = None,
@@ -211,15 +214,15 @@ class ReportProxy[DistributionT, PosWgtT](
         to_return = super()._additional_repr_(sep, tab, n_tab, new_line)
         to_return += space + f"report_every={self.report_every}" + sep
         level = {
-            logging.DEBUG:    "DEBUG",
-            logging.INFO:     "INFO",
-            logging.WARNING:  "WARNING",
-            logging.ERROR:    "ERROR",
+            logging.DEBUG: "DEBUG",
+            logging.INFO: "INFO",
+            logging.WARNING: "WARNING",
+            logging.ERROR: "ERROR",
             logging.CRITICAL: "CRITICAL",
         }
         to_return += space + f"level={level.get(self.level, self.level)}" + sep
         log_repr = f"'{self.log.name}': {level[self.log.level]}"
-        to_return += (space + f"log={log_repr}" + sep)
+        to_return += space + f"log={log_repr}" + sep
         return to_return
 
     def make_report(self) -> str:
@@ -252,8 +255,9 @@ class ReportProxy[DistributionT, PosWgtT](
             report += f"Δt = {self.iter_params.diff_t * 1000:.2f} [ms], "
 
         if self.include_dict["dt_per_iter"]:
-            dt_per_iter = (self.iter_params.total_time * 1000
-                           / (self.iter_params.k + 1))
+            dt_per_iter = (
+                self.iter_params.total_time * 1000 / (self.iter_params.k + 1)
+            )
             report += f"Δt per iter. = {dt_per_iter:.2f} [ms/iter], "
 
         if report.endswith(", "):
@@ -271,9 +275,7 @@ class ReportProxy[DistributionT, PosWgtT](
 
     @override
     def step_algorithm(
-        self,
-        k: int,
-        pos_wgt_k: PosWgtT
+        self, k: int, pos_wgt_k: PosWgtT
     ) -> tuple[Seq[DistributionT], PosWgtT]:
         result = super().step_algorithm(k, pos_wgt_k)
 
@@ -327,9 +329,7 @@ class BaseLogProxy[DistributionT, PosWgtT, RegisterValueT](
 
     @override
     def step_algorithm(
-        self,
-        k: int,
-        pos_wgt_k: PosWgtT
+        self, k: int, pos_wgt_k: PosWgtT
     ) -> tuple[Seq[DistributionT], PosWgtT]:
         result = super().step_algorithm(k, pos_wgt_k)
         self.register_lst.append(self.register(*result))
@@ -406,7 +406,8 @@ class LogDistrSampledProxy[DistributionT, PosWgtT](
 
 
 def interpolate_geodesic(
-    pos_wgt_s: torch.Tensor, pos_wgt_t: torch.Tensor,
+    pos_wgt_s: torch.Tensor,
+    pos_wgt_t: torch.Tensor,
     t_interpolation: float,
 ) -> torch.Tensor:
     """
@@ -418,14 +419,14 @@ def interpolate_geodesic(
     return debiased_conv(
         A=torch.stack([pos_wgt_s, pos_wgt_t]),
         weights=torch.tensor(
-            [t_interpolation, 1 - t_interpolation],
-            dtype=dtype, device=device
+            [t_interpolation, 1 - t_interpolation], dtype=dtype, device=device
         ),
     )
 
 
 def interpolate_linear(
-    pos_wgt_s: torch.Tensor, pos_wgt_t: torch.Tensor,
+    pos_wgt_s: torch.Tensor,
+    pos_wgt_t: torch.Tensor,
     t_interpolation: float,
 ) -> torch.Tensor:
     """
@@ -442,7 +443,7 @@ _interpolation_strategies: dict[str, InterpStrategyFn[torch.Tensor]] = {
 
 
 def _get_interp_strategy(
-    interp_strategy: InterpStrategyArg | None
+    interp_strategy: InterpStrategyArg | None,
 ) -> InterpStrategyFn | None:
     """
     Get the interpolation strategy from the argument.
@@ -457,7 +458,7 @@ def _get_interp_strategy(
     elif callable(interp_strategy) or interp_strategy is None:
         return interp_strategy
     raise TypeError(
-        f"Interpolation strategy should be a string, a callable or None."
+        "Interpolation strategy should be a string, a callable or None."
         f" Currently: {type(interp_strategy) = }"
     )
 
@@ -477,22 +478,26 @@ class SGDWProjectedDecorator[DistributionT, PosWgtT](
         projector: ProjectorFn[PosWgtT],
         project_every: int | None = 1,
         interp_strategy: InterpStrategyArg | None = None,
-        interp_step_schd = None,
+        interp_step_schd=None,
     ) -> None:
         super().__init__(wrapee)
         self.projector = projector
         self.project_every = project_every
-        self.interp_step_schd = interp_step_schd if interp_step_schd is not None else wrapee.schd.step_schedule
+        self.interp_step_schd = (
+            interp_step_schd
+            if interp_step_schd is not None
+            else wrapee.schd.step_schedule
+        )
 
         # Define the interpolation strategy
         self._interp_strategy = interp_strategy
-        self.interp_strategy: InterpStrategyFn | None = _get_interp_strategy(interp_strategy)
+        self.interp_strategy: InterpStrategyFn | None = (
+            _get_interp_strategy(interp_strategy)
+        )  # fmt: skip
 
     @override
     def step_algorithm(
-        self,
-        k: int,
-        pos_wgt_k: PosWgtT
+        self, k: int, pos_wgt_k: PosWgtT
     ) -> tuple[Seq[DistributionT], PosWgtT]:
         lst_mu_kp1, pos_wgt_kp1 = super().step_algorithm(k, pos_wgt_k)
 
@@ -503,7 +508,9 @@ class SGDWProjectedDecorator[DistributionT, PosWgtT](
             # Case when the interpolation strategy is defined
             if self.interp_strategy is not None:
                 step_k: float = self.interp_step_schd(k)
-                pos_wgt_kp1_ = self.interp_strategy(pos_wgt_kp1, pos_wgt_kp1_, step_k)
+                pos_wgt_kp1_ = self.interp_strategy(
+                    pos_wgt_kp1, pos_wgt_kp1_, step_k
+                )
                 self.dict_log["pos_wgt_proj_interp"] = pos_wgt_kp1_
 
             pos_wgt_kp1 = pos_wgt_kp1_

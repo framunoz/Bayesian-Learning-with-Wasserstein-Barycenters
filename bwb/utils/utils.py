@@ -1,6 +1,7 @@
 """
 Module that contains utility functions.
 """
+
 import collections as c
 import functools
 import time
@@ -48,8 +49,7 @@ def timeit_to_total_time(method):
 
 
 def set_generator(
-    seed: SeedT = None,
-    device: DeviceT = "cpu"
+    seed: SeedT = None, device: DeviceT = "cpu"
 ) -> torch.Generator:
     """
     Set the generator for the random number generator.
@@ -73,9 +73,7 @@ def set_generator(
     return gen
 
 
-def freq_labels_dist_sampler(
-    dist_sampler: DiscreteDistribSamplerP
-) -> Seq[str]:
+def freq_labels_dist_sampler(dist_sampler: DiscreteDistribSamplerP) -> Seq[str]:
     """
     Function that returns the most common labels in the dist_sampler.
 
@@ -84,8 +82,7 @@ def freq_labels_dist_sampler(
         dist_sampler.
     """
     if not isinstance(dist_sampler, DiscreteDistribSamplerP):
-        msg = ("The dist_sampler must be an instance of "
-               "PDiscreteDistribSampler.")
+        msg = "The dist_sampler must be an instance of PDiscreteDistribSampler."
         _log.error(msg)
         raise TypeError(msg)
     return [
@@ -104,8 +101,9 @@ def normalised_samples_ordered_dict(posterior: DiscreteDistribSamplerP):
         MCMC instance.
     """
     counter = posterior.samples_counter
-    return c.OrderedDict([(k, v / counter.total())
-                          for k, v in counter.most_common()])
+    return c.OrderedDict(
+        [(k, v / counter.total()) for k, v in counter.most_common()]
+    )
 
 
 # ================= DEPRECATED FUNCTIONS =================
@@ -118,8 +116,10 @@ def plot_list_of_images(list_of_images: Seq[PIL.Image.Image], **kwargs):
         function. For further information, please see the documentation of
         that function.
     """
-    msg = ("The plot_list_of_images function is deprecated and will be "
-           "removed in the future. Use plotters.plot_list_of_images instead.")
+    msg = (
+        "The plot_list_of_images function is deprecated and will be "
+        "removed in the future. Use plotters.plot_list_of_images instead."
+    )
     _log.warning(msg)
     warnings.warn(msg, DeprecationWarning, stacklevel=2)
     # Set values by default
@@ -140,12 +140,13 @@ def plot_list_of_draws(list_of_draws: Seq[DrawP], **kwargs):
         function. For further information, please see the documentation of
         that function.
     """
-    msg = ("The plot_list_of_draws function is deprecated and will be "
-           "removed in the future. Use plotters.plot_list_of_draws instead.")
+    msg = (
+        "The plot_list_of_draws function is deprecated and will be "
+        "removed in the future. Use plotters.plot_list_of_draws instead."
+    )
     _log.warning(msg)
     warnings.warn(msg, DeprecationWarning, stacklevel=2)
-    return plot_list_of_images([draw.image for draw in list_of_draws],
-                               **kwargs)
+    return plot_list_of_images([draw.image for draw in list_of_draws], **kwargs)
 
 
 def likelihood_ordered_dict(posterior):
@@ -157,14 +158,17 @@ def likelihood_ordered_dict(posterior):
     :return: An ordered dictionary with the likelihoods of the samples
         in the posterior.
     """
-    msg = ("The likelihood_ordered_dict function is deprecated and will "
-           "be removed in the future. ")
+    msg = (
+        "The likelihood_ordered_dict function is deprecated and will "
+        "be removed in the future. "
+    )
     _log.warning(msg)
     warnings.warn(msg, DeprecationWarning, stacklevel=2)
     like_cache = posterior.likelihood_cache
     posterior_probs = like_cache / np.sum(like_cache)
-    likelihood_dct = c.OrderedDict({i: prob
-                                    for i, prob in enumerate(posterior_probs)})
+    likelihood_dct = c.OrderedDict(
+        {i: prob for i, prob in enumerate(posterior_probs)}
+    )
 
     for key, _ in sorted(likelihood_dct.items(), key=lambda item: -item[1]):
         likelihood_dct.move_to_end(key)
@@ -181,11 +185,13 @@ def normalised_steps_ordered_dict(mcmc):
     :return: An ordered dictionary with the normalised steps in the
         MCMC instance.
     """
-    msg = ("The normalised_steps_ordered_dict function is deprecated "
-           "and will be removed in "
-           "the future.")
+    msg = (
+        "The normalised_steps_ordered_dict function is deprecated "
+        "and will be removed in the future."
+    )
     _log.warning(msg)
     warnings.warn(msg, DeprecationWarning, stacklevel=2)
     counter = mcmc.steps_counter
-    return c.OrderedDict([(k, v / counter.total())
-                          for k, v in counter.most_common()])
+    return c.OrderedDict(
+        [(k, v / counter.total()) for k, v in counter.most_common()]
+    )
