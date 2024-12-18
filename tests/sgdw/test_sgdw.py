@@ -10,13 +10,14 @@ from bwb.sgdw import sgdw, utils
 _log = logging.get_logger(__name__)
 logging.set_level(logging.DEBUG, name=__name__)
 
-devices = [torch.device('cpu')]
+devices = [torch.device("cpu")]
 if torch.cuda.is_available():
-    devices.append(torch.device('cuda:0'))
+    devices.append(torch.device("cuda:0"))
 else:
     logging.raise_warning(
         "CUDA is not available. Skipping tests for CUDA devices.",
-        _log, stacklevel=2
+        _log,
+        stacklevel=2,
     )
 
 dtypes = [torch.float32, torch.float64]
@@ -67,16 +68,24 @@ class MockDistributionSampler[DistributionT]:
         # Generate a list of n elements selecting randomly n elements
         # (with replacement) from the distributions list.
         index = torch.randint(
-            0, len(self.distributions), (n,), generator=self.gen,
-            device=self.device, dtype=torch.int64
+            0,
+            len(self.distributions),
+            (n,),
+            generator=self.gen,
+            device=self.device,
+            dtype=torch.int64,
         )
         return [self.distributions[int(i)] for i in index]
 
     def draw(self) -> DistributionT:
         # Select randomly a distribution from the distributions list.
         index = torch.randint(
-            0, len(self.distributions), (1,), generator=self.gen,
-            device=self.device, dtype=torch.int64
+            0,
+            len(self.distributions),
+            (1,),
+            generator=self.gen,
+            device=self.device,
+            dtype=torch.int64,
         )
         return self.distributions[int(index)]
 
@@ -98,10 +107,17 @@ def distribution_sampler(gen):
     gen, device, dtype = gen
     distributions: [D.DistributionDraw] = [
         D.DistributionDraw.from_array(
-            torch.randint(0, 256, (28, 28),
-                          dtype=torch.uint8, device=device, generator=gen),
-            dtype=dtype
-        ) for _ in range(10)
+            torch.randint(
+                0,
+                256,
+                (28, 28),
+                dtype=torch.uint8,
+                device=device,
+                generator=gen,
+            ),
+            dtype=dtype,
+        )
+        for _ in range(10)
     ]
     return MockDistributionSampler(distributions, gen)
 

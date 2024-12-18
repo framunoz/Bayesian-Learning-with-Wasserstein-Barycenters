@@ -6,9 +6,9 @@ import bwb.logging_ as logging
 
 _log = logging.get_logger(__name__)
 
-devices = [torch.device('cpu')]
+devices = [torch.device("cpu")]
 if torch.cuda.is_available():
-    devices.append(torch.device('cuda:0'))
+    devices.append(torch.device("cuda:0"))
 
 dtypes = [torch.float16, torch.float32, torch.float64]
 
@@ -66,8 +66,7 @@ def test_grayscale_parser_valid_input(gen) -> None:
         (784,), dtype=dtype, device=device, generator=generator
     )
     support = torch.randint(
-        0, 28, (784, 2),
-        dtype=torch.int32, device=device, generator=generator
+        0, 28, (784, 2), dtype=torch.int32, device=device, generator=generator
     )
     result = utils.grayscale_parser(shape, weights, support)
     assert result.shape == shape
@@ -78,12 +77,8 @@ def test_grayscale_parser_valid_input(gen) -> None:
 # noinspection PyTestUnpassedFixture
 def test_partition_valid_input(gen) -> None:
     generator, device, dtype = gen
-    X = torch.rand(
-        (784, 2), dtype=dtype, device=device, generator=generator
-    )
-    mu = torch.rand(
-        (784,), dtype=dtype, device=device, generator=generator
-    )
+    X = torch.rand((784, 2), dtype=dtype, device=device, generator=generator)
+    mu = torch.rand((784,), dtype=dtype, device=device, generator=generator)
     alpha = 0.1
 
     if dtype == torch.float16:
@@ -95,6 +90,5 @@ def test_partition_valid_input(gen) -> None:
     assert X_new.shape[0] >= X.shape[0]
     assert mu_new.shape[0] >= mu.shape[0]
     assert torch.isclose(
-        torch.sum(mu_new),
-        torch.tensor(1.0, device=device, dtype=dtype)
+        torch.sum(mu_new), torch.tensor(1.0, device=device, dtype=dtype)
     )

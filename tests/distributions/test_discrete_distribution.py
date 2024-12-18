@@ -1,6 +1,7 @@
 """
 Tests for the :mod:`bwb.distributions.discrete_distribution` module.
 """
+
 import pytest
 import torch
 
@@ -10,13 +11,14 @@ import bwb.logging_ as logging
 _log = logging.get_logger(__name__)
 logging.set_level(logging.DEBUG, name=__name__)
 
-devices = [torch.device('cpu')]
+devices = [torch.device("cpu")]
 if torch.cuda.is_available():
-    devices.append(torch.device('cuda:0'))
+    devices.append(torch.device("cuda:0"))
 else:
     logging.raise_warning(
         "CUDA is not available. Skipping tests for CUDA devices.",
-        _log, stacklevel=2
+        _log,
+        stacklevel=2,
     )
 
 dtypes = [torch.float32, torch.float64]
@@ -126,11 +128,15 @@ def test_distribution_draw_from_discrete_distribution(gen) -> None:
 
 def test_distribution_draw_from_grayscale_weights(gen) -> None:
     gen, device, dtype = gen
-    grayscale = torch.tensor([
-        [0, 128, 255],
-        [64, 192, 128],
-        [128, 64, 192]
-    ], dtype=torch.uint8, device=device)
+    grayscale = torch.tensor(
+        [
+            [0, 128, 255],
+            [64, 192, 128],
+            [128, 64, 192],
+        ],
+        dtype=torch.uint8,
+        device=device,
+    )
     grayscale_weights = grayscale.to(dtype) / 255
     grayscale_weights /= torch.sum(grayscale_weights)
     dist = dd.DistributionDraw.from_grayscale_weights(grayscale_weights)
@@ -141,11 +147,15 @@ def test_distribution_draw_from_grayscale_weights(gen) -> None:
 
 def test_distribution_draw_from_array(gen) -> None:
     gen, device, dtype = gen
-    grayscale = torch.tensor([
-        [0, 128, 255],
-        [64, 192, 128],
-        [128, 64, 192]
-    ], dtype=torch.uint8, device=device)
+    grayscale = torch.tensor(
+        [
+            [0, 128, 255],
+            [64, 192, 128],
+            [128, 64, 192],
+        ],
+        dtype=torch.uint8,
+        device=device,
+    )
     dist = dd.DistributionDraw.from_array(grayscale, dtype=dtype)
 
     assert dist.shape == grayscale.shape
@@ -158,15 +168,14 @@ def test_distribution_draw_from_array(gen) -> None:
 
 def test_distribution_draw_from_array_creates_correct_weights(gen) -> None:
     gen, device, dtype = gen
-    grayscale = torch.tensor([
-        [0, 128, 255],
-        [64, 192, 128],
-        [128, 64, 192]
-    ], dtype=torch.uint8, device=device)
+    grayscale = torch.tensor(
+        [[0, 128, 255], [64, 192, 128], [128, 64, 192]],
+        dtype=torch.uint8,
+        device=device,
+    )
     dist = dd.DistributionDraw.from_array(grayscale, dtype=dtype)
     expected_weights = torch.tensor(
-        [0, 128, 255, 64, 192, 128, 128, 64, 192],
-        dtype=dtype, device=device
+        [0, 128, 255, 64, 192, 128, 128, 64, 192], dtype=dtype, device=device
     ) / torch.sum(grayscale.to(dtype))
     assert torch.allclose(dist.weights, expected_weights, atol=1e-5)
 
@@ -180,32 +189,41 @@ def test_distribution_draw_from_array_creates_correct_weights(gen) -> None:
 
 def test_distribution_draw_image_returns_pil_image(gen) -> None:
     gen, device, dtype = gen
-    grayscale = torch.tensor([
-        [0, 128, 255],
-        [64, 192, 128],
-        [128, 64, 192],
-        [255, 255, 255],
-    ], dtype=torch.uint8, device=device)
+    grayscale = torch.tensor(
+        [
+            [0, 128, 255],
+            [64, 192, 128],
+            [128, 64, 192],
+            [255, 255, 255],
+        ],
+        dtype=torch.uint8,
+        device=device,
+    )
     dist = dd.DistributionDraw.from_array(grayscale, dtype=dtype)
     image = dist.image
     assert image.size == grayscale.shape[::-1]
-    assert image.mode == 'L'
+    assert image.mode == "L"
 
 
 def test_grayscale_property_returns_existing_grayscale(gen) -> None:
     gen, device, dtype = gen
-    grayscale = torch.tensor([
-        [0, 128, 255],
-        [64, 192, 128],
-        [128, 64, 192],
-        [255, 255, 255],
-    ], dtype=torch.uint8, device=device)
+    grayscale = torch.tensor(
+        [
+            [0, 128, 255],
+            [64, 192, 128],
+            [128, 64, 192],
+            [255, 255, 255],
+        ],
+        dtype=torch.uint8,
+        device=device,
+    )
 
     # Directly setting the cached value
     dist = dd.DistributionDraw(
-        weights=torch.tensor(torch.rand(grayscale.shape,
-                                        device=device, dtype=dtype)),
-        shape=grayscale.shape
+        weights=torch.tensor(
+            torch.rand(grayscale.shape, device=device, dtype=dtype)
+        ),
+        shape=grayscale.shape,
     )
     dist._grayscale = grayscale
     assert torch.allclose(dist.grayscale, grayscale, atol=1e-5)
@@ -213,28 +231,28 @@ def test_grayscale_property_returns_existing_grayscale(gen) -> None:
 
 def test_grayscale_property_computes_grayscale_from_weights(gen) -> None:
     gen, device, dtype = gen
-    weights = torch.tensor([1.0, 0.0, 0.5, 0.5],
-                           device=device, dtype=dtype)
-    support = torch.tensor([[0, 0], [0, 1], [1, 0], [1, 1]],
-                           device=device)
+    weights = torch.tensor([1.0, 0.0, 0.5, 0.5], device=device, dtype=dtype)
+    support = torch.tensor([[0, 0], [0, 1], [1, 0], [1, 1]], device=device)
     shape = (2, 2)
     dist = dd.DistributionDraw(weights, shape, support)
-    expected_grayscale = torch.tensor([[255, 0], [127, 127]],
-                                      dtype=torch.uint8, device=device)
+    expected_grayscale = torch.tensor(
+        [[255, 0], [127, 127]], dtype=torch.uint8, device=device
+    )
     assert torch.equal(dist.grayscale, expected_grayscale)
 
 
-def test_grayscale_property_normalizes_grayscale_weights_correctly(
-    gen
-) -> None:
+def test_grayscale_property_normalizes_grayscale_weights_correctly(gen) -> None:
     gen, device, dtype = gen
-    grayscale_weights = torch.tensor([[0.2, 0.8], [0.1, 1.0]],
-                                     dtype=dtype, device=device)
+    grayscale_weights = torch.tensor(
+        [[0.2, 0.8], [0.1, 1.0]], dtype=dtype, device=device
+    )
     grayscale_weights /= torch.sum(grayscale_weights)
-    expected_grayscale = torch.tensor([[51, 204], [25, 255]],
-                                      dtype=torch.uint8, device=device)
-    false_weights = torch.rand((2, 2), generator=gen,
-                               device=device, dtype=dtype)
+    expected_grayscale = torch.tensor(
+        [[51, 204], [25, 255]], dtype=torch.uint8, device=device
+    )
+    false_weights = torch.rand(
+        (2, 2), generator=gen, device=device, dtype=dtype
+    )
     dist = dd.DistributionDraw(weights=false_weights, shape=(2, 2))
     dist._grayscale_weights = grayscale_weights
     assert torch.equal(dist.grayscale, expected_grayscale)
@@ -242,12 +260,15 @@ def test_grayscale_property_normalizes_grayscale_weights_correctly(
 
 def test_grayscale_property_handles_zero_max_grayscale_weight(gen) -> None:
     gen, device, dtype = gen
-    grayscale_weights = torch.tensor([[0.0, 1.0], [0.0, 0.0]],
-                                     dtype=dtype, device=device)
-    expected_grayscale = torch.tensor([[0, 255], [0, 0]],
-                                      dtype=torch.uint8, device=device)
-    false_weights = torch.rand((2, 2), generator=gen,
-                               device=device, dtype=dtype)
+    grayscale_weights = torch.tensor(
+        [[0.0, 1.0], [0.0, 0.0]], dtype=dtype, device=device
+    )
+    expected_grayscale = torch.tensor(
+        [[0, 255], [0, 0]], dtype=torch.uint8, device=device
+    )
+    false_weights = torch.rand(
+        (2, 2), generator=gen, device=device, dtype=dtype
+    )
     dist = dd.DistributionDraw(weights=false_weights, shape=(2, 2))
     dist._grayscale_weights = grayscale_weights
     assert torch.equal(dist.grayscale, expected_grayscale)
@@ -255,23 +276,26 @@ def test_grayscale_property_handles_zero_max_grayscale_weight(gen) -> None:
 
 def test_grayscale_weights_property_returns_normalized_weights(gen) -> None:
     gen, device, dtype = gen
-    grayscale = torch.tensor([
-        [10, 20],
-        [30, 40],
-    ], dtype=torch.uint8, device=device)
-    expected_weights = torch.tensor([10, 20, 30, 40],
-                                    dtype=dtype, device=device) / 100
+    grayscale = torch.tensor(
+        [
+            [10, 20],
+            [30, 40],
+        ],
+        dtype=torch.uint8,
+        device=device,
+    )
+    expected_weights = (
+        torch.tensor([10, 20, 30, 40], dtype=dtype, device=device) / 100
+    )
 
     # dist = DistributionDraw.from_array(grayscale, dtype=dtype)
-    dist = dd.DistributionDraw(weights=torch.rand((2, 2),
-                                                  device=device, dtype=dtype),
-                               shape=(2, 2))
+    dist = dd.DistributionDraw(
+        weights=torch.rand((2, 2), device=device, dtype=dtype), shape=(2, 2)
+    )
     dist._grayscale = grayscale
 
     assert torch.allclose(
-        dist.grayscale_weights,
-        expected_weights.view(2, 2),
-        atol=1e-5
+        dist.grayscale_weights, expected_weights.view(2, 2), atol=1e-5
     )
 
 
@@ -288,8 +312,9 @@ def test_representation_includes_class_name_shape_device_dtype(gen) -> None:
 
 def test_representation_handles_empty_shape_correctly(gen) -> None:
     gen, device, dtype = gen
-    dist = dd.DistributionDraw(torch.rand((0, 0)), (0, 0),
-                               dtype=dtype, device=device)
+    dist = dd.DistributionDraw(
+        torch.rand((0, 0)), (0, 0), dtype=dtype, device=device
+    )
     representation = repr(dist)
     assert "DistributionDraw" in representation
     assert "shape=(0, 0)" in representation
