@@ -57,6 +57,9 @@ exclude = '''
 preview = true
 unstable = true
 
+[tool.isort]
+profile = "black"
+
 [tool.ruff]
 fix = true
 exclude = [
