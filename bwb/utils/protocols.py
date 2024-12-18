@@ -9,10 +9,10 @@ import torch
 __all__ = [
     "ArrayLikeT",
     "DeviceT",
-    "SeedT",
-    "PathT",
     "DiscreteDistribSamplerP",
     "DrawP",
+    "PathT",
+    "SeedT",
 ]
 
 type ArrayLikeT = np.ndarray | torch.Tensor | Iterable

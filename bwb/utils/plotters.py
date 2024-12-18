@@ -15,11 +15,11 @@ from matplotlib import pyplot as plt
 import bwb.logging_ as logging
 
 __all__ = [
-    "plot_image",
     "plot_draw",
-    "plot_list_of_images",
-    "plot_list_of_draws",
     "plot_histogram_from_points",
+    "plot_image",
+    "plot_list_of_draws",
+    "plot_list_of_images",
 ]
 
 _log = logging.get_logger(__name__)
@@ -215,7 +215,6 @@ def plot_list_of_images(
     :type cmap: str
     :return: The figure and the axes of the plot.
     """
-
     n_images = len(list_of_images)
     if n_images < n_rows * n_cols:
         msg = (
@@ -286,7 +285,6 @@ def plot_list_of_draws(
     :type cmap: str
 
     """
-
     list_of_images: list[PIL.Image.Image] = [
         draw.image for draw in list_of_draws[: n_rows * n_cols]
     ]

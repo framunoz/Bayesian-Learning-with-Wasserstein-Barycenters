@@ -1,7 +1,7 @@
 import copy
 import random
 import warnings
-from typing import Any, Callable, final, override, Protocol, Self, Sequence
+from typing import Any, Callable, Protocol, Self, Sequence, final, override
 
 import hamiltorch
 import torch
@@ -18,18 +18,18 @@ from bwb.distributions.distribution_samplers import (
 from bwb.distributions.models import DiscreteWeightedModelSetP
 from bwb.utils import (
     ArrayLikeT,
+    SeedT,
     check_is_fitted,
     integrated_time,
-    SeedT,
     timeit_to_total_time,
 )
 
 _log = logging.get_logger(__name__)
 
 __all__ = [
+    "BaseLatentMCMCPosteriorSampler",
     "DistributionP",
     "ExplicitPosteriorSampler",
-    "BaseLatentMCMCPosteriorSampler",
     "LatentMCMCPosteriorSampler",
     "NUTSPosteriorSampler",
 ]
@@ -46,10 +46,9 @@ class DistributionP(Protocol):
         """
 
 
-def log_likelihood_model(
-    model: DistributionP, data: torch.Tensor
-) -> torch.Tensor:
-    """Log-likelihood of a model.
+def log_likelihood_model(model: DistributionP, data: torch.Tensor) -> torch.Tensor:
+    """
+    Log-likelihood of a model.
 
     :param model: A model to obtain its log-likelihood
     :param data: The data to evaluate in the model
@@ -59,7 +58,8 @@ def log_likelihood_model(
 
 
 def likelihood_model(model: DistributionP, data: torch.Tensor) -> torch.Tensor:
-    """Likelihood of a model.
+    """
+    Likelihood of a model.
 
     :param model: A model to obtain its likelihood
     :param data: The data to evaluate in the model
@@ -138,10 +138,9 @@ def log_posterior(
 
 
 # noinspection PyAttributeOutsideInit
-class ExplicitPosteriorSampler[DistributionT](
-    DiscreteDistribSampler[DistributionT]
-):
-    r"""Distribution that uses the strategy of calculating all
+class ExplicitPosteriorSampler[DistributionT](DiscreteDistribSampler[DistributionT]):
+    r"""
+    Distribution that uses the strategy of calculating all
     likelihoods by brute force. This class implements likelihoods of
     the form
 
@@ -177,9 +176,7 @@ class ExplicitPosteriorSampler[DistributionT](
 
         data = self.data_.reshape(1, -1)
 
-        self.probabilities_: torch.Tensor = models.compute_likelihood(
-            data, **kwargs
-        )
+        self.probabilities_: torch.Tensor = models.compute_likelihood(data, **kwargs)
 
         self.support_ = self.models_index_[self.probabilities_ > conf.eps]
 
@@ -205,9 +202,7 @@ class ExplicitPosteriorSampler[DistributionT](
 
 
 # noinspection PyAttributeOutsideInit
-class BaseLatentMCMCPosteriorSampler(
-    BaseGeneratorDistribSampler[D.DistributionDraw]
-):
+class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[D.DistributionDraw]):
     """
     Base class for MCMC posterior samplers. This class try to mirror
     the `emcee` package, but using the ``hamiltorch`` package as a
@@ -263,9 +258,7 @@ class BaseLatentMCMCPosteriorSampler(
         """
         return sum(len(chain) for chain in self.chains)
 
-    def _create_empty_chains(
-        self, n_walkers: int = None
-    ) -> list[list[torch.Tensor]]:
+    def _create_empty_chains(self, n_walkers: int = None) -> list[list[torch.Tensor]]:
         """
         Create an empty list of chains.
 
@@ -351,9 +344,7 @@ class BaseLatentMCMCPosteriorSampler(
 
     def _get_hamiltorch_kwargs(self, **kwargs) -> dict:
         hamiltorch_kwargs = self._hamiltorch_kwargs.copy()
-        specific_kwargs: dict[str, Any] = dict(
-            log_prob_func=self.log_prob, **kwargs
-        )
+        specific_kwargs: dict[str, Any] = dict(log_prob_func=self.log_prob, **kwargs)
         hamiltorch_kwargs.update(
             [(k, v) for k, v in specific_kwargs.items() if v is not None]
         )
@@ -535,9 +526,7 @@ class BaseLatentMCMCPosteriorSampler(
 
     @final
     @override
-    def _draw(
-        self, seed: SeedT = None
-    ) -> tuple[D.DistributionDraw, torch.Tensor]:
+    def _draw(self, seed: SeedT = None) -> tuple[D.DistributionDraw, torch.Tensor]:
         if not self.samples_cache:
             self.run(n_steps=50)
             self.shuffle_samples_cache()
@@ -633,8 +622,7 @@ class BaseLatentMCMCPosteriorSampler(
 
         # Manually create a new dictionary and copy the items
         hamiltorch_kwargs = {
-            k: copy.deepcopy(v, memo)
-            for k, v in self._hamiltorch_kwargs.items()
+            k: copy.deepcopy(v, memo) for k, v in self._hamiltorch_kwargs.items()
         }
 
         generator = copy.deepcopy(self.generator_, memo)
@@ -677,9 +665,7 @@ class BaseLatentMCMCPosteriorSampler(
 
     @classmethod
     @override
-    def _load_half_(
-        cls, new: Self, device_: torch.device, dtype_: torch.dtype
-    ) -> None:
+    def _load_half_(cls, new: Self, device_: torch.device, dtype_: torch.dtype) -> None:
         super()._load_half_(new, device_, dtype_)
         new.chains = new._set_normal_dtype(new.chains)
         new.samples_cache = new._set_normal_dtype(new.samples_cache)
@@ -717,9 +703,7 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
         self.n_workers = n_workers
         self.n_walkers = n_walkers
         self.parallel = parallel
-        self.chains: list[list[torch.Tensor]] = self._create_empty_chains(
-            n_walkers
-        )
+        self.chains: list[list[torch.Tensor]] = self._create_empty_chains(n_walkers)
 
     @override
     @timeit_to_total_time
@@ -759,9 +743,7 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
             hamiltorch.sample, _prior, hamiltorch_kwargs
         )
 
-        params_hmc = hamiltorch.util.multi_chain(
-            chain, n_workers, seeds, parallel
-        )
+        params_hmc = hamiltorch.util.multi_chain(chain, n_workers, seeds, parallel)
 
         log_list = []
         for i, params in enumerate(params_hmc):
@@ -850,8 +832,7 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
 
         # Manually create a new dictionary and copy the items
         hamiltorch_kwargs = {
-            k: copy.deepcopy(v, memo)
-            for k, v in self._hamiltorch_kwargs.items()
+            k: copy.deepcopy(v, memo) for k, v in self._hamiltorch_kwargs.items()
         }
 
         generator = copy.deepcopy(self.generator_, memo)
@@ -970,8 +951,7 @@ class NUTSPosteriorSampler(LatentMCMCPosteriorSampler):
 
         # Manually create a new dictionary and copy the items
         hamiltorch_kwargs = {
-            k: copy.deepcopy(v, memo)
-            for k, v in self._hamiltorch_kwargs.items()
+            k: copy.deepcopy(v, memo) for k, v in self._hamiltorch_kwargs.items()
         }
 
         hamiltorch_kwargs.pop(
@@ -1027,8 +1007,9 @@ class ExplicitPosteriorPiN(ExplicitPosteriorSampler):
 
 # noinspection DuplicatedCode
 def __main():
-    from icecream import ic
     from pathlib import Path
+
+    from icecream import ic
 
     logging.set_level(logging.DEBUG)
 
@@ -1048,12 +1029,10 @@ def __main():
     LATENT_MCMC_POSTERIOR_SAMPLER = False
     NUTS_POSTERIOR_SAMPLER = True
 
-    input_size = 128
+    input_size = 128  # noqa: F841
     output_size = (32, 32)
     n_data = 100
-    data_ = torch.randint(0, output_size[0] * output_size[1], (n_data,)).to(
-        conf.device
-    )
+    data_ = torch.randint(0, output_size[0] * output_size[1], (n_data,)).to(conf.device)
 
     # ======== BaseLatentMCMCPosteriorSampler ========
     if BASE_LATENT_MCMC_POSTERIOR_SAMPLER:
@@ -1155,11 +1134,11 @@ def __main():
         ic("deep copy test", posterior_)
         ic(posterior_._hamiltorch_kwargs)
 
-        with logging.register_total_time(_log) as timer:
+        with logging.register_total_time(_log) as _:
             posterior.sample(50)
 
         # Save test
-        with logging.register_total_time(_log) as timer:
+        with logging.register_total_time(_log) as _:
             SAVE_PATH = Path("posterior_sampler.pkl")
             ic(posterior.noise_sampler_)
             posterior.save(SAVE_PATH)
@@ -1169,7 +1148,7 @@ def __main():
             SAVE_PATH.unlink()
 
         # Save test with gzip
-        with logging.register_total_time(_log) as timer:
+        with logging.register_total_time(_log) as _:
             SAVE_PATH = Path("posterior_sampler.pkl.gz")
             posterior.save(SAVE_PATH)
             posterior_ = NUTSPosteriorSampler.load(SAVE_PATH)
@@ -1179,7 +1158,7 @@ def __main():
 
         # Save test with gzip and without half precision
         NUTSPosteriorSampler.SAVE_HALF_PRECISION = False
-        with logging.register_total_time(_log) as timer:
+        with logging.register_total_time(_log) as _:
             SAVE_PATH = Path("posterior_sampler.pkl.gz")
             posterior.save(SAVE_PATH)
             posterior_ = NUTSPosteriorSampler.load(SAVE_PATH)

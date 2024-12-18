@@ -44,7 +44,8 @@ STREAM_HANDLER.setFormatter(GENERIC_FORMATTER)
 
 # noinspection DuplicatedCode
 class _SingletonMeta(type):
-    """Metaclass to implements the Singleton Pattern. Obtained from
+    """
+    Metaclass to implements the Singleton Pattern. Obtained from
     https://refactoring.guru/design-patterns/singleton/python/example#example-1
     """
 
@@ -60,7 +61,8 @@ class _SingletonMeta(type):
 
 
 class LoggerConfiguration(metaclass=_SingletonMeta):
-    """A singleton that manages the configuration of the loggers in the
+    """
+    A singleton that manages the configuration of the loggers in the
     library.
 
     :cvar LEVEL: The general level of the loggers in the library.
@@ -71,9 +73,8 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
     :cvar loggers: The loggers instance of the package.
 
 
-    Example
+    Example:
     -------
-
     You can instance a logger configuration with the default values.
 
     >>> log_conf = LoggerConfiguration().reset()  # Reset is optional
@@ -89,6 +90,7 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
 
     >>> logger = log_conf.get_logger("ex")
     >>> logger.debug("This is a debug message.")  # This will not show
+
     """
 
     LEVEL: int = WARNING
@@ -100,9 +102,8 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         """
         Reset the logger configuration to the default values.
 
-        Example
+        Example:
         -------
-
         We set the level of the loggers to DEBUG.
 
         >>> log_conf = LoggerConfiguration().set_level(logging.DEBUG)
@@ -114,6 +115,7 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         >>> _ = log_conf.reset()
         >>> log_conf.LEVEL == logging.WARNING
         True
+
         """
         self.LEVEL = WARNING
         self.HANDLERS = [STREAM_HANDLER]
@@ -132,9 +134,8 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         :param handlers: The list of handlers. Default is the list of
             handlers managed.
 
-        Example
+        Example:
         -------
-
         We first create a logger that has no handlers. The reset is
         optional.
 
@@ -159,6 +160,7 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         LoggerConfiguration(LEVEL=30, HANDLERS=[<StreamHandler <stderr> (NOTSET)>])
         >>> len(log_ex.handlers)
         2
+
         """
         # Set the default handlers
         if handlers is None:
@@ -186,9 +188,8 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
             Default is the general level of the loggers in the library.
         :return: The logger instance.
 
-        Example
+        Example:
         -------
-
         We get a logger with the name 'get_logger_example'.
         The reset is optional.
 
@@ -232,6 +233,7 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         >>> log6 = get_logger("get_logger_example6")
         >>> log6 in log_conf.loggers.values()
         True
+
         """
         if name in self.loggers:
             logger = self.loggers[name]
@@ -256,9 +258,8 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
             If it is None (default), change the severity of every logger
             in the package.
 
-        Example
+        Example:
         -------
-
         We set the level of the loggers to DEBUG. The reset is optional.
 
         >>> import logging
@@ -307,6 +308,7 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
 
         >>> set_level(logging.CRITICAL)
         LoggerConfiguration(LEVEL=50, HANDLERS=[<StreamHandler <stderr> (NOTSET)>])
+
         """
         if name in self.loggers:
             self.loggers[name].setLevel(level)
@@ -327,9 +329,7 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         return self
 
     def __repr__(self):
-        return (
-            f"LoggerConfiguration(LEVEL={self.LEVEL}, HANDLERS={self.HANDLERS})"
-        )
+        return f"LoggerConfiguration(LEVEL={self.LEVEL}, HANDLERS={self.HANDLERS})"
 
     def remove_all_handlers(self, logger: logging.Logger = None) -> t.Self:
         """
@@ -341,9 +341,8 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         :param logger: The logger to remove the handlers.
             Default is None.
 
-        Example
+        Example:
         -------
-
         We create a logger. The reset is optional.
 
         >>> log_conf = LoggerConfiguration().reset()
@@ -401,9 +400,8 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         :param handler: The handler to add.
         :param logger: The logger to add the handler. Default is None.
 
-        Example
+        Example:
         -------
-
         We create a handler. The reset is optional.
 
         >>> log_conf = LoggerConfiguration().reset()
@@ -438,6 +436,7 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         >>> _ = log_conf.add_handler(other_handler)
         >>> other_handler in log.handlers
         True
+
         """
         handler.setFormatter(self.FORMATTER)
 
@@ -470,9 +469,8 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
             formatter of the package.
         :return: The instance of the logger configuration.
 
-        Example
+        Example:
         -------
-
         We create a logger configuration with the default values.
 
         >>> log_conf = LoggerConfiguration().reset()
@@ -498,6 +496,7 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         LoggerConfiguration(LEVEL=30, HANDLERS=[<StreamHandler <stderr> (NOTSET)>, <StreamHandler <stderr> (NOTSET)>])
         >>> all(handler.formatter == formatter for handler in log_conf.HANDLERS)
         True
+
         """
         # Set the default formatter
         formatter_ = formatter or self.FORMATTER
@@ -535,9 +534,8 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         :param kwargs: Other arguments to pass to the warning.
         :return: None
 
-        Example
+        Example:
         -------
-
         We set a logger with the name 'raise_warning_example', and we
         set the stream to a
         `StringIO <https://docs.python.org/3/library/io.html#io.StringIO>`_
@@ -597,9 +595,8 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         :param kwargs: Other arguments to pass to the error.
         :return: None
 
-        Example
+        Example:
         -------
-
         We set a logger with the name 'raise_error_example', and we
         set the stream to a
         `StringIO <https://docs.python.org/3/library/io.html#io.StringIO>`_
@@ -635,6 +632,7 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         ... except AssertionError as e:
         ...     print(e)
         This is an error.
+
         """
         logger.log(level, msg)
         # noinspection PyArgumentList
@@ -669,9 +667,7 @@ def raise_warning(
     level: int = WARNING,
     **kwargs,
 ) -> None:
-    log_config.raise_warning(
-        msg, logger, warning_category, stacklevel, level, **kwargs
-    )
+    log_config.raise_warning(msg, logger, warning_category, stacklevel, level, **kwargs)
 
 
 # noinspection PyMissingOrEmptyDocstring
@@ -698,9 +694,8 @@ def _time_fmt(seconds: float) -> str:
     :param seconds: The time in seconds.
     :return: The formatted time in a string.
 
-    Example
+    Example:
     -------
-
     Format the time in seconds to a string.
 
     >>> from math import pi
@@ -768,9 +763,8 @@ class register_total_time:
     of code, and shows it with the logger. It can be used as a context
     manager or as a decorator.
 
-    Example
+    Example:
     -------
-
     First, we set a logger with the name 'example', and we set the
     stream to a `StringIO
     <https://docs.python.org/3/library/io.html#io.StringIO>`_
@@ -817,6 +811,7 @@ class register_total_time:
     >>> test_function()
     >>> log_stream2.getvalue()  # Nothing to show
     ''
+
     """
 
     def __init__(self, logger: logging.Logger, level: int = logging.DEBUG):
@@ -869,9 +864,7 @@ class register_total_time:
         return wrapper
 
 
-def register_total_time_function(
-    logger: logging.Logger, level: int = logging.DEBUG
-):
+def register_total_time_function(logger: logging.Logger, level: int = logging.DEBUG):
     """
     Wrapper that records the total time it takes to execute a function,
     and shows it with the logger.
@@ -880,9 +873,8 @@ def register_total_time_function(
     :param level: The level of the logger
     :return: The decorator
 
-    Example
+    Example:
     -------
-
     We set a logger with the name 'example', and we set the stream to a `StringIO
     <https://docs.python.org/3/library/io.html#io.StringIO>`_
 
@@ -900,6 +892,7 @@ def register_total_time_function(
     >>> test_function()
     >>> print(log_stream.getvalue()[:-8])  # Remove the microseconds
     The function 'test_function' takes 0:00:01
+
     """
 
     # noinspection PyMissingOrEmptyDocstring
@@ -919,9 +912,7 @@ def register_total_time_function(
     return decorator
 
 
-def register_total_time_method(
-    logger: logging.Logger, level: int = logging.DEBUG
-):
+def register_total_time_method(logger: logging.Logger, level: int = logging.DEBUG):
     """
     Wrapper that records the total time it takes to execute a method,
     and shows it with the logger.
@@ -930,9 +921,8 @@ def register_total_time_method(
     :param level: The level of the logger
     :return: The decorator
 
-    Example
+    Example:
     -------
-
     We set a logger with the name 'example', and we set the stream to a
     `StringIO <https://docs.python.org/3/library/io.html#io.StringIO>`_
 
@@ -952,6 +942,7 @@ def register_total_time_method(
     >>> print(log_stream.getvalue()[:-8])  # Remove the microseconds
     Using the method 'Test.test_method'...
     The method 'Test.test_method' takes 0:00:01
+
     """
 
     # noinspection PyMissingOrEmptyDocstring
@@ -962,8 +953,7 @@ def register_total_time_method(
             self: object = args[0]
             logger.log(
                 level,
-                "Using the method "
-                f"'{self.__class__.__name__}.{method.__name__}'...",
+                "Using the method " f"'{self.__class__.__name__}.{method.__name__}'...",
             )
             tic = time.perf_counter()
             result = method(*args, **kwargs)
@@ -990,9 +980,8 @@ def register_init_method(logger: logging.Logger, level: int = logging.DEBUG):
     :param level: The level of the logger
     :return: The decorator
 
-    Example
+    Example:
     -------
-
     We set a logger with the name 'example', and we set the stream to a
     `StringIO <https://docs.python.org/3/library/io.html#io.StringIO>`_
 
@@ -1011,6 +1000,7 @@ def register_init_method(logger: logging.Logger, level: int = logging.DEBUG):
     >>> Test().foo()
     >>> print(log_stream.getvalue()[:-1])
     Using the method 'foo' in the class 'Test'.
+
     """
 
     # noinspection PyMissingOrEmptyDocstring
@@ -1023,8 +1013,7 @@ def register_init_method(logger: logging.Logger, level: int = logging.DEBUG):
             method_name = method.__name__
             logger.log(
                 level,
-                f"Using the method '{method_name}' "
-                f"in the class '{class_name}'.",
+                f"Using the method '{method_name}' " f"in the class '{class_name}'.",
             )
             # Compute the result
             result = method(*args, **kwargs)

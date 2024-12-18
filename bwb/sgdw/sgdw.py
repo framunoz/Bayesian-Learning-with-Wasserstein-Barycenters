@@ -7,10 +7,12 @@ from copy import deepcopy
 from functools import partial
 from typing import (
     Callable,
-    final,
     Literal,
-    override,
     Protocol,
+    final,
+    override,
+)
+from typing import (
     Sequence as Seq,
 )
 
@@ -25,12 +27,12 @@ from bwb import protocols as P
 from bwb.sgdw import utils
 
 __all__ = [
-    "CallbackFn",
-    "Runnable",
     "SGDW",
     "BaseSGDW",
-    "DistributionDrawSGDW",
+    "CallbackFn",
     "DiscreteDistributionSGDW",
+    "DistributionDrawSGDW",
+    "Runnable",
     "_convolutional_methods",
 ]
 
@@ -71,15 +73,11 @@ def _get_conv_function(conv_bar_strategy: ConvolutionalArg) -> ConvolutionalFn:
     """
     if isinstance(conv_bar_strategy, str):
         if conv_bar_strategy not in _convolutional_methods:
-            raise ValueError(
-                f"Unknown convolutional strategy '{conv_bar_strategy}'."
-            )
+            raise ValueError(f"Unknown convolutional strategy '{conv_bar_strategy}'.")
         return _convolutional_methods[conv_bar_strategy]
     elif callable(conv_bar_strategy):
         return conv_bar_strategy
-    raise TypeError(
-        "The convolutional strategy must be a string or a callable."
-    )
+    raise TypeError("The convolutional strategy must be a string or a callable.")
 
 
 def _transport_source(xt: torch.Tensor, plan: torch.Tensor):
@@ -192,9 +190,7 @@ class SGDW[DistributionT, PosWgtT](
             # Step 4 (optional): Compute the Wasserstein distance
             if self.iter_params.is_wass_dist_iter():
                 gamma_k = self.schd.step_schedule(k)
-                wass_dist = self._compute_wass_dist(
-                    pos_wgt_k, pos_wgt_kp1, gamma_k
-                )
+                wass_dist = self._compute_wass_dist(pos_wgt_k, pos_wgt_kp1, gamma_k)
                 self.update_wass_dist(wass_dist)
 
             # Update the position and weight
@@ -253,9 +249,7 @@ class SGDW[DistributionT, PosWgtT](
 
         return wass_dist_smooth
 
-    def _additional_repr_(
-        self, sep: str, tab: str, n_tab: int, new_line: str
-    ) -> str:
+    def _additional_repr_(self, sep: str, tab: str, n_tab: int, new_line: str) -> str:
         """
         Additional representation for the class.
         """
@@ -407,9 +401,7 @@ class BaseSGDW[DistributionT, PosWgtT](
         self._val = torch.tensor(1, dtype=self.dtype, device=self.device)
 
     @override
-    def _additional_repr_(
-        self, sep: str, tab: str, n_tab: int, new_line: str
-    ) -> str:
+    def _additional_repr_(self, sep: str, tab: str, n_tab: int, new_line: str) -> str:
         space = tab * n_tab
         to_return = super()._additional_repr_(sep, tab, n_tab, new_line)
         to_return += space + "distr_sampler=" + repr(self.distr_sampler) + sep
@@ -486,9 +478,7 @@ class DistributionDrawSGDW(
             wass_dist_every,
             callback,
         )
-        self.conv_bar_strategy: ConvolutionalFn = _get_conv_function(
-            conv_bar_strategy
-        )
+        self.conv_bar_strategy: ConvolutionalFn = _get_conv_function(conv_bar_strategy)
         self.conv_bar_kwargs: dict = (
             deepcopy(conv_bar_kwargs) if conv_bar_kwargs is not None else {}
         )
@@ -523,9 +513,7 @@ class DistributionDrawSGDW(
         lst_gamma_g = [1 - gamma_k] + [gamma_k / S_k] * S_k
         gs_weights_kp1 = self.conv_bar_strategy(
             A=torch.stack(gs_weights_lst_k),
-            weights=torch.as_tensor(
-                lst_gamma_g, dtype=self.dtype, device=self.device
-            ),
+            weights=torch.as_tensor(lst_gamma_g, dtype=self.dtype, device=self.device),
             **self.conv_bar_kwargs,
         )
         return gs_weights_kp1
@@ -547,9 +535,7 @@ class DistributionDrawSGDW(
 
 # MARK: SGDW with discrete distributions
 @final
-class DiscreteDistributionSGDW(
-    BaseSGDW[D.DiscreteDistribution, DiscretePosWgt]
-):
+class DiscreteDistributionSGDW(BaseSGDW[D.DiscreteDistribution, DiscretePosWgt]):
     r"""
     Class for Stochastic Gradient Descent in Wasserstein Space with
     discrete distributions.
@@ -610,9 +596,7 @@ class DiscreteDistributionSGDW(
         )
 
     @override
-    def as_distribution(
-        self, pos_wgt: DiscretePosWgt
-    ) -> D.DiscreteDistribution:
+    def as_distribution(self, pos_wgt: DiscretePosWgt) -> D.DiscreteDistribution:
         X_k, m = pos_wgt
         return D.DiscreteDistribution(support=X_k, weights=m)
 

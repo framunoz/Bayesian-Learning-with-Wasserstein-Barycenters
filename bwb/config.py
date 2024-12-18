@@ -1,7 +1,9 @@
-"""Configuration module for the library. This module contains the
+"""
+Configuration module for the library. This module contains the
 configuration class and some helper functions to change the
 configuration. The configuration is a singleton, so it is shared across
-the whole library."""
+the whole library.
+"""
 
 import threading
 import typing as t
@@ -16,7 +18,8 @@ _log = log_config.get_logger(__name__)
 
 # noinspection DuplicatedCode
 class _SingletonMeta(type):
-    """Metaclass to implements Singleton Pattern. Obtained from
+    """
+    Metaclass to implements Singleton Pattern. Obtained from
     https://refactoring.guru/design-patterns/singleton/python/example#example-1
     """
 

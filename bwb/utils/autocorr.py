@@ -25,7 +25,8 @@ def next_pow_two(n):
 
 
 def function_1d(x):
-    """Estimate the normalized autocorrelation function of a 1-D series
+    """
+    Estimate the normalized autocorrelation function of a 1-D series
 
     Args:
         x: The series as a 1-D PyTorch tensor.
@@ -65,7 +66,8 @@ def auto_window(taus, c, device=None):
 
 
 def integrated_time(x, c=5, tol=50, quiet=True, has_walkers=True, device=None):
-    """Estimate the integrated autocorrelation time of a time series.
+    """
+    Estimate the integrated autocorrelation time of a time series.
 
     This estimate uses the iterative procedure described on page 16 of
     `Sokal's notes
@@ -96,7 +98,7 @@ def integrated_time(x, c=5, tol=50, quiet=True, has_walkers=True, device=None):
         float or tensor: An estimate of the integrated autocorrelation
             time of the time series ``x``.
 
-    Raises
+    Raises:
         AutocorrError: If the autocorrelation time can't be reliably
             estimated from the chain and ``quiet`` is ``False``. This
             normally means

@@ -18,10 +18,10 @@ from bwb.protocols import HasDeviceDType
 from bwb.utils import shape_validation
 
 __all__ = [
-    "DistributionP",
-    "wass_distance",
     "DiscreteDistribution",
     "DistributionDraw",
+    "DistributionP",
+    "wass_distance",
 ]
 
 _log = logging.get_logger(__name__)
@@ -43,12 +43,12 @@ class DistributionP(t.Protocol):
 
     @property
     def dtype(self) -> torch.dtype:
-        """dtype of the instance."""
+        """Dtype of the instance."""
         ...
 
     @property
     def device(self) -> torch.device:
-        """device of the instance."""
+        """Device of the instance."""
         ...
 
     def enumerate_support_(self, expand=True) -> torch.Tensor:
@@ -105,9 +105,7 @@ def wass_distance(
     x_p, w_p = get_pos_wgt(p)
     x_q, w_q = get_pos_wgt(q)
 
-    res: ot.utils.OTResult = ot.solve_sample(
-        x_p, x_q, w_p, w_q, **solve_sample_kwargs
-    )
+    res: ot.utils.OTResult = ot.solve_sample(x_p, x_q, w_p, w_q, **solve_sample_kwargs)
 
     return res.value
 
@@ -175,20 +173,18 @@ class DiscreteDistribution(torch.distributions.Categorical, HasDeviceDType):
     def original_support(self) -> torch.Tensor:
         """Original support."""
         if self._original_support is None:
-            self._original_support = torch.arange(
-                len(self.weights), device=self.device
-            )
+            self._original_support = torch.arange(len(self.weights), device=self.device)
 
         return self._original_support
 
     @property
     def dtype(self) -> torch.dtype:
-        """dtype of the instance."""
+        """Dtype of the instance."""
         return self.weights.dtype
 
     @property
     def device(self) -> torch.device:
-        """device of the instance."""
+        """Device of the instance."""
         return self.weights.device
 
     def enumerate_support_(self, expand=True) -> torch.Tensor:
@@ -264,9 +260,9 @@ class DistributionDraw(DiscreteDistribution):
         """Original support."""
         if self._original_support is None:
             n, m = self.shape
-            index = torch.arange(
-                n * m, device=self.device, dtype=torch.int64
-            ).reshape(-1, 1)
+            index = torch.arange(n * m, device=self.device, dtype=torch.int64).reshape(
+                -1, 1
+            )
             self._original_support = torch.cat((index // m, index % m), 1)
 
         return self._original_support
@@ -348,9 +344,7 @@ class DistributionDraw(DiscreteDistribution):
             grayscale_weights /= torch.sum(grayscale_weights)
         weights = grayscale_weights.reshape((-1,))
 
-        to_return = cls(
-            weights=weights, shape=shape, device=device, dtype=dtype
-        )
+        to_return = cls(weights=weights, shape=shape, device=device, dtype=dtype)
 
         to_return._grayscale_weights = grayscale_weights
 
@@ -393,9 +387,7 @@ class DistributionDraw(DiscreteDistribution):
         grayscale_weights /= torch.sum(grayscale_weights)
         weights = grayscale_weights.reshape((-1,)).to(dtype)
 
-        to_return = cls(
-            weights=weights, shape=shape, device=device, dtype=dtype
-        )
+        to_return = cls(weights=weights, shape=shape, device=device, dtype=dtype)
 
         to_return._grayscale = grayscale
         to_return._grayscale_weights = grayscale_weights.to(dtype)
@@ -468,7 +460,8 @@ class DistributionDraw(DiscreteDistribution):
         return to_return
 
     def _repr_png_(self) -> bytes:
-        """iPython display hook support for PNG format.
+        """
+        iPython display hook support for PNG format.
 
         :returns: png version of the image as bytes
         """

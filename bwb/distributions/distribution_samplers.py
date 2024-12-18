@@ -1,7 +1,9 @@
-"""This module contains the classes that represent the distribution
+"""
+This module contains the classes that represent the distribution
 samplers. These classes are used to sample distributions from a set of
 models, and they are divided into two main categories:
-discrete and continuous samplers."""
+discrete and continuous samplers.
+"""
 
 import abc
 import collections as c
@@ -11,11 +13,13 @@ import pickle
 from pathlib import Path
 from typing import (
     Callable,
-    final,
     Optional,
-    override,
     Protocol,
     Self,
+    final,
+    override,
+)
+from typing import (
     Sequence as Seq,
 )
 
@@ -27,9 +31,9 @@ from bwb.config import config
 from bwb.distributions.models import DiscreteModelsSetP
 from bwb.protocols import HasDeviceDType
 from bwb.utils import (
-    check_is_fitted,
     PathT,
     SeedT,
+    check_is_fitted,
     set_generator,
     timeit_to_total_time,
 )
@@ -37,13 +41,13 @@ from bwb.utils import (
 _log = logging.get_logger(__name__)
 
 __all__ = [
-    "DistributionSampler",
-    "DiscreteDistribSampler",
-    "UniformDiscreteSampler",
-    "ContinuousDistribSampler",
     "BaseGeneratorDistribSampler",
+    "ContinuousDistribSampler",
+    "DiscreteDistribSampler",
+    "DistributionSampler",
     "GeneratorDistribSampler",
     "GeneratorP",
+    "UniformDiscreteSampler",
 ]
 
 
@@ -285,9 +289,7 @@ class DiscreteDistribSampler[DistributionT](DistributionSampler[DistributionT]):
 
 
 # noinspection PyAttributeOutsideInit
-class UniformDiscreteSampler[DistributionT](
-    DiscreteDistribSampler[DistributionT]
-):
+class UniformDiscreteSampler[DistributionT](DiscreteDistribSampler[DistributionT]):
     r"""
     A class representing a distribution sampler with a discrete set of
     models, and the probabilities are set to be uniform.
@@ -489,7 +491,6 @@ class BaseGeneratorDistribSampler[DistributionT](
         :return: The fitted distribution sampler.
         :rtype: self
         """
-
         # Validation of the noise sampler
         if not callable(noise_sampler):
             raise TypeError("The noise sampler must be a callable.")
@@ -526,8 +527,7 @@ class BaseGeneratorDistribSampler[DistributionT](
         except Exception as e:
             _log.error(e)
             raise ValueError(
-                "The generator must be able to generate a sample from "
-                "the noise."
+                "The generator must be able to generate a sample from " "the noise."
             )
         self.generator_ = generator
 
@@ -629,9 +629,7 @@ class BaseGeneratorDistribSampler[DistributionT](
     def draw(self, seed: SeedT = None) -> DistributionT:
         # Check if the distribution sampler is fitted
         if not self._fitted:
-            check_is_fitted(
-                self, ["generator_", "transform_out_", "noise_sampler_"]
-            )
+            check_is_fitted(self, ["generator_", "transform_out_", "noise_sampler_"])
 
         to_return, noise = self._draw(seed)
         if self.save_samples:
@@ -645,9 +643,7 @@ class BaseGeneratorDistribSampler[DistributionT](
     def sample(self, size: int = 1, seed: SeedT = None) -> Seq[DistributionT]:
         # Check if the distribution sampler is fitted
         if not self._fitted:
-            check_is_fitted(
-                self, ["generator_", "transform_out_", "noise_sampler_"]
-            )
+            check_is_fitted(self, ["generator_", "transform_out_", "noise_sampler_"])
 
         to_return, noises = self._sample(size, seed)
         if self.save_samples:
@@ -672,7 +668,7 @@ class BaseGeneratorDistribSampler[DistributionT](
             return self.noise_sampler_(size)
 
         # Otherwise, try to generate the noise with the seed
-        gen = set_generator(seed=seed, device=self.device)
+        _ = set_generator(seed=seed, device=self.device)
         try:
             # noinspection PyArgumentList
             noise = self.noise_sampler_(size, seed=seed)
@@ -801,9 +797,7 @@ class BaseGeneratorDistribSampler[DistributionT](
         :param dtype_: The dtype to load the samples.
         :return: The new instance.
         """
-        new.samples_history = new._set_normal_dtype(
-            new.samples_history, force=True
-        )
+        new.samples_history = new._set_normal_dtype(new.samples_history, force=True)
 
 
 # noinspection PyAttributeOutsideInit
@@ -820,9 +814,7 @@ class GeneratorDistribSampler(BaseGeneratorDistribSampler[D.DistributionDraw]):
 
     @final
     @override
-    def _draw(
-        self, seed: SeedT = None
-    ) -> tuple[D.DistributionDraw, torch.Tensor]:
+    def _draw(self, seed: SeedT = None) -> tuple[D.DistributionDraw, torch.Tensor]:
         noise: torch.Tensor = self._get_noise(1, seed)
         to_return: D.DistributionDraw = self.transform_noise(noise)
         return to_return, noise
@@ -843,8 +835,9 @@ def __main() -> None:
     """
     Main function for testing purposes.
     """
-    from icecream import ic
     from pathlib import Path
+
+    from icecream import ic
 
     input_size = 128
     output_size = (32, 32)

@@ -11,14 +11,14 @@ from typing import Callable, Iterator
 import bwb.logging_ as logging
 
 __all__ = [
-    "step_scheduler",
-    "StepSchedulerFn",
-    "StepSchedulerArg",
-    "BatchSizeFn",
     "BatchSizeArg",
-    "Schedule",
+    "BatchSizeFn",
     "DetentionParameters",
     "IterationParameters",
+    "Schedule",
+    "StepSchedulerArg",
+    "StepSchedulerFn",
+    "step_scheduler",
 ]
 
 _log = logging.get_logger(__name__)
@@ -29,9 +29,7 @@ type BatchSizeFn = Callable[[int], int]
 type BatchSizeArg = int | BatchSizeFn
 
 
-def step_scheduler(
-    *, a: float = 1, b: float = 0, c: float = 1
-) -> StepSchedulerFn:
+def step_scheduler(*, a: float = 1, b: float = 0, c: float = 1) -> StepSchedulerFn:
     r"""
     This function returns a step scheduler with parameters :math:`a`,
     :math:`b`, and :math:`c`.
@@ -106,9 +104,7 @@ class Schedule:
             if not isinstance(step_schd(1), float):
                 raise ValueError("step_schedule must return a float")
         except Exception as e:
-            raise ValueError(
-                "step_schedule must accept an integer argument"
-            ) from e
+            raise ValueError("step_schedule must accept an integer argument") from e
 
         self._step_schedule: StepSchedulerFn = step_schd
 
@@ -142,9 +138,7 @@ class Schedule:
             if not isinstance(batch_size(0), int):
                 raise ValueError("batch_size must return an integer")
         except Exception as e:
-            raise ValueError(
-                "batch_size must accept an integer argument"
-            ) from e
+            raise ValueError("batch_size must accept an integer argument") from e
 
         self._batch_size: BatchSizeFn = batch_size
 
@@ -248,9 +242,7 @@ class DetentionParameters:
         if self.max_time != float("inf"):
             max_time = self.max_time
             time_fmt = str(timedelta(seconds=max_time))[:-4]
-        max_iter_fmt = (
-            f"{self.max_iter:_}" if self.max_iter != float("inf") else "∞"
-        )
+        max_iter_fmt = f"{self.max_iter:_}" if self.max_iter != float("inf") else "∞"
 
         return (
             f"DetentionParameters(tol={self.tol:.2e}, "
@@ -277,6 +269,7 @@ class IterationParameters(Iterator[int]):
     0
     1
     2
+
     """
 
     def __init__(self, det_params: DetentionParameters, length_ema: int = 5):
@@ -437,9 +430,7 @@ class IterationParameters(Iterator[int]):
         return False
 
     def __repr__(self) -> str:
-        w_dist_fmt = (
-            f"{self.w_dist:.6f}" if self.w_dist != float("inf") else "∞"
-        )
+        w_dist_fmt = f"{self.w_dist:.6f}" if self.w_dist != float("inf") else "∞"
         time_fmt = str(timedelta(seconds=self.total_time))[:-4]
         return (
             f"IterationParameters(k={self.k:_}, w_dist={w_dist_fmt}, "

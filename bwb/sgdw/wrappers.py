@@ -6,24 +6,24 @@ This module contains the wrappers for the SGDW algorithm.
 import abc
 from copy import deepcopy
 from datetime import timedelta
-from typing import Callable, Literal, override, Sequence as Seq, TypedDict
+from typing import Callable, Literal, TypedDict, override
+from typing import Sequence as Seq
 
 import torch
 
 import bwb.logging_ as logging
 from bwb.sgdw.sgdw import (
-    CallbackFn,
     SGDW,
     _convolutional_methods,
 )
 
 __all__ = [
+    "LogDistrIterProxy",
+    "LogDistrSampledProxy",
+    "LogPosWgtIterProxy",
+    "LogPosWgtSampledProxy",
     "ProjectorFn",
     "ReportProxy",
-    "LogPosWgtIterProxy",
-    "LogDistrIterProxy",
-    "LogPosWgtSampledProxy",
-    "LogDistrSampledProxy",
     "SGDWProjectedDecorator",
 ]
 
@@ -110,9 +110,7 @@ class SGDWBaseWrapper[DistributionT, PosWgtT](SGDW[DistributionT, PosWgtT]):
         return self.wrapee.create_barycenter(pos_wgt)
 
 
-class LogWassDistProxy[DistributionT, PosWgtT](
-    SGDWBaseWrapper[DistributionT, PosWgtT]
-):
+class LogWassDistProxy[DistributionT, PosWgtT](SGDWBaseWrapper[DistributionT, PosWgtT]):
     """
     Proxy class for the SGDW algorithm to log the Wasserstein distance
     at each iteration of the algorithm.
@@ -125,9 +123,7 @@ class LogWassDistProxy[DistributionT, PosWgtT](
         self.iterations_lst: list[int] = []
 
     @override
-    def _additional_repr_(
-        self, sep: str, tab: str, n_tab: int, new_line: str
-    ) -> str:
+    def _additional_repr_(self, sep: str, tab: str, n_tab: int, new_line: str) -> str:
         space = tab * n_tab
         to_return = super()._additional_repr_(sep, tab, n_tab, new_line)
         to_return += space + f"len_wass_dist={len(self.wass_dist_lst)}" + sep
@@ -169,9 +165,7 @@ class ReportOptions(TypedDict, total=False):
     dt_per_iter: bool
 
 
-class ReportProxy[DistributionT, PosWgtT](
-    SGDWBaseWrapper[DistributionT, PosWgtT]
-):
+class ReportProxy[DistributionT, PosWgtT](SGDWBaseWrapper[DistributionT, PosWgtT]):
     """
     Proxy class for the SGDW algorithm to report relevant iteration
     information.
@@ -207,9 +201,7 @@ class ReportProxy[DistributionT, PosWgtT](
         self.level = level
 
     @override
-    def _additional_repr_(
-        self, sep: str, tab: str, n_tab: int, new_line: str
-    ) -> str:
+    def _additional_repr_(self, sep: str, tab: str, n_tab: int, new_line: str) -> str:
         space = tab * n_tab
         to_return = super()._additional_repr_(sep, tab, n_tab, new_line)
         to_return += space + f"report_every={self.report_every}" + sep
@@ -229,7 +221,6 @@ class ReportProxy[DistributionT, PosWgtT](
         """
         Generate the report for the algorithm.
         """
-
         bar = "=" * self.len_bar
 
         report = bar + " "
@@ -255,9 +246,7 @@ class ReportProxy[DistributionT, PosWgtT](
             report += f"Δt = {self.iter_params.diff_t * 1000:.2f} [ms], "
 
         if self.include_dict["dt_per_iter"]:
-            dt_per_iter = (
-                self.iter_params.total_time * 1000 / (self.iter_params.k + 1)
-            )
+            dt_per_iter = self.iter_params.total_time * 1000 / (self.iter_params.k + 1)
             report += f"Δt per iter. = {dt_per_iter:.2f} [ms/iter], "
 
         if report.endswith(", "):
@@ -298,9 +287,7 @@ class BaseLogProxy[DistributionT, PosWgtT, RegisterValueT](
         super().__init__(wrapee)
         self.register_lst: list[RegisterValueT] = []
 
-    def _additional_repr_(
-        self, sep: str, tab: str, n_tab: int, new_line: str
-    ) -> str:
+    def _additional_repr_(self, sep: str, tab: str, n_tab: int, new_line: str) -> str:
         space = tab * n_tab
         to_return = super()._additional_repr_(sep, tab, n_tab, new_line)
         to_return += space + f"len_register={len(self.register_lst)}" + sep
@@ -508,9 +495,7 @@ class SGDWProjectedDecorator[DistributionT, PosWgtT](
             # Case when the interpolation strategy is defined
             if self.interp_strategy is not None:
                 step_k: float = self.interp_step_schd(k)
-                pos_wgt_kp1_ = self.interp_strategy(
-                    pos_wgt_kp1, pos_wgt_kp1_, step_k
-                )
+                pos_wgt_kp1_ = self.interp_strategy(pos_wgt_kp1, pos_wgt_kp1_, step_k)
                 self.dict_log["pos_wgt_proj_interp"] = pos_wgt_kp1_
 
             pos_wgt_kp1 = pos_wgt_kp1_
@@ -534,9 +519,7 @@ class SGDWProjectedDecorator[DistributionT, PosWgtT](
         return k % proj_every == proj_every - 1
 
     @override
-    def _additional_repr_(
-        self, sep: str, tab: str, n_tab: int, new_line: str
-    ) -> str:
+    def _additional_repr_(self, sep: str, tab: str, n_tab: int, new_line: str) -> str:
         space = tab * n_tab
         to_return = super()._additional_repr_(sep, tab, n_tab, new_line)
         to_return += space + f"project_every={self.project_every}" + sep

@@ -13,10 +13,10 @@ from bwb.distributions import DistributionDraw
 from bwb.utils import ArrayLikeT
 
 __all__ = [
-    "DiscreteModelsSetP",
     "BaseDiscreteModelsSet",
-    "DiscreteWeightedModelSetP",
     "BaseDiscreteWeightedModelSet",
+    "DiscreteModelsSetP",
+    "DiscreteWeightedModelSetP",
     "ModelDataset",
 ]
 
@@ -61,9 +61,7 @@ class DiscreteWeightedModelSetP[DistributionT](
      discrete support.
     """
 
-    def compute_likelihood(
-        self, data: ArrayLikeT = None, **kwargs
-    ) -> torch.Tensor:
+    def compute_likelihood(self, data: ArrayLikeT = None, **kwargs) -> torch.Tensor:
         """
         Compute the probabilities of the data given the models.
 
@@ -81,9 +79,7 @@ class BaseDiscreteWeightedModelSet[DistributionT](
     """
 
     @abc.abstractmethod
-    def compute_likelihood(
-        self, data: ArrayLikeT = None, **kwargs
-    ) -> torch.Tensor:
+    def compute_likelihood(self, data: ArrayLikeT = None, **kwargs) -> torch.Tensor:
         """
         Compute the probabilities of the data given the models.
 

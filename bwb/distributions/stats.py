@@ -1,6 +1,7 @@
 import functools
 from copy import copy
-from typing import Callable, Protocol, Sequence as Seq
+from typing import Callable, Protocol
+from typing import Sequence as Seq
 
 import PIL.Image
 import torch
@@ -11,9 +12,9 @@ import bwb.logging_ as logging
 import bwb.utils as utils
 
 __all__ = [
+    "find_set_quantile",
     "order_distributions",
     "plot_log_like_models",
-    "find_set_quantile",
 ]
 
 _log = logging.get_logger(__name__)

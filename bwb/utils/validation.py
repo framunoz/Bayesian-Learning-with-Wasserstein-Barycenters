@@ -13,7 +13,8 @@ __all__ = [
 
 
 def check_is_fitted(estimator, attributes=None, *, msg=None, all_or_any=all):
-    """Perform is_fitted validation for estimator.
+    """
+    Perform is_fitted validation for estimator.
     Checks if the estimator is fitted by verifying the presence of
     fitted attributes (ending with a trailing underscore) and otherwise
     raises a NotFittedError with the given message.
@@ -48,9 +49,7 @@ def check_is_fitted(estimator, attributes=None, *, msg=None, all_or_any=all):
         fitted = all_or_any([hasattr(estimator, attr) for attr in attributes])
     else:
         fitted = [
-            v
-            for v in vars(estimator)
-            if v.endswith("_") and not v.startswith("__")
+            v for v in vars(estimator) if v.endswith("_") and not v.startswith("__")
         ]
 
     if not fitted:

@@ -6,7 +6,7 @@ a specific iteration.
 
 import abc
 from itertools import product
-from typing import Callable, final, Optional, override
+from typing import Callable, Optional, final, override
 
 import numpy as np
 import torch
@@ -15,16 +15,14 @@ from matplotlib import pyplot as plt
 import bwb.logging_ as logging
 from bwb.distributions import DistributionDraw
 from bwb.sgdw import wrappers as W
-from bwb.sgdw.sgdw import Runnable, SGDW
+from bwb.sgdw.sgdw import SGDW, Runnable
 
 _log = logging.get_logger(__name__)
 
 type DistDrawPosWgtT = torch.Tensor
 
 
-class Plotter[DistributionT, PosWgtT](
-    Runnable[DistributionT], metaclass=abc.ABCMeta
-):
+class Plotter[DistributionT, PosWgtT](Runnable[DistributionT], metaclass=abc.ABCMeta):
     fig: Optional[plt.Figure]
     ax: Optional[plt.Axes]
     sgdw: SGDW[DistributionT, PosWgtT]
@@ -121,9 +119,7 @@ class PlotterComparison(Plotter[DistributionDraw, DistDrawPosWgtT]):
         cmap="binary",
         **kwargs,
     ):
-        super().__init__(
-            sgdw, plot_every, n_cols, n_rows, factor, cmap, **kwargs
-        )
+        super().__init__(sgdw, plot_every, n_cols, n_rows, factor, cmap, **kwargs)
         if plot_every is not None and plot_every < n_rows * n_cols:
             logging.raise_error(
                 "'plot_every' should not be less than n_rows * n_cols."
@@ -224,9 +220,7 @@ class PlotterComparisonProjected(Plotter[DistributionDraw, DistDrawPosWgtT]):
         proj_kwargs: Optional[dict] = None,
         **kwargs,
     ):
-        super().__init__(
-            sgdw, plot_every, n_cols, n_rows, factor, cmap, **kwargs
-        )
+        super().__init__(sgdw, plot_every, n_cols, n_rows, factor, cmap, **kwargs)
         if plot_every is not None and plot_every < n_rows * n_cols:
             logging.raise_error(
                 "'plot_every' should not be less than n_rows * n_cols."
