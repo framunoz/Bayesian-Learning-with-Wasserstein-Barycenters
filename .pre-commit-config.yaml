@@ -23,6 +23,10 @@ repos:
     rev: "v0.8.3"
     hooks:
       - id: ruff
+        types_or: [ python, pyi ]
+        stages: [ pre-commit ]
+      - id: ruff-format
+        types_or: [ python, pyi ]
         stages: [ pre-commit ]
 
   # waiting for https://github.com/gee-community/geetools/issues/337
