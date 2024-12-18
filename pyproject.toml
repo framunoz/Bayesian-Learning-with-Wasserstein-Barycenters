@@ -36,6 +36,78 @@ pickleshare = "^0.7.5"
 python-dotenv = "^1.0.1"
 pytest = "^8.2.0"
 black = {extras = ["jupyter"], version = "^24.10.0"}
+pre-commit = "^4.0.1"
+
+[tool.black]
+line-length = 80
+target-version = ['py311', 'py312']
+exclude = '''
+/(
+    \.git
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+)/
+'''
+preview = true
+unstable = true
+
+[tool.ruff]
+fix = true
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+    "tests",
+    "*.ipynb",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "D", "RUF"]
+ignore = [
+    "F821", # Undefined name
+    "D212", # Multi-line docstring summary should start at the first line
+    "E741", # Ambiguous variable name: `l` | TODO
+    "D205", # 1 blank line required between summary line and description
+    "D105", # Missing docstring in magic method
+    "D415", # First line should end with a period
+    "D400", # First line should end with a period
+    "D401", # First line should be in imperative mood
+]
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "double"
+
+[tool.ruff.lint.pycodestyle]
+max-doc-length = 72
 
 [build-system]
 requires = ["poetry-core"]
