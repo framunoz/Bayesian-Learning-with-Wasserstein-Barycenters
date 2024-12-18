@@ -25,9 +25,6 @@ repos:
       - id: ruff
         types_or: [ python, pyi ]
         stages: [ pre-commit ]
-      - id: ruff-format
-        types_or: [ python, pyi ]
-        stages: [ pre-commit ]
 
   # waiting for https://github.com/gee-community/geetools/issues/337
   # so notebooks can again be executed from the documentation

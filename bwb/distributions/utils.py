@@ -1,3 +1,7 @@
+"""
+Module that contains utility functions for the distributions module.
+"""  # noqa: D200
+
 from math import prod
 from pathlib import Path
 
@@ -152,7 +156,8 @@ else:
 
 def partition(X: torch.Tensor, mu: torch.Tensor, alpha: float):
     """
-    Function that partitions the samples in X according to the weights in mu.
+    Function that partitions the samples in X according to the weights
+    in mu.
 
     :param X: The positions of the distribution.
     :param mu: The weights of the distribution.
