@@ -50,7 +50,9 @@ def timeit_to_total_time(method):
     return timeit_wrapper
 
 
-def set_generator(seed: SeedT = None, device: DeviceT = "cpu") -> torch.Generator:
+def set_generator(
+    seed: SeedT = None, device: DeviceT = "cpu"
+) -> torch.Generator:
     """
     Set the generator for the random number generator.
 
@@ -101,7 +103,9 @@ def normalised_samples_ordered_dict(posterior: DiscreteDistribSamplerP):
         MCMC instance.
     """
     counter = posterior.samples_counter
-    return c.OrderedDict([(k, v / counter.total()) for k, v in counter.most_common()])
+    return c.OrderedDict(
+        [(k, v / counter.total()) for k, v in counter.most_common()]
+    )
 
 
 # ================= DEPRECATED FUNCTIONS =================
@@ -164,7 +168,9 @@ def likelihood_ordered_dict(posterior):
     warnings.warn(msg, DeprecationWarning, stacklevel=2)
     like_cache = posterior.likelihood_cache
     posterior_probs = like_cache / np.sum(like_cache)
-    likelihood_dct = c.OrderedDict({i: prob for i, prob in enumerate(posterior_probs)})
+    likelihood_dct = c.OrderedDict(
+        {i: prob for i, prob in enumerate(posterior_probs)}
+    )
 
     for key, _ in sorted(likelihood_dct.items(), key=lambda item: -item[1]):
         likelihood_dct.move_to_end(key)
@@ -188,4 +194,6 @@ def normalised_steps_ordered_dict(mcmc):
     _log.warning(msg)
     warnings.warn(msg, DeprecationWarning, stacklevel=2)
     counter = mcmc.steps_counter
-    return c.OrderedDict([(k, v / counter.total()) for k, v in counter.most_common()])
+    return c.OrderedDict(
+        [(k, v / counter.total()) for k, v in counter.most_common()]
+    )

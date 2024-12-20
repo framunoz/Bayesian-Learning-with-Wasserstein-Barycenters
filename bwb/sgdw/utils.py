@@ -29,7 +29,9 @@ type BatchSizeFn = Callable[[int], int]
 type BatchSizeArg = int | BatchSizeFn
 
 
-def step_scheduler(*, a: float = 1, b: float = 0, c: float = 1) -> StepSchedulerFn:
+def step_scheduler(
+    *, a: float = 1, b: float = 0, c: float = 1
+) -> StepSchedulerFn:
     r"""
     This function returns a step scheduler with parameters :math:`a`,
     :math:`b`, and :math:`c`.
@@ -104,7 +106,8 @@ class Schedule:
             if not isinstance(step_schd(1), float):
                 raise ValueError("step_schedule must return a float")
         except Exception as e:
-            raise ValueError("step_schedule must accept an integer argument") from e
+            msg = "step_schedule must accept an integer argument"
+            raise ValueError(msg) from e
 
         self._step_schedule: StepSchedulerFn = step_schd
 
@@ -138,7 +141,8 @@ class Schedule:
             if not isinstance(batch_size(0), int):
                 raise ValueError("batch_size must return an integer")
         except Exception as e:
-            raise ValueError("batch_size must accept an integer argument") from e
+            msg = "batch_size must accept an integer argument"
+            raise ValueError(msg) from e
 
         self._batch_size: BatchSizeFn = batch_size
 
@@ -242,7 +246,9 @@ class DetentionParameters:
         if self.max_time != float("inf"):
             max_time = self.max_time
             time_fmt = str(timedelta(seconds=max_time))[:-4]
-        max_iter_fmt = f"{self.max_iter:_}" if self.max_iter != float("inf") else "∞"
+        max_iter_fmt = (
+            f"{self.max_iter:_}" if self.max_iter != float("inf") else "∞"
+        )
 
         return (
             f"DetentionParameters(tol={self.tol:.2e}, "
@@ -404,33 +410,33 @@ class IterationParameters(Iterator[int]):
         # Reaches maximum time
         if self.total_time >= self.det_params.max_time:
             if self.det_params.tol != 0:
-                warnings.warn(
+                msg = (
                     "The algorithm did not converge in distance "
                     f"({self.w_dist:.6e}) within the maximum time "
-                    f"({self.total_time:.2f} seconds).",
-                    RuntimeWarning,
-                    stacklevel=2,
+                    f"({self.total_time:.2f} seconds)."
                 )
+                warnings.warn(msg, RuntimeWarning, stacklevel=2)
             _log.debug(f"Reached maximum time: {self.total_time}")
             return True
 
         # Reaches maximum iteration
         if self.k >= self.det_params.max_iter:
             if self.det_params.tol != 0:
-                warnings.warn(
+                msg = (
                     "The algorithm did not converge in distance "
                     f"({self.w_dist:.6e}) within the maximum iteration "
-                    f"({self.k}).",
-                    RuntimeWarning,
-                    stacklevel=2,
+                    f"({self.k})."
                 )
+                warnings.warn(msg, RuntimeWarning, stacklevel=2)
             _log.debug(f"Reached maximum iteration: {self.k}")
             return True
 
         return False
 
     def __repr__(self) -> str:
-        w_dist_fmt = f"{self.w_dist:.6f}" if self.w_dist != float("inf") else "∞"
+        w_dist_fmt = (
+            f"{self.w_dist:.6f}" if self.w_dist != float("inf") else "∞"
+        )
         time_fmt = str(timedelta(seconds=self.total_time))[:-4]
         return (
             f"IterationParameters(k={self.k:_}, w_dist={w_dist_fmt}, "

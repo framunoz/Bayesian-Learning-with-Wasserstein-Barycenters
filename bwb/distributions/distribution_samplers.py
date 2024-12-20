@@ -112,12 +112,8 @@ class DistributionSampler[DistributionT](HasDeviceDType, metaclass=abc.ABCMeta):
         filename: Path = Path(filename)
 
         if filename.suffix not in [".pkl", ".gz"]:
-            logging.raise_warning(
-                "The file must have the extension '.pkl' or '.gz'.",
-                _log,
-                RuntimeWarning,
-                stacklevel=2,
-            )
+            msg = "The file must have the extension '.pkl' or '.gz'."
+            logging.raise_warning(msg, _log, RuntimeWarning, stacklevel=2)
 
         if filename.suffix == ".gz":
             f = gzip.open(filename, "wb")
@@ -289,7 +285,9 @@ class DiscreteDistribSampler[DistributionT](DistributionSampler[DistributionT]):
 
 
 # noinspection PyAttributeOutsideInit
-class UniformDiscreteSampler[DistributionT](DiscreteDistribSampler[DistributionT]):
+class UniformDiscreteSampler[DistributionT](
+    DiscreteDistribSampler[DistributionT]
+):
     r"""
     A class representing a distribution sampler with a discrete set of
     models, and the probabilities are set to be uniform.
@@ -398,11 +396,8 @@ class BaseGeneratorDistribSampler[DistributionT](
             return value.half()
 
         if not isinstance(value, list):
-            logging.raise_error(
-                "The value must be a tensor or a list of tensors.",
-                _log,
-                TypeError,
-            )
+            msg = "The value must be a tensor or a list of tensors."
+            logging.raise_error(msg, _log, TypeError)
 
         return [self._set_half_dtype(v, force) for v in value]
 
@@ -423,11 +418,8 @@ class BaseGeneratorDistribSampler[DistributionT](
             return value.to(dtype=self.dtype)
 
         if not isinstance(value, list):
-            logging.raise_error(
-                "The value must be a tensor or a list of tensors.",
-                _log,
-                TypeError,
-            )
+            msg = "The value must be a tensor or a list of tensors."
+            logging.raise_error(msg, _log, TypeError)
 
         return [self._set_normal_dtype(v, force) for v in value]
 
@@ -498,10 +490,11 @@ class BaseGeneratorDistribSampler[DistributionT](
             noise = noise_sampler(42)
             if not isinstance(noise, torch.Tensor):
                 raise ValueError(
-                    "The noise sampler must return a tensor, but it returns a "
-                    f"{type(noise)}"
+                    "The noise sampler must return a tensor, "
+                    f"but it returns a {type(noise)}"
                 )
             if noise.shape[0] != 42:
+
                 raise ValueError(
                     "The noise sampler must return a tensor of shape "
                     "(42, ...), but it returns a tensor of shape "
@@ -527,7 +520,8 @@ class BaseGeneratorDistribSampler[DistributionT](
         except Exception as e:
             _log.error(e)
             raise ValueError(
-                "The generator must be able to generate a sample from " "the noise."
+                "The generator must be able to generate a sample from "
+                "the noise."
             )
         self.generator_ = generator
 
@@ -538,8 +532,8 @@ class BaseGeneratorDistribSampler[DistributionT](
             output = transform_out(result)
             if not isinstance(output, torch.Tensor):
                 raise ValueError(
-                    "The transform_out must return a tensor, but it returns a "
-                    f"{type(output)}"
+                    "The transform_out must return a tensor, "
+                    f"but it returns a {type(output)}"
                 )
             if output.device != self.device:
                 raise ValueError(
@@ -629,7 +623,8 @@ class BaseGeneratorDistribSampler[DistributionT](
     def draw(self, seed: SeedT = None) -> DistributionT:
         # Check if the distribution sampler is fitted
         if not self._fitted:
-            check_is_fitted(self, ["generator_", "transform_out_", "noise_sampler_"])
+            attributes = ["generator_", "transform_out_", "noise_sampler_"]
+            check_is_fitted(self, attributes)
 
         to_return, noise = self._draw(seed)
         if self.save_samples:
@@ -643,7 +638,8 @@ class BaseGeneratorDistribSampler[DistributionT](
     def sample(self, size: int = 1, seed: SeedT = None) -> Seq[DistributionT]:
         # Check if the distribution sampler is fitted
         if not self._fitted:
-            check_is_fitted(self, ["generator_", "transform_out_", "noise_sampler_"])
+            attributes = ["generator_", "transform_out_", "noise_sampler_"]
+            check_is_fitted(self, attributes)
 
         to_return, noises = self._sample(size, seed)
         if self.save_samples:
@@ -674,22 +670,18 @@ class BaseGeneratorDistribSampler[DistributionT](
             noise = self.noise_sampler_(size, seed=seed)
         except KeyError as e:
             noise = self.noise_sampler_(size)
-            logging.raise_warning(
+            msg = (
                 "Failed to generate noise with seed. The noise "
-                f"will be generated without the seed. {e}",
-                _log,
-                RuntimeWarning,
-                stacklevel=2,
+                f"will be generated without the seed. {e}"
             )
+            logging.raise_warning(msg, _log, RuntimeWarning, stacklevel=2)
         except Exception as e:
             noise = self.noise_sampler_(size)
-            logging.raise_warning(
+            msg = (
                 "Failed to generate noise with seed. The noise "
-                f"will be generated without the seed. {e}",
-                _log,
-                RuntimeWarning,
-                stacklevel=2,
+                f"will be generated without the seed. {e}"
             )
+            logging.raise_warning(msg, _log, RuntimeWarning, stacklevel=2)
         return noise
 
     def __copy__(self) -> Self:
@@ -725,14 +717,12 @@ class BaseGeneratorDistribSampler[DistributionT](
 
     @override
     def __getstate__(self) -> dict:
-        logging.raise_warning(
+        msg = (
             "The generator_, transform_out_ and noise_sampler_ "
-            "attributes will not be saved. "
-            "Use fit method to fit these attributes.",
-            _log,
-            RuntimeWarning,
-            stacklevel=2,
+            "attributes will not be saved. Use fit method to fit "
+            "these attributes."
         )
+        logging.raise_warning(msg, _log, RuntimeWarning, stacklevel=2)
 
         # Remove the generator, transform_out and noise_sampler attributes
         state = copy.copy(self.__dict__)
@@ -741,14 +731,12 @@ class BaseGeneratorDistribSampler[DistributionT](
         state.pop("noise_sampler_", None)
 
         if self.SAVE_HALF_PRECISION and not self.use_half:
-            logging.raise_warning(
+            msg = (
                 "The samples will be saved in half precision. To "
                 "disable this behavior, set the "
-                "attribute SAVE_HALF_PRECISION to False.",
-                _log,
-                RuntimeWarning,
-                stacklevel=2,
+                "attribute SAVE_HALF_PRECISION to False."
             )
+            logging.raise_warning(msg, _log, RuntimeWarning, stacklevel=2)
             state = self._getstate_half_(state)
 
         return state
@@ -773,14 +761,11 @@ class BaseGeneratorDistribSampler[DistributionT](
 
         if cls.SAVE_HALF_PRECISION and not new.use_half:
             if not (hasattr(new, "device") and hasattr(new, "dtype")):
-                logging.raise_warning(
-                    "The device and dtype were not saved. The "
-                    "samples will be loaded with the "
-                    "default device and dtype.",
-                    _log,
-                    RuntimeWarning,
-                    stacklevel=2,
+                msg = (
+                    "The device and dtype were not saved. The samples "
+                    "will be loaded with the default device and dtype."
                 )
+                logging.raise_warning(msg, _log, RuntimeWarning, stacklevel=2)
                 cls._load_half_(new, config.device, config.dtype)
             else:
                 cls._load_half_(new, new.device, new.dtype)
@@ -797,7 +782,9 @@ class BaseGeneratorDistribSampler[DistributionT](
         :param dtype_: The dtype to load the samples.
         :return: The new instance.
         """
-        new.samples_history = new._set_normal_dtype(new.samples_history, force=True)
+        new.samples_history = new._set_normal_dtype(
+            new.samples_history, force=True
+        )
 
 
 # noinspection PyAttributeOutsideInit
@@ -814,7 +801,9 @@ class GeneratorDistribSampler(BaseGeneratorDistribSampler[D.DistributionDraw]):
 
     @final
     @override
-    def _draw(self, seed: SeedT = None) -> tuple[D.DistributionDraw, torch.Tensor]:
+    def _draw(
+        self, seed: SeedT = None
+    ) -> tuple[D.DistributionDraw, torch.Tensor]:
         noise: torch.Tensor = self._get_noise(1, seed)
         to_return: D.DistributionDraw = self.transform_noise(noise)
         return to_return, noise

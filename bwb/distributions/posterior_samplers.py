@@ -46,7 +46,9 @@ class DistributionP(Protocol):
         """
 
 
-def log_likelihood_model(model: DistributionP, data: torch.Tensor) -> torch.Tensor:
+def log_likelihood_model(
+    model: DistributionP, data: torch.Tensor
+) -> torch.Tensor:
     """
     Log-likelihood of a model.
 
@@ -138,7 +140,9 @@ def log_posterior(
 
 
 # noinspection PyAttributeOutsideInit
-class ExplicitPosteriorSampler[DistributionT](DiscreteDistribSampler[DistributionT]):
+class ExplicitPosteriorSampler[DistributionT](
+    DiscreteDistribSampler[DistributionT]
+):
     r"""
     Distribution that uses the strategy of calculating all
     likelihoods by brute force. This class implements likelihoods of
@@ -176,7 +180,9 @@ class ExplicitPosteriorSampler[DistributionT](DiscreteDistribSampler[Distributio
 
         data = self.data_.reshape(1, -1)
 
-        self.probabilities_: torch.Tensor = models.compute_likelihood(data, **kwargs)
+        self.probabilities_: torch.Tensor = (
+            models.compute_likelihood(data, **kwargs)
+        )  # fmt: skip
 
         self.support_ = self.models_index_[self.probabilities_ > conf.eps]
 
@@ -202,7 +208,9 @@ class ExplicitPosteriorSampler[DistributionT](DiscreteDistribSampler[Distributio
 
 
 # noinspection PyAttributeOutsideInit
-class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[D.DistributionDraw]):
+class BaseLatentMCMCPosteriorSampler(
+    BaseGeneratorDistribSampler[D.DistributionDraw]
+):
     """
     Base class for MCMC posterior samplers. This class try to mirror
     the `emcee` package, but using the ``hamiltorch`` package as a
@@ -258,7 +266,9 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[D.DistributionD
         """
         return sum(len(chain) for chain in self.chains)
 
-    def _create_empty_chains(self, n_walkers: int = None) -> list[list[torch.Tensor]]:
+    def _create_empty_chains(
+        self, n_walkers: int = None
+    ) -> list[list[torch.Tensor]]:
         """
         Create an empty list of chains.
 
@@ -344,7 +354,9 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[D.DistributionD
 
     def _get_hamiltorch_kwargs(self, **kwargs) -> dict:
         hamiltorch_kwargs = self._hamiltorch_kwargs.copy()
-        specific_kwargs: dict[str, Any] = dict(log_prob_func=self.log_prob, **kwargs)
+        specific_kwargs: dict[str, Any] = dict(
+            log_prob_func=self.log_prob, **kwargs
+        )
         hamiltorch_kwargs.update(
             [(k, v) for k, v in specific_kwargs.items() if v is not None]
         )
@@ -430,12 +442,8 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[D.DistributionD
         :return: The autocorrelation time of the chain.
         """
         if self._mean_autocorr_time is None:
-            logging.raise_warning(
-                "The autocorrelation time is not set yet.",
-                _log,
-                RuntimeWarning,
-                stacklevel=2,
-            )
+            msg = "The autocorrelation time is not set yet."
+            logging.raise_warning(msg, _log, RuntimeWarning, stacklevel=2)
             return torch.tensor(0.0, dtype=self.dtype, device=self.device)
         return self._mean_autocorr_time
 
@@ -447,12 +455,8 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[D.DistributionD
         :return: The autocorrelation time of the chain.
         """
         if self._autocorr_time is None:
-            logging.raise_warning(
-                "The autocorrelation time is not set yet.",
-                _log,
-                RuntimeWarning,
-                stacklevel=2,
-            )
+            msg = "The autocorrelation time is not set yet."
+            logging.raise_warning(msg, _log, RuntimeWarning, stacklevel=2)
             return torch.tensor(0.0, dtype=self.dtype, device=self.device)
         return self._autocorr_time
 
@@ -462,12 +466,8 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[D.DistributionD
         Get the effective number of samples.
         """
         if self._n_effective is None:
-            logging.raise_warning(
-                "The effective number of samples is not set yet.",
-                _log,
-                RuntimeWarning,
-                stacklevel=2,
-            )
+            msg = "The effective number of samples is not set yet."
+            logging.raise_warning(msg, _log, RuntimeWarning, stacklevel=2)
             return 0
         return self._n_effective
 
@@ -526,7 +526,9 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[D.DistributionD
 
     @final
     @override
-    def _draw(self, seed: SeedT = None) -> tuple[D.DistributionDraw, torch.Tensor]:
+    def _draw(
+        self, seed: SeedT = None
+    ) -> tuple[D.DistributionDraw, torch.Tensor]:
         if not self.samples_cache:
             self.run(n_steps=50)
             self.shuffle_samples_cache()
@@ -622,7 +624,8 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[D.DistributionD
 
         # Manually create a new dictionary and copy the items
         hamiltorch_kwargs = {
-            k: copy.deepcopy(v, memo) for k, v in self._hamiltorch_kwargs.items()
+            k: copy.deepcopy(v, memo)
+            for k, v in self._hamiltorch_kwargs.items()
         }
 
         generator = copy.deepcopy(self.generator_, memo)
@@ -665,7 +668,9 @@ class BaseLatentMCMCPosteriorSampler(BaseGeneratorDistribSampler[D.DistributionD
 
     @classmethod
     @override
-    def _load_half_(cls, new: Self, device_: torch.device, dtype_: torch.dtype) -> None:
+    def _load_half_(
+        cls, new: Self, device_: torch.device, dtype_: torch.dtype
+    ) -> None:
         super()._load_half_(new, device_, dtype_)
         new.chains = new._set_normal_dtype(new.chains)
         new.samples_cache = new._set_normal_dtype(new.samples_cache)
@@ -703,7 +708,9 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
         self.n_workers = n_workers
         self.n_walkers = n_walkers
         self.parallel = parallel
-        self.chains: list[list[torch.Tensor]] = self._create_empty_chains(n_walkers)
+        self.chains: list[list[torch.Tensor]] = self._create_empty_chains(
+            n_walkers
+        )
 
     @override
     @timeit_to_total_time
@@ -717,9 +724,8 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
         seeds: Sequence[SeedT] = None,
         **kwargs,
     ) -> Self:
-        check_is_fitted(
-            self, ["generator_", "transform_out_", "noise_sampler_", "data_"]
-        )
+        attrs = ["generator_", "transform_out_", "noise_sampler_", "data_"]
+        check_is_fitted(self, attrs)
 
         n_workers = n_workers if n_workers is not None else self.n_workers
         n_walkers = n_walkers if n_walkers is not None else self.n_walkers
@@ -743,7 +749,9 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
             hamiltorch.sample, _prior, hamiltorch_kwargs
         )
 
-        params_hmc = hamiltorch.util.multi_chain(chain, n_workers, seeds, parallel)
+        params_hmc = hamiltorch.util.multi_chain(
+            chain, n_workers, seeds, parallel
+        )
 
         log_list = []
         for i, params in enumerate(params_hmc):
@@ -832,7 +840,8 @@ class LatentMCMCPosteriorSampler(BaseLatentMCMCPosteriorSampler):
 
         # Manually create a new dictionary and copy the items
         hamiltorch_kwargs = {
-            k: copy.deepcopy(v, memo) for k, v in self._hamiltorch_kwargs.items()
+            k: copy.deepcopy(v, memo)
+            for k, v in self._hamiltorch_kwargs.items()
         }
 
         generator = copy.deepcopy(self.generator_, memo)
@@ -907,9 +916,8 @@ class NUTSPosteriorSampler(LatentMCMCPosteriorSampler):
     # noinspection DuplicatedCode,PyTypeChecker
     def __copy__(self):
         hamiltorch_kwargs = copy.copy(self._hamiltorch_kwargs)
-        hamiltorch_kwargs.pop(
-            "sampler"
-        )  # The sampler is already set in the constructor
+        # The sampler is already set in the constructor
+        hamiltorch_kwargs.pop("sampler")
         generator = copy.copy(self.generator_)
         transform_out = copy.copy(self.transform_out_)
         noise_sampler = copy.copy(self.noise_sampler_)
@@ -951,12 +959,12 @@ class NUTSPosteriorSampler(LatentMCMCPosteriorSampler):
 
         # Manually create a new dictionary and copy the items
         hamiltorch_kwargs = {
-            k: copy.deepcopy(v, memo) for k, v in self._hamiltorch_kwargs.items()
+            k: copy.deepcopy(v, memo)
+            for k, v in self._hamiltorch_kwargs.items()
         }
 
-        hamiltorch_kwargs.pop(
-            "sampler"
-        )  # The sampler is already set in the constructor
+        # The sampler is already set in the constructor
+        hamiltorch_kwargs.pop("sampler")
         generator = copy.deepcopy(self.generator_, memo)
         transform_out = copy.deepcopy(self.transform_out_, memo)
         noise_sampler = copy.deepcopy(self.noise_sampler_, memo)
@@ -997,9 +1005,12 @@ class ExplicitPosteriorPiN(ExplicitPosteriorSampler):
         super().__init__(*args, **kwargs)
 
         # Raise a warning of deprecation
+        msg = (
+            "ExplicitPosteriorPiN is deprecated. "
+            "Use ExplicitPosteriorSampler instead."
+        )
         warnings.warn(
-            "ExplicitPosteriorPiN is deprecated. Use "
-            "ExplicitPosteriorSampler instead.",
+            msg,
             DeprecationWarning,
             stacklevel=2,
         )
@@ -1032,7 +1043,9 @@ def __main():
     input_size = 128  # noqa: F841
     output_size = (32, 32)
     n_data = 100
-    data_ = torch.randint(0, output_size[0] * output_size[1], (n_data,)).to(conf.device)
+    data_ = torch.randint(0, output_size[0] * output_size[1], (n_data,)).to(
+        conf.device
+    )
 
     # ======== BaseLatentMCMCPosteriorSampler ========
     if BASE_LATENT_MCMC_POSTERIOR_SAMPLER:

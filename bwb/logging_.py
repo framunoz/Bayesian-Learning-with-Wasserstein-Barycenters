@@ -329,7 +329,9 @@ class LoggerConfiguration(metaclass=_SingletonMeta):
         return self
 
     def __repr__(self):
-        return f"LoggerConfiguration(LEVEL={self.LEVEL}, HANDLERS={self.HANDLERS})"
+        return (
+            f"LoggerConfiguration(LEVEL={self.LEVEL}, HANDLERS={self.HANDLERS})"
+        )
 
     def remove_all_handlers(self, logger: logging.Logger = None) -> t.Self:
         """
@@ -667,7 +669,9 @@ def raise_warning(
     level: int = WARNING,
     **kwargs,
 ) -> None:
-    log_config.raise_warning(msg, logger, warning_category, stacklevel, level, **kwargs)
+    log_config.raise_warning(
+        msg, logger, warning_category, stacklevel, level, **kwargs
+    )
 
 
 # noinspection PyMissingOrEmptyDocstring
@@ -864,7 +868,9 @@ class register_total_time:
         return wrapper
 
 
-def register_total_time_function(logger: logging.Logger, level: int = logging.DEBUG):
+def register_total_time_function(
+    logger: logging.Logger, level: int = logging.DEBUG
+):
     """
     Wrapper that records the total time it takes to execute a function,
     and shows it with the logger.
@@ -912,7 +918,9 @@ def register_total_time_function(logger: logging.Logger, level: int = logging.DE
     return decorator
 
 
-def register_total_time_method(logger: logging.Logger, level: int = logging.DEBUG):
+def register_total_time_method(
+    logger: logging.Logger, level: int = logging.DEBUG
+):
     """
     Wrapper that records the total time it takes to execute a method,
     and shows it with the logger.
@@ -953,7 +961,8 @@ def register_total_time_method(logger: logging.Logger, level: int = logging.DEBU
             self: object = args[0]
             logger.log(
                 level,
-                "Using the method " f"'{self.__class__.__name__}.{method.__name__}'...",
+                "Using the method "
+                f"'{self.__class__.__name__}.{method.__name__}'...",
             )
             tic = time.perf_counter()
             result = method(*args, **kwargs)
@@ -1013,7 +1022,8 @@ def register_init_method(logger: logging.Logger, level: int = logging.DEBUG):
             method_name = method.__name__
             logger.log(
                 level,
-                f"Using the method '{method_name}' " f"in the class '{class_name}'.",
+                f"Using the method '{method_name}' "
+                f"in the class '{class_name}'.",
             )
             # Compute the result
             result = method(*args, **kwargs)

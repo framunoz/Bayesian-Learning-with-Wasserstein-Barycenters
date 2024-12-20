@@ -22,7 +22,9 @@ _log = logging.get_logger(__name__)
 type DistDrawPosWgtT = torch.Tensor
 
 
-class Plotter[DistributionT, PosWgtT](Runnable[DistributionT], metaclass=abc.ABCMeta):
+class Plotter[DistributionT, PosWgtT](
+    Runnable[DistributionT], metaclass=abc.ABCMeta
+):
     fig: Optional[plt.Figure]
     ax: Optional[plt.Axes]
     sgdw: SGDW[DistributionT, PosWgtT]
@@ -119,7 +121,9 @@ class PlotterComparison(Plotter[DistributionDraw, DistDrawPosWgtT]):
         cmap="binary",
         **kwargs,
     ):
-        super().__init__(sgdw, plot_every, n_cols, n_rows, factor, cmap, **kwargs)
+        super().__init__(
+            sgdw, plot_every, n_cols, n_rows, factor, cmap, **kwargs
+        )
         if plot_every is not None and plot_every < n_rows * n_cols:
             logging.raise_error(
                 "'plot_every' should not be less than n_rows * n_cols."
@@ -220,7 +224,9 @@ class PlotterComparisonProjected(Plotter[DistributionDraw, DistDrawPosWgtT]):
         proj_kwargs: Optional[dict] = None,
         **kwargs,
     ):
-        super().__init__(sgdw, plot_every, n_cols, n_rows, factor, cmap, **kwargs)
+        super().__init__(
+            sgdw, plot_every, n_cols, n_rows, factor, cmap, **kwargs
+        )
         if plot_every is not None and plot_every < n_rows * n_cols:
             logging.raise_error(
                 "'plot_every' should not be less than n_rows * n_cols."
