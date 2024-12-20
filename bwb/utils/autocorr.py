@@ -142,11 +142,11 @@ def integrated_time(x, c=5, tol=50, quiet=True, has_walkers=True, device=None):
     # Warn or raise in the case of non-convergence
     if torch.any(flag):
         msg = (
-            "The chain is shorter than {0} times the integrated "
-            "autocorrelation time for {1} parameter(s). Use this estimate "
+            "The chain is shorter than {} times the integrated "
+            "autocorrelation time for {} parameter(s). Use this estimate "
             "with caution and run a longer chain!\n"
         ).format(tol, torch.sum(flag))
-        msg += "N/{0} = {1:.0f};\ntau: {2}".format(tol, n_t / tol, tau_est)
+        msg += "N/{} = {:.0f};\ntau: {}".format(tol, n_t / tol, tau_est)
         if not quiet:
             raise AutocorrError(tau_est.cpu(), msg)
         _log.warning(msg)

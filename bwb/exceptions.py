@@ -27,4 +27,4 @@ class AutocorrError(Exception):
 
     def __init__(self, tau, *args, **kwargs):
         self.tau = tau
-        super(AutocorrError, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
