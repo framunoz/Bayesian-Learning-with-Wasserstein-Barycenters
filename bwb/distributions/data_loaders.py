@@ -1,5 +1,5 @@
 """
-This module contains the classes that are used to load the data.
+Module that contains the classes that are used to load the data.
 """
 
 import abc
@@ -48,15 +48,19 @@ class BaseDistributionDataLoader[DistributionT](
         if not (
             torch.isclose(probs_tensor_sum, torch.ones_like(probs_tensor_sum))
         ).all():
-            raise ValueError(
-                "The sum over the dim 1 of the tensor probs_tensor " "must all be 1."
+            msg = (
+                "The sum over the dim 1 of the tensor probs_tensor "
+                "must all be 1."
             )
+            raise ValueError(msg)
 
         # Set the tensor of log-probabilities
         self.logits_tensor = torch.log(self.probs_tensor + config.eps)
 
         # And define the dictionary to wrap
-        self._models: dict[int, DistributionT] = {i: None for i in range(_n_probs)}
+        self._models: dict[int, DistributionT] = {
+            i: None for i in range(_n_probs)
+        }
 
         toc = time.time()
         _log.debug(f"Δt={toc - tic:.2f} [seg]")
@@ -64,9 +68,8 @@ class BaseDistributionDataLoader[DistributionT](
     @abc.abstractmethod
     def _create_distribution_instance(self, index) -> DistributionT:
         """To use template pattern on __get_item__"""
-        raise NotImplementedError(
-            "Must implement method '_create_distribution_instance'."
-        )
+        msg = "Must implement method '_create_distribution_instance'."
+        raise NotImplementedError(msg)
 
     def __getitem__(self, item: int) -> DistributionT:
         if self._models[item] is None:
@@ -105,11 +108,15 @@ class DiscreteDistributionDataLoader(
     :py:class:`bwb.distributions.discrete_distributions.DiscreteDistributions`.
     """
 
-    def _create_distribution_instance(self, index: int) -> dist.DiscreteDistribution:
+    def _create_distribution_instance(
+        self, index: int
+    ) -> dist.DiscreteDistribution:
         return dist.DiscreteDistribution(self.probs_tensor[index])
 
 
-class DistributionDrawDataLoader(BaseDistributionDataLoader[dist.DistributionDraw]):
+class DistributionDrawDataLoader(
+    BaseDistributionDataLoader[dist.DistributionDraw]
+):
     """
     A class of type :py:class:`MutableMapping` that wraps a
     dictionary. It stores information from probability arrays and logits.
@@ -169,7 +176,7 @@ class DistributionDrawDataLoader(BaseDistributionDataLoader[dist.DistributionDra
         toc = time.time()
         _log.debug(f"Δt={toc - tic:.2f} [seg]")
 
-        super(DistributionDrawDataLoader, self).__init__(probs_tensor=probs_tensor)
+        super().__init__(probs_tensor=probs_tensor)
 
     def _create_distribution_instance(self, index) -> dist.DistributionDraw:
         weights = self.transform(self.probs_tensor[index])

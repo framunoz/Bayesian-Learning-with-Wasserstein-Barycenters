@@ -52,7 +52,9 @@ class DistributionP(t.Protocol):
         ...
 
     def enumerate_support_(self, expand=True) -> torch.Tensor:
-        """Enumerates the original support ``support`` and not its indices."""
+        """
+        Enumerates the original support ``support`` and not its indices.
+        """
         ...
 
     def sample_(self, sample_shape=torch.Size([])) -> torch.Tensor:
@@ -105,7 +107,9 @@ def wass_distance(
     x_p, w_p = get_pos_wgt(p)
     x_q, w_q = get_pos_wgt(q)
 
-    res: ot.utils.OTResult = ot.solve_sample(x_p, x_q, w_p, w_q, **solve_sample_kwargs)
+    res: ot.utils.OTResult = ot.solve_sample(
+        x_p, x_q, w_p, w_q, **solve_sample_kwargs
+    )
 
     return res.value
 
@@ -173,7 +177,10 @@ class DiscreteDistribution(torch.distributions.Categorical, HasDeviceDType):
     def original_support(self) -> torch.Tensor:
         """Original support."""
         if self._original_support is None:
-            self._original_support = torch.arange(len(self.weights), device=self.device)
+            len_weights = len(self.weights)
+            self._original_support = torch.arange(
+                len_weights, device=self.device
+            )
 
         return self._original_support
 
@@ -251,7 +258,7 @@ class DistributionDraw(DiscreteDistribution):
         # For the cache of the grayscale weights
         self._grayscale_weights = None
 
-        super(DistributionDraw, self).__init__(
+        super().__init__(
             weights=weights, support=support, dtype=dtype, device=device
         )
 
@@ -260,9 +267,9 @@ class DistributionDraw(DiscreteDistribution):
         """Original support."""
         if self._original_support is None:
             n, m = self.shape
-            index = torch.arange(n * m, device=self.device, dtype=torch.int64).reshape(
-                -1, 1
-            )
+            index = torch.arange(
+                n * m, device=self.device, dtype=torch.int64
+            ).reshape(-1, 1)
             self._original_support = torch.cat((index // m, index % m), 1)
 
         return self._original_support
@@ -288,11 +295,8 @@ class DistributionDraw(DiscreteDistribution):
         :param device: The device of the distribution.
         :return: an instance of :py:class:`DistributionDraw`
         """
-        warnings.warn(
-            "This method is deprecated, use the constructor instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+        msg = "This method is deprecated, use the constructor instead."
+        warnings.warn(msg, DeprecationWarning, stacklevel=2)
         return cls(weights, shape, device=device, dtype=dtype)
 
     @classmethod
@@ -334,17 +338,16 @@ class DistributionDraw(DiscreteDistribution):
         ).squeeze()
 
         # Get the shape information
-        shape = shape_validation(
-            grayscale_weights.shape,
-            n_dim=2,
-            msg="The 'grayscale_weights' tensor must have dimension {n_dim}.",
-        )
+        msg = "The 'grayscale_weights' tensor must have dimension {n_dim}."
+        shape = shape_validation(grayscale_weights.shape, n_dim=2, msg=msg)
 
         if not torch.allclose(grayscale_weights.sum(), torch.tensor(1.0)):
             grayscale_weights /= torch.sum(grayscale_weights)
         weights = grayscale_weights.reshape((-1,))
 
-        to_return = cls(weights=weights, shape=shape, device=device, dtype=dtype)
+        to_return = cls(
+            weights=weights, shape=shape, device=device, dtype=dtype
+        )
 
         to_return._grayscale_weights = grayscale_weights
 
@@ -376,18 +379,17 @@ class DistributionDraw(DiscreteDistribution):
         ).squeeze()
 
         # Get the shape information
-        shape = shape_validation(
-            grayscale.shape,
-            n_dim=2,
-            msg="The 'grayscale' tensor must have dimension {n_dim}.",
-        )
+        msg = "The 'grayscale' tensor must have dimension {n_dim}."
+        shape = shape_validation(grayscale.shape, n_dim=2, msg=msg)
 
         # Get the weights from the grayscale
         grayscale_weights: torch.Tensor = grayscale / 255
         grayscale_weights /= torch.sum(grayscale_weights)
         weights = grayscale_weights.reshape((-1,)).to(dtype)
 
-        to_return = cls(weights=weights, shape=shape, device=device, dtype=dtype)
+        to_return = cls(
+            weights=weights, shape=shape, device=device, dtype=dtype
+        )
 
         to_return._grayscale = grayscale
         to_return._grayscale_weights = grayscale_weights.to(dtype)
