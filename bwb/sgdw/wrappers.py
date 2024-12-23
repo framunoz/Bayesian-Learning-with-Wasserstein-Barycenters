@@ -65,7 +65,7 @@ class SGDWBaseWrapper[DistributionT, PosWgtT](SGDW[DistributionT, PosWgtT]):
         return to_return
 
     @override
-    def first_sample(self) -> tuple[Seq[DistributionT], PosWgtT]:
+    def first_sample(self) -> tuple[list[DistributionT], PosWgtT]:
         return self.wrapee.first_sample()
 
     @override
@@ -449,19 +449,19 @@ def _get_interp_strategy(
     """
     if isinstance(interp_strategy, str):
         if interp_strategy not in _interpolation_strategies:
-            msg = (
+            raise ValueError(
                 f"Interpolation strategy '{interp_strategy}' not found. "
                 f"Please choose from: {list(_interpolation_strategies.keys())}."
             )
-            raise ValueError(msg)
         return _interpolation_strategies[interp_strategy]
+
     elif callable(interp_strategy) or interp_strategy is None:
         return interp_strategy
-    msg = (
+
+    raise TypeError(
         "Interpolation strategy should be a string, a callable or None."
         f" Currently: {type(interp_strategy) = }"
     )
-    raise TypeError(msg)
 
 
 class SGDWProjectedDecorator[DistributionT, PosWgtT](

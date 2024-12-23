@@ -128,7 +128,7 @@ class DistributionSamplerP[DistributionT](P.HasDeviceDTypeP, Protocol):
     Protocol for distribution samplers.
     """
 
-    def sample(self, n: int) -> Seq[DistributionT]:
+    def sample(self, n: int) -> list[DistributionT]:
         """
         Sample a sequence of distributions.
 
@@ -212,7 +212,7 @@ class SGDW[DistributionT, PosWgtT](
 
         return barycenter
 
-    def init_algorithm(self) -> tuple[Seq[DistributionT], PosWgtT]:
+    def init_algorithm(self) -> tuple[list[DistributionT], PosWgtT]:
         """
         Initialize the algorithm.
         """
@@ -226,7 +226,7 @@ class SGDW[DistributionT, PosWgtT](
 
     def step_algorithm(
         self, k: int, pos_wgt_k: PosWgtT
-    ) -> tuple[Seq[DistributionT], PosWgtT]:
+    ) -> tuple[list[DistributionT], PosWgtT]:
         """
         Run a step of the algorithm.
         """
@@ -299,7 +299,7 @@ class SGDW[DistributionT, PosWgtT](
         return self.distr_sampler.device
 
     @abc.abstractmethod
-    def first_sample(self) -> tuple[Seq[DistributionT], PosWgtT]:
+    def first_sample(self) -> tuple[list[DistributionT], PosWgtT]:
         """
         Draw the first sample from the distribution sampler.
         """
@@ -510,7 +510,7 @@ class DistributionDrawSGDW(
         return mu.grayscale_weights
 
     @override
-    def first_sample(self) -> tuple[Seq[D.DistributionDraw], DistDrawPosWgt]:
+    def first_sample(self) -> tuple[list[D.DistributionDraw], DistDrawPosWgt]:
         mu_0: D.DistributionDraw = self.distr_sampler.sample(1)[0]
         return [mu_0], mu_0.grayscale_weights
 
@@ -631,7 +631,7 @@ class DiscreteDistributionSGDW(
     @override
     def first_sample(
         self,
-    ) -> tuple[Seq[D.DiscreteDistribution], DiscretePosWgt]:
+    ) -> tuple[list[D.DiscreteDistribution], DiscretePosWgt]:
         mu_0: D.DiscreteDistribution = self.distr_sampler.sample(1)[0]
         X_k, m = D_utils.partition(
             X=mu_0.enumerate_nz_support_(), mu=mu_0.nz_probs, alpha=self.alpha

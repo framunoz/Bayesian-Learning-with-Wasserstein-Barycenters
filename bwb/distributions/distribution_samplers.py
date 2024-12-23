@@ -19,9 +19,6 @@ from typing import (
     final,
     override,
 )
-from typing import (
-    Sequence as Seq,
-)
 
 import torch
 
@@ -90,7 +87,7 @@ class DistributionSampler[DistributionT](HasDeviceDType, metaclass=abc.ABCMeta):
         ...
 
     @abc.abstractmethod
-    def sample(self, size: int = 1, seed: SeedT = None) -> Seq[DistributionT]:
+    def sample(self, size: int = 1, seed: SeedT = None) -> list[DistributionT]:
         """
         Samples as many distributions as the ``size`` parameter
         indicates.
@@ -239,7 +236,7 @@ class DiscreteDistribSampler[DistributionT](DistributionSampler[DistributionT]):
 
     def _sample(
         self, size: int = 1, seed: SeedT = None
-    ) -> tuple[Seq[DistributionT], list[int]]:
+    ) -> tuple[list[DistributionT], list[int]]:
         """
         Samples as many distributions as the ``size`` parameter
         indicates.
@@ -257,7 +254,7 @@ class DiscreteDistribSampler[DistributionT](DistributionSampler[DistributionT]):
 
     @timeit_to_total_time
     @override
-    def sample(self, size: int = 1, seed: SeedT = None) -> Seq[DistributionT]:
+    def sample(self, size: int = 1, seed: SeedT = None) -> list[DistributionT]:
         """
         Samples as many distributions as the ``size`` parameter
         indicates.
@@ -451,7 +448,7 @@ class BaseGeneratorDistribSampler[DistributionT](
     @abc.abstractmethod
     def _sample(
         self, size: int = 1, seed: SeedT = None
-    ) -> tuple[Seq[DistributionT], Seq[torch.Tensor]]:
+    ) -> tuple[list[DistributionT], list[torch.Tensor]]:
         """
         Samples as many distributions as the `size` parameter indicates.
         """
@@ -635,7 +632,7 @@ class BaseGeneratorDistribSampler[DistributionT](
 
     @final
     @override
-    def sample(self, size: int = 1, seed: SeedT = None) -> Seq[DistributionT]:
+    def sample(self, size: int = 1, seed: SeedT = None) -> list[DistributionT]:
         # Check if the distribution sampler is fitted
         if not self._fitted:
             attributes = ["generator_", "transform_out_", "noise_sampler_"]
@@ -812,7 +809,7 @@ class GeneratorDistribSampler(BaseGeneratorDistribSampler[D.DistributionDraw]):
     @override
     def _sample(
         self, size: int = 1, seed: SeedT = None
-    ) -> tuple[Seq[D.DistributionDraw], Seq[torch.Tensor]]:
+    ) -> tuple[list[D.DistributionDraw], list[torch.Tensor]]:
         noises = [noise for noise in self._get_noise(size, seed)]
         to_return: list[D.DistributionDraw] = [
             self.transform_noise(noise.unsqueeze(0)) for noise in noises
