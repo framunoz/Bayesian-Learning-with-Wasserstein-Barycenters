@@ -295,47 +295,6 @@ class IterationParameters(Iterator[int]):
         """The Wasserstein distance."""
         self.length_ema = length_ema
 
-    @property
-    def total_time(self) -> float:
-        """
-        The total time of the algorithm.
-
-        :return: The total time of the algorithm.
-        """
-        return self.toc - self.tic
-
-    @property
-    def length_ema(self) -> int:
-        """
-        The length of the Exponential Moving Average (EMA).
-        """
-        return self._length_ema
-
-    @length_ema.setter
-    def length_ema(self, value: int) -> None:
-        if not isinstance(value, num.Integral):
-            raise TypeError("length_ema must be an integer")
-        if value <= 0:
-            raise ValueError("length_ema must be positive")
-        self._length_ema: int = value
-        self._smooth = 2 / (self._length_ema + 1)
-
-    @property
-    def smooth(self) -> float:
-        """
-        The smoothing factor for the Exponential Moving Average (EMA).
-        """
-        return self._smooth
-
-    @smooth.setter
-    def smooth(self, value: float) -> None:
-        if not isinstance(value, num.Real):
-            raise TypeError("smooth must be a real number")
-        if value <= 0:
-            raise ValueError("smooth must be positive")
-        self._smooth: float = value
-        self._length_ema = int(2 / self._smooth - 1)
-
     def __iter__(self) -> Iterator[int]:
         # Initialize the iteration parameters
         self.k = 0  # In the beginning, the iteration number is incremented
@@ -442,3 +401,44 @@ class IterationParameters(Iterator[int]):
             f"IterationParameters(k={self.k:_}, w_dist={w_dist_fmt}, "
             f"t={time_fmt}, Δt={self.diff_t * 1000:.2f} [ms])"
         )
+
+    @property
+    def total_time(self) -> float:
+        """
+        The total time of the algorithm.
+
+        :return: The total time of the algorithm.
+        """
+        return self.toc - self.tic
+
+    @property
+    def length_ema(self) -> int:
+        """
+        The length of the Exponential Moving Average (EMA).
+        """
+        return self._length_ema
+
+    @length_ema.setter
+    def length_ema(self, value: int) -> None:
+        if not isinstance(value, num.Integral):
+            raise TypeError("length_ema must be an integer")
+        if value <= 0:
+            raise ValueError("length_ema must be positive")
+        self._length_ema: int = value
+        self._smooth = 2 / (self._length_ema + 1)
+
+    @property
+    def smooth(self) -> float:
+        """
+        The smoothing factor for the Exponential Moving Average (EMA).
+        """
+        return self._smooth
+
+    @smooth.setter
+    def smooth(self, value: float) -> None:
+        if not isinstance(value, num.Real):
+            raise TypeError("smooth must be a real number")
+        if value <= 0:
+            raise ValueError("smooth must be positive")
+        self._smooth: float = value
+        self._length_ema = int(2 / self._smooth - 1)
