@@ -223,6 +223,27 @@ class ReportProxy[DistributionT, PosWgtT](
         to_return += space + f"level={level.get(self.level, self.level)}" + sep
         log_repr = f"'{self.log.name}': {level[self.log.level]}"
         to_return += space + f"log={log_repr}" + sep
+        k = self.iter_params.k
+        gamma_k = self.schd.step_schedule(k)
+        if self.include_dict["iter"]:
+            to_return += space + f"iter={k}" + sep
+        if self.include_dict["w_dist"]:
+            to_return += space + f"w_dist={self.iter_params.w_dist:.6f}" + sep
+        if self.include_dict["step_schd"]:
+            to_return += space + f"step_schd={gamma_k:.2%}" + sep
+        if self.include_dict["total_time"]:
+            total_time = self.iter_params.total_time
+            time_fmt = str(timedelta(seconds=total_time))[:-4]
+            to_return += space + f"total_time={time_fmt}" + sep
+        if self.include_dict["dt"]:
+            to_return += (
+                space + f"dt={self.iter_params.diff_t * 1000:.2f}" + sep
+            )
+        if self.include_dict["dt_per_iter"]:
+            dt_per_iter = (
+                self.iter_params.total_time * 1000 / (self.iter_params.k + 1)
+            )
+            to_return += space + f"dt_per_iter={dt_per_iter:.2f}" + sep
         return to_return
 
     def make_report(self) -> str:
