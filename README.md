@@ -1,3 +1,5 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/framunoz/Bayesian-Learning-with-Wasserstein-Barycenters)
+
 # Bayesian Learning with Wasserstein Barycenters
 Library to reproduce results from the paper with the same name. It provides the code to perform a Stochastic Gradient Descent over Wasserstein Space (WSGD) for the calculation of population Wasserstein barycentres, and more specifically, for Bayesian Wasserstein barycentres.
 
